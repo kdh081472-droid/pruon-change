@@ -199,7 +199,7 @@ export default function NewChange({ nf, setNf, onDone }) {
             </div>
           ) : (
             <div className="pb-meta">
-              {curP.fixed ? '기본 목록은 설정 > 기본 할 일에서 고칩니다 (여기서는 수정·삭제 불가)' : <>저장: <Person id={curP.created_by} /> · 할 일 {curP.items.length}건</>}
+              {curP.fixed ? '기본 목록은 수정·삭제할 수 없습니다. 바꿔 쓰려면 고친 뒤 새 목록으로 저장하세요.' : <>저장: <Person id={curP.created_by} /> · 할 일 {curP.items.length}건</>}
             </div>
           )}
           {usedP && <div className="pb-meta"><b>지금 적용: {usedP.name}</b></div>}
