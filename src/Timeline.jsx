@@ -1,18 +1,6 @@
-import { useEffect, useState } from 'react'
 import { ORDER, SHORT } from './supabase.js'
-import { useApp, Person, ICON } from './ctx.jsx'
+import { useApp, Person, ICON, useWidth } from './ctx.jsx'
 import { DAY, add, dd, ddLabel, iso, md, norm, parse, todayMid, stamp } from './util.js'
-
-function useWidth() {
-  const [w, setW] = useState(window.innerWidth)
-  useEffect(() => {
-    let t
-    const on = () => { clearTimeout(t); t = setTimeout(() => setW(window.innerWidth), 120) }
-    window.addEventListener('resize', on)
-    return () => window.removeEventListener('resize', on)
-  }, [])
-  return w
-}
 
 function matches(c, q) {
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -68,7 +56,7 @@ function TimelineList({ list, searching }) {
   )
 }
 
-function LateBlock() {
+export function LateBlock() {
   const { db, C, isLate, openTask } = useApp()
   const lt = db.tasks.filter(isLate).sort((a, b) => parse(a.due_date) - parse(b.due_date))
   if (!lt.length) return <div className="late-box ok">지연된 할 일이 없습니다.</div>
@@ -116,20 +104,20 @@ export function ChatMini({ c }) {
   )
 }
 
-function ProductCard({ c }) {
+export function ProductCard({ c, forceOpen }) {
   const { db, me, viewer, ui, setUi, tOf, isLate, sheet, openTask, openSheet, openReport } = useApp()
   const width = useWidth()
   const ts = tOf(c.id)
   const left = ts.filter(t => t.status === '대기')
   const late = ts.filter(isLate)
   const mine = left.filter(t => t.department === me.department).length
-  const isOpen = !!ui.open[c.id]
+  const isOpen = !!ui.open[c.id] || !!forceOpen
   const closed = c.status === '종결'
   const stopped = closed && c.close_type === '중단'
   const byD = {}
   ts.forEach(t => { (byD[t.department] = byD[t.department] || []).push(t) })
   const tlogs = db.changeLogs.filter(x => x.change_id === c.id && x.action === '전환일 변경')
-  const toggle = () => setUi(u => ({ ...u, open: { ...u.open, [c.id]: !u.open[c.id] } }))
+  const toggle = () => { if (!forceOpen) setUi(u => ({ ...u, open: { ...u.open, [c.id]: !u.open[c.id] } })) }
   const stop = fn => e => { e.stopPropagation(); fn() }
   const n = dd(c.target_date)
 
@@ -154,9 +142,9 @@ function ProductCard({ c }) {
   }
 
   const head = (
-    <div className="p-h" role="button" tabIndex={0} aria-expanded={isOpen} onClick={toggle}
+    <div className={'p-h' + (forceOpen ? ' fixed' : '')} role={forceOpen ? undefined : 'button'} tabIndex={forceOpen ? undefined : 0} aria-expanded={forceOpen ? undefined : isOpen} onClick={toggle}
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggle() } }}>
-      <span className="p-title"><ChatMini c={c} /><span className="chev">▶</span>{c.title}</span>
+      <span className="p-title"><ChatMini c={c} />{!forceOpen && <span className="chev">▶</span>}{c.title}</span>
       {acts}
       <span className={'dday' + (closed ? ' closed' : '') + (stopped ? ' stopped' : '')}>
         <b>{closed ? (stopped ? '중단 종결' : '종결') : n >= 0 ? 'D-' + n : 'D+' + -n}</b>
@@ -188,7 +176,7 @@ function ProductCard({ c }) {
   const P = sc.P
   const at = x => { const v = P(x); return { left: v + '%', transform: v < 7 ? 'none' : v > 93 ? 'translateX(-100%)' : undefined } }
   const lw = width < 480 ? 128 : 170
-  const avail = Math.min(width, 760) - lw - 60
+  const avail = (width >= 1100 ? Math.min(width - 700, 980) : Math.min(width, 760)) - lw - 60
   const step = (avail / sc.tot) * 7 < 44 ? 14 : 7
   const ticks = []
   let last = null
@@ -292,7 +280,7 @@ function ProductCard({ c }) {
 }
 
 /* ---------- 달력 ---------- */
-function Calendar({ list, searching }) {
+export function Calendar({ list, searching }) {
   const { me, viewer, ui, setUi, tOf, isLate, openTask, goChange, C } = useApp()
   const ids = new Set(list.map(c => c.id))
   const mineOnly = ui.calMine && !viewer

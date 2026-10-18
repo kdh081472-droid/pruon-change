@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ORDER } from './supabase.js'
 import { useApp, Person, MsgText } from './ctx.jsx'
+import OrgTree from './Org.jsx'
 import { add, dd, ddLabel, iso, md, stamp, todayMid } from './util.js'
 
 export default function Sheet() {
@@ -18,6 +19,7 @@ export default function Sheet() {
   else if (sheet.kind === 'stop') body = <StopSheet cid={sheet.cid} close={close} />
   else if (sheet.kind === 'resume') body = <ResumeSheet cid={sheet.cid} close={close} />
   else if (sheet.kind === 'assign') body = <AssignSheet cid={sheet.cid} close={close} />
+  else if (sheet.kind === 'org') body = <><Top tag={'가입한 사람 ' + app.db.profiles.length + '명'} close={close} /><div className="s-title">조직도</div><OrgTree inSheet /></>
   return (
     <>
       <div className="scrim" onClick={close} />
@@ -60,7 +62,7 @@ function useFocus() {
 
 /* ---------- 할 일 처리 ---------- */
 function TaskSheet({ tid, close }) {
-  const { db, me, viewer, C, run, toast, openChat } = useApp()
+  const { db, me, viewer, wide, C, openChat } = useApp()
   const t = db.tasks.find(x => x.id === tid)
   const [mode, setMode] = useState(null)
   if (!t) return <><Top tag="" close={close} /><p className="empty">이 할 일을 찾을 수 없습니다.</p></>
@@ -120,7 +122,7 @@ function TaskSheet({ tid, close }) {
         {linked.length > 0 && (
           <ol>{linked.map(m => <li key={m.id}><Person id={m.user_id} /> · “<MsgText m={m} />” — {stamp(m.created_at)}</li>)}</ol>
         )}
-        <button type="button" className="link" onClick={() => openChat(c.id)}>제품 대화 열기 ›</button>
+        {!wide && <button type="button" className="link" onClick={() => openChat(c.id)}>제품 대화 열기 ›</button>}
       </div>
       {logs.length > 0 && (
         <div className="hist">

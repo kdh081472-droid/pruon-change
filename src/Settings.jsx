@@ -205,14 +205,5 @@ function MyInfo() {
 }
 
 export default function Settings() {
-  const [sub, setSub] = useState('me')
-  return (
-    <>
-      <div className="seg" style={{ marginBottom: 12 }}>
-        <button type="button" className={sub === 'me' ? 'on' : ''} onClick={() => setSub('me')}>내 정보</button>
-        <button type="button" className={sub === 'tpl' ? 'on' : ''} onClick={() => setSub('tpl')}>기본 할 일</button>
-      </div>
-      {sub === 'tpl' ? <Templates /> : <MyInfo />}
-    </>
-  )
+  return <MyInfo />
 }

@@ -5,7 +5,10 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const configured = Boolean(url && key && !key.startsWith('여기에'))
 
-export const supabase = createClient(url || 'http://localhost', key || 'missing-key')
+// 로그인 유지: 브라우저에 저장하고, 만료 전에 자동으로 연장
+export const supabase = createClient(url || 'http://localhost', key || 'missing-key', {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+})
 
 // 할 일을 맡는 부서 (화면에 나오는 순서)
 export const ORDER = ['제품개발', '품질', '구매', '영업', '생산', '물류']

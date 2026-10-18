@@ -82,7 +82,16 @@ export function useAppData(userId) {
 
   const reload = useCallback(async () => {
     try {
-      const raw = await loadRaw()
+      let raw
+      try {
+        raw = await loadRaw()
+      } catch (e) {
+        // 로그인 기간이 지난 상태로 요청한 경우: 먼저 연장하고 한 번 더
+        const m = String((e && (e.message || e.code)) || '')
+        if (!/JWT|expired|401|PGRST30/i.test(m)) throw e
+        await supabase.auth.refreshSession()
+        raw = await loadRaw()
+      }
       if (alive.current) { setDb(buildDb(raw)); setErr('') }
     } catch (e) {
       if (alive.current) setErr((e && e.message) || String(e))
@@ -103,13 +112,22 @@ export function useAppData(userId) {
     })
     ch.subscribe()
     // 화면으로 다시 돌아오면 최신으로
-    const onVis = () => { if (document.visibilityState === 'visible') soon() }
+    const onVis = async () => {
+      if (document.visibilityState !== 'visible') return
+      // 절전·오래 둔 뒤 돌아오면 로그인부터 연장하고 다시 불러오기
+      try { await supabase.auth.getSession() } catch (e) { /* 다음 시도에서 */ }
+      soon()
+    }
     document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onVis)
+    window.addEventListener('online', onVis)
     return () => {
       alive.current = false
       clearTimeout(timer.current)
       supabase.removeChannel(ch)
       document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', onVis)
+      window.removeEventListener('online', onVis)
     }
   }, [userId, reload, soon])
 

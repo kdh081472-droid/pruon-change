@@ -9,7 +9,7 @@ function tokenAt(el) {
   return m ? { ch: m[2], q: m[3], start: b.length - m[3].length - 1, end: el.selectionStart } : null
 }
 
-export default function Chat({ cid, onClose }) {
+export default function Chat({ cid, onClose, docked }) {
   const { db, me, uid, C, isLate, unreadCnt, mentionsMe, reload, toast, markReadLocal, openTask } = useApp()
   const c = C(cid)
   const closed = c.status === '종결'
@@ -47,7 +47,7 @@ export default function Chat({ cid, onClose }) {
       if (e.key !== 'Escape') return
       if (ctx) return setCtx(null)
       if (pop) return
-      onClose()
+      if (!docked) onClose()
     }
     document.addEventListener('keydown', on)
     return () => document.removeEventListener('keydown', on)
@@ -181,15 +181,15 @@ export default function Chat({ cid, onClose }) {
 
   return (
     <>
-      <div className="scrim" onClick={onClose} />
-      <div className="chat" role="dialog" aria-modal="true" aria-label="제품 대화" onClick={e => { if (ctx && !e.target.closest('.ctx')) setCtx(null) }}>
+      {!docked && <div className="scrim" onClick={onClose} />}
+      <div className={'chat' + (docked ? ' docked' : '')} role={docked ? 'complementary' : 'dialog'} aria-modal={docked ? undefined : true} aria-label="제품 대화">
         <div className="ch-h">
           <div>
             <span className="s-tag">제품 대화 · {list.filter(m => !m.deleted).length}개</span>
             <b>{c.title}</b>
             {!closed && <span className="ch-tip">메시지를 누르면 답글·복사(내 글은 수정·삭제도) · 숫자는 안 읽은 사람 수</span>}
           </div>
-          <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>
+          {!docked && <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>}
         </div>
         <div className="ch-list" ref={listRef}>
           {!list.length && <div className="empty">아직 대화가 없습니다. 첫 글을 남겨보세요.</div>}
@@ -213,7 +213,7 @@ export default function Chat({ cid, onClose }) {
                         <span className="rq-t">{o.deleted ? '삭제된 메시지입니다' : snip(o.body, 40)}</span>
                       </button>
                     )}
-                    {t && <button type="button" className="ch-task" onClick={() => { onClose(); openTask(t.id) }}><b>/</b> [{t.department}] {t.title}</button>}
+                    {t && <button type="button" className="ch-task" onClick={() => { if (!docked) onClose(); openTask(t.id) }}><b>/</b> [{t.department}] {t.title}</button>}
                     <MsgText m={m} />
                   </div>
                   <span className="side">
