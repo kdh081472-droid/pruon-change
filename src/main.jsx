@@ -8,3 +8,10 @@ createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 )
+
+// 홈 화면 추가 / PC 바로가기(앱 설치)용
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {})
+  })
+}
