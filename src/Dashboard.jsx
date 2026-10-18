@@ -6,6 +6,7 @@ import { dd, iso, todayMid, errText } from './util.js'
 import { MineTab, LateTab, NewChatBlock } from './Mine.jsx'
 import TimelineTab, { LateBlock, Calendar, ProductCard } from './Timeline.jsx'
 import Sidebar, { DockEmpty } from './Sidebar.jsx'
+import ChatList from './ChatList.jsx'
 import Sheet from './Sheets.jsx'
 import NewChange, { emptyForm } from './NewChange.jsx'
 import Chat from './Chat.jsx'
@@ -40,6 +41,7 @@ export default function Dashboard({ session }) {
   useEffect(() => {
     if (!me || tab === null) return
     if (viewer && (tab === 'mine' || tab === 'new')) setTab('late')
+    if (wide && tab === 'chat') setTab(viewer ? 'late' : 'mine')
     if (!wide && tab === 'product') { setTab('timeline'); if (sel) setUi(u => ({ ...u, open: { ...u.open, [sel]: true } })) }
     if (!viewer && tab === 'late') setTab('mine')
     if (viewer) setUi(u => (u.calMine ? { ...u, calMine: false } : u))
@@ -96,10 +98,11 @@ export default function Dashboard({ session }) {
   if (!app || !tab) return null
 
   const myOpenN = db.tasks.filter(t => t.department === me.department && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length
+  const unreadAll = db.changes.reduce((n, c) => n + app.unread(c.id).length, 0)
   const tabs = viewer
-    ? [['late', '지연 현황'], ['timeline', '타임라인']]
-    : [['mine', '내 할 일'], ['timeline', '타임라인'], ['new', '변경 등록']]
-  const title = { mine: '내 할 일', late: '지연 현황', timeline: wide ? '전체 일정 · 달력' : '타임라인', new: '변경 등록', settings: '내 정보', product: '' }[tab]
+    ? [['late', '지연 현황'], ['timeline', '타임라인'], ['chat', '대화']]
+    : [['mine', '내 할 일'], ['timeline', '타임라인'], ['chat', '대화'], ['new', '변경 등록']]
+  const title = { chat: '대화', mine: '내 할 일', late: '지연 현황', timeline: wide ? '전체 일정 · 달력' : '타임라인', new: '변경 등록', settings: '내 정보', product: '' }[tab]
 
   const content = (
     <>
@@ -114,6 +117,7 @@ export default function Dashboard({ session }) {
       {tab === 'new' && !viewer && (
         <NewChange nf={nf || emptyForm(db)} setNf={setNf} onDone={cid => { setNf(null); app.goChange(cid) }} />
       )}
+      {tab === 'chat' && !wide && <ChatList />}
       {tab === 'settings' && <Settings />}
     </>
   )
@@ -169,6 +173,7 @@ export default function Dashboard({ session }) {
               <button key={k} type="button" className={'tab' + (tab === k ? ' on' : '')} onClick={() => { setTab(k); setSheet(null); window.scrollTo(0, 0) }}>
                 {ICON[k]}<span>{label}</span>
                 {k === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
+                {k === 'chat' && unreadAll > 0 && <span className="n">{unreadAll}</span>}
               </button>
             ))}
           </div>

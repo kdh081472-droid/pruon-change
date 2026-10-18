@@ -122,7 +122,6 @@ function TaskSheet({ tid, close }) {
         {linked.length > 0 && (
           <ol>{linked.map(m => <li key={m.id}><Person id={m.user_id} /> · “<MsgText m={m} />” — {stamp(m.created_at)}</li>)}</ol>
         )}
-        {!wide && <button type="button" className="link" onClick={() => openChat(c.id)}>제품 대화 열기 ›</button>}
       </div>
       {logs.length > 0 && (
         <div className="hist">
