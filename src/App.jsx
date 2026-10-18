@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase, configured, DEPARTMENTS, EMAIL_DOMAIN } from './supabase.js'
+import { supabase, configured, SIGNUP_DEPTS, VIEWER, EMAIL_DOMAIN } from './supabase.js'
 import Dashboard from './Dashboard.jsx'
 
 function errorText(err) {
@@ -16,8 +16,8 @@ function errorText(err) {
 
 function Card({ title, children }) {
   return (
-    <div className="wrap">
-      <div className="card">
+    <div className="auth">
+      <div className="auth-card">
         <h1>푸르온 변경점 관리</h1>
         <h2>{title}</h2>
         {children}
@@ -111,8 +111,9 @@ function Signup({ go }) {
         <label>소속 부서</label>
         <select value={f.department} onChange={set('department')} required>
           <option value="">선택</option>
-          {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+          {SIGNUP_DEPTS.map(d => <option key={d}>{d}</option>)}
         </select>
+        {f.department === VIEWER && <p className="muted small-text">임원 계정은 보기 전용입니다. 모든 일정·이력을 볼 수 있고 대화는 쓸 수 있지만, 처리·수정은 할 수 없습니다.</p>}
         <label>회사 이메일</label>
         <input type="email" value={f.email} onChange={set('email')} placeholder={'name@' + EMAIL_DOMAIN} required autoComplete="email" />
         <label>비밀번호 (8자 이상)</label>
