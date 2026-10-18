@@ -3,6 +3,15 @@ import { supabase, ORDER, SHORT, ITEM_TYPES } from './supabase.js'
 import { useApp, Person } from './ctx.jsx'
 import { add, dayTxt, diffDays, iso, parse, todayMid, errText, stampFull } from './util.js'
 
+// 품목 종류별 이름 예시
+const NAME_HINT = {
+  단품: '예: 교자만두 1kg',
+  '번들/기획상품': '예: 교자만두 1kg×2 번들',
+  띠지: '예: 교자만두 번들 띠지',
+  박스: '예: 교자만두 6입 박스',
+  기타: '품목 이름',
+}
+
 export function emptyForm() {
   return {
     title: '', desc: '', reason: '', target: iso(add(todayMid(), 35)),
@@ -153,13 +162,13 @@ export default function NewChange({ nf, setNf, onDone }) {
       </div>
 
       <div className="card nf">
-        <h3 className="nf-t">2. 대상 품목 <small>연관 품목을 빠짐없이</small></h3>
+        <h3 className="nf-t">2. 대상 품목 <small>이번 변경으로 포장재가 바뀌는 제품·포장재를 종류별로 빠짐없이</small></h3>
         {nf.items.map((it, i) => (
           <div className="nf-item" key={i}>
             <select value={it.type} aria-label="품목 종류" onChange={e => set({ items: nf.items.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })}>
               {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
-            <input value={it.name} placeholder="품목명" aria-label="품목명" onChange={e => set({ items: nf.items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)), err: '' })} />
+            <input value={it.name} placeholder={NAME_HINT[it.type] || '품목 이름'} aria-label="품목 이름" onChange={e => set({ items: nf.items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)), err: '' })} />
             {nf.items.length > 1 && <button type="button" className="x" aria-label="품목 삭제" onClick={() => set({ items: nf.items.filter((_, j) => j !== i) })}>✕</button>}
           </div>
         ))}

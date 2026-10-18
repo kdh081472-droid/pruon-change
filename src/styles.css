@@ -578,3 +578,12 @@ button.me-chip { border: 0; cursor: pointer; color: var(--text) }
 .cl-d { font-family: var(--mono); font-size: 11px; color: var(--faint) }
 .cl-s { font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-weight: 600 }
 .cl .m-h .d { font-family: var(--f) }
+
+/* ===== 화면 폭 고정 (긴 목록 이름·날짜 칸 때문에 가로로 밀리지 않게) ===== */
+html, body { max-width: 100%; overflow-x: hidden }
+.app, main, .card, .nf, .pbox { min-width: 0; max-width: 100% }
+.pb-row select { flex: 1 1 0; width: 0; min-width: 0; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap }
+.pb-nm, .pb-card .tg-dl dd, .pb-form p { overflow-wrap: anywhere; word-break: break-all }
+.nf select, .form select { max-width: 100%; text-overflow: ellipsis }
+.nf input[type=date], .form input[type=date] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; min-height: 44px; text-align: left }
+.nf-dl input[type=date] { min-height: 0; display: inline-block; width: auto }
