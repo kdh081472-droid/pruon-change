@@ -26,8 +26,14 @@ function Card({ title, children }) {
   )
 }
 
+// 아이디 저장 (이 브라우저에만 이메일을 기억)
+const SAVE_KEY = 'pruon_saved_email'
+function readSaved() { try { return localStorage.getItem(SAVE_KEY) || '' } catch (e) { return '' } }
+function writeSaved(v) { try { v ? localStorage.setItem(SAVE_KEY, v) : localStorage.removeItem(SAVE_KEY) } catch (e) { /* 저장 불가 브라우저 */ } }
+
 function Login({ go }) {
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(readSaved)
+  const [remember, setRemember] = useState(() => !!readSaved())
   const [pw, setPw] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -36,8 +42,8 @@ function Login({ go }) {
     e.preventDefault()
     setBusy(true); setMsg('')
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw })
-    if (error) setMsg(errorText(error))
-    setBusy(false)
+    if (error) { setMsg(errorText(error)); setBusy(false); return }
+    writeSaved(remember ? email.trim() : '')
   }
 
   return (
@@ -46,7 +52,11 @@ function Login({ go }) {
         <label>회사 이메일</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={'name@' + EMAIL_DOMAIN} required autoComplete="email" />
         <label>비밀번호</label>
-        <input type="password" value={pw} onChange={e => setPw(e.target.value)} required autoComplete="current-password" />
+        <input type="password" value={pw} onChange={e => setPw(e.target.value)} required autoComplete="current-password" autoFocus={!!email} />
+        <label className="ck-row">
+          <input type="checkbox" checked={remember} onChange={e => { setRemember(e.target.checked); if (!e.target.checked) writeSaved('') }} />
+          아이디 저장
+        </label>
         {msg && <p className="err">{msg}</p>}
         <button disabled={busy}>{busy ? '확인 중…' : '로그인'}</button>
       </form>

@@ -486,6 +486,8 @@ button.me-chip { border: 0; cursor: pointer; color: var(--text) }
 .auth-card .links { display: flex; justify-content: space-between; margin-top: 16px; font-size: 14px }
 .auth-card .links a { color: var(--accent); cursor: pointer }
 .auth-card .err { color: var(--late); font-size: 14px; margin: 12px 0 0 }
+.auth-card .ck-row { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-weight: 500; color: var(--text); cursor: pointer; user-select: none }
+.auth-card .ck-row input { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--accent); flex: none }
 .auth-card code { background: var(--bg); padding: 1px 5px; border-radius: 4px }
 .nc .m-h .d, .day-card .m-h .d { font-family: var(--f) }
 
