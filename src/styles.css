@@ -824,7 +824,7 @@ html, body { max-width: 100%; overflow-x: hidden }
 @media (max-width: 1360px) { .p-h2.pcv .p2-top { flex-wrap: wrap } .p-h2.pcv .p-title { flex-basis: 100% } .p-h2.pcv .dd-big { margin-left: auto } }
 /* 부서별 카드 칸 */
 .dg-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 4px }
-@media (min-width: 1100px) { .dg-grid { grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)) } }
+
 .dg-grid .dg2 { border: 1px solid var(--line); border-radius: 14px; padding: 4px 12px 8px; background: var(--surface); align-self: start }
 .dg-grid .dg2.od { border-color: var(--late); box-shadow: inset 3px 0 0 var(--late) }
 .dg-grid .dg2.mine { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)) }
@@ -845,4 +845,4 @@ html, body { max-width: 100%; overflow-x: hidden }
 .mon2 { padding: 12px 14px 14px; margin-bottom: 0 }
 .mon2 h3 { margin: 0 0 6px }
 .cal2 { margin-bottom: 12px }
-@media (min-width: 1100px) { .c2 { min-height: clamp(46px, calc((100vh - 470px) / 6), 96px) } }
+@media (min-width: 1100px) { .c2 { min-height: clamp(60px, calc((100vh - 360px) / 6), 130px) } }

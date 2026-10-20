@@ -127,7 +127,7 @@ export function ProductCard({ c, forceOpen }) {
         <span className="dd-big"><DBadge c={c} /></span>
       </div>
       <div className="p2-meta">
-        <span className="mono">전환 {md(c.target_date)}</span>
+        {!pcView && <span className="mono">전환 {md(c.target_date)}</span>}
         {tlogs.length > 0 && <span className="chg">전환일 변경됨</span>}
         <span>{ts.length - left.length}/{ts.length} 처리</span>
         {left.length > 0 && <span className={od ? 'late' : ''}>{stopped ? '중단 ' + left.length + '건' : '남은 ' + left.length + '건'}</span>}
