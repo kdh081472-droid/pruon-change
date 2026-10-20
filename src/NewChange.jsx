@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase, ORDER, SHORT, ITEM_TYPES } from './supabase.js'
 import { useApp, Person } from './ctx.jsx'
-import { add, dayTxt, diffDays, iso, parse, todayMid, errText, stampFull } from './util.js'
+import { add, iso, todayMid, errText, stampFull } from './util.js'
 
 // 품목 종류별 이름 예시
 const NAME_HINT = {
@@ -9,6 +9,7 @@ const NAME_HINT = {
   '번들/기획상품': '예: 교자만두 1kg×2 번들',
   띠지: '예: 교자만두 번들 띠지',
   박스: '예: 교자만두 6입 박스',
+  원료: '예: 돼지고기 (국내산 → 스페인산)',
   기타: '품목 이름',
 }
 
@@ -16,7 +17,7 @@ export function emptyForm() {
   return {
     title: '', desc: '', reason: '', target: iso(add(todayMid(), 35)),
     items: [{ type: '단품', name: '' }],
-    picks: {}, days: {}, extras: [],
+    picks: {}, extras: [],
     presetSel: 'base', presetUsed: 'base', presetMode: null, presetErr: '',
     addDept: null, err: '',
   }
@@ -26,17 +27,14 @@ export default function NewChange({ nf, setNf, onDone }) {
   const { db, uid, C, reload, toast } = useApp()
   const [busy, setBusy] = useState(false)
   const [addTitle, setAddTitle] = useState('')
-  const [addDate, setAddDate] = useState('')
   const [pName, setPName] = useState('')
   const [pRename, setPRename] = useState('')
   const set = patch => setNf({ ...nf, ...patch })
   const tpls = db.templates.filter(t => t.active)
   const picked = t => nf.picks[t.id] !== undefined ? nf.picks[t.id] : true
-  const daysOf = t => nf.days[t.id] !== undefined ? nf.days[t.id] : t.days_before
-  const tgt = nf.target ? parse(nf.target) : null
   const pickedN = tpls.filter(picked).length + nf.extras.length
 
-  const base = { id: 'base', name: `기본 · 포장지 변경 (${tpls.length}건)`, fixed: true, items: tpls.map(t => ({ department: t.department, title: t.title, days: t.days_before })) }
+  const base = { id: 'base', name: `기본 목록 (${tpls.length}건)`, fixed: true, items: tpls.map(t => ({ department: t.department, title: t.title })) }
   const presets = [base, ...db.presets]
   const curP = presets.find(p => p.id === nf.presetSel) || base
   const usedP = presets.find(p => p.id === nf.presetUsed)
@@ -44,27 +42,20 @@ export default function NewChange({ nf, setNf, onDone }) {
   const gClosed = db.presets.filter(p => p.source_change_id)
 
   // 지금 화면의 배정 → 목록 항목
-  const currentItems = () => {
-    if (!tgt) return null
-    return [
-      ...tpls.filter(picked).map(t => ({ department: t.department, title: t.title, days: daysOf(t) })),
-      ...nf.extras.map(x => ({ department: x.dept, title: x.title, days: diffDays(nf.target, x.date) })),
-    ]
-  }
+  const currentItems = () => [
+    ...tpls.filter(picked).map(t => ({ department: t.department, title: t.title })),
+    ...nf.extras.map(x => ({ department: x.dept, title: x.title })),
+  ]
 
   function loadPreset() {
     const P = curP
-    const t0 = tgt || add(todayMid(), 35)
-    const picks = {}, days = {}
-    tpls.forEach(t => {
-      const f = P.items.find(i => i.department === t.department && i.title === t.title)
-      picks[t.id] = !!f
-      days[t.id] = f ? f.days : t.days_before
-    })
+    const picks = {}
+    tpls.forEach(t => { picks[t.id] = P.items.some(i => i.department === t.department && i.title === t.title) })
     const extras = P.items
       .filter(i => !tpls.some(t => t.department === i.department && t.title === i.title))
-      .map(i => ({ dept: i.department, title: i.title, date: iso(add(t0, -i.days)) }))
-    setNf({ ...nf, picks, days, extras, presetUsed: P.id, presetMode: null, presetErr: '' })
+      .filter(i => ORDER.includes(i.department))            // 지금은 없는 부서의 할 일은 빼고
+      .map(i => ({ dept: i.department, title: i.title }))
+    setNf({ ...nf, picks, extras, presetUsed: P.id, presetMode: null, presetErr: '' })
     toast(`"${P.name.length > 24 ? P.name.slice(0, 24) + '…' : P.name}" 목록을 불러왔습니다`)
   }
 
@@ -75,7 +66,6 @@ export default function NewChange({ nf, setNf, onDone }) {
       const nm = pName.trim(), items = currentItems()
       if (!nm) return set({ presetErr: '목록 이름을 입력해주세요.' })
       if (presets.some(x => x.name === nm)) return set({ presetErr: '같은 이름의 목록이 이미 있습니다.' })
-      if (!items) return set({ presetErr: '전환일을 먼저 정해야 마감 일수를 저장할 수 있습니다.' })
       if (!items.length) return set({ presetErr: '저장할 할 일이 없습니다.' })
       res = await supabase.from('assign_presets').insert({ name: nm, items, created_by: uid }).select('id').single()
       if (res.error) return set({ presetErr: errText(res.error) })
@@ -96,7 +86,6 @@ export default function NewChange({ nf, setNf, onDone }) {
     }
     if (kind === 'over') {
       const items = currentItems()
-      if (!items) return set({ presetErr: '전환일을 먼저 정해야 마감 일수를 저장할 수 있습니다.' })
       if (!items.length) return set({ presetErr: '저장할 할 일이 없습니다.' })
       res = await supabase.from('assign_presets').update({ items, updated_at: new Date().toISOString() }).eq('id', P.id).select('id')
       if (res.error || !res.data.length) return set({ presetErr: res.error ? errText(res.error) : '권한이 없습니다.' })
@@ -113,24 +102,14 @@ export default function NewChange({ nf, setNf, onDone }) {
     }
   }
 
-  function changeTarget(v) {
-    // 전환일을 바꾸면 직접 추가한 할 일 마감도 같은 날수만큼 이동
-    let extras = nf.extras
-    if (nf.target && v) {
-      const sh = diffDays(v, nf.target)
-      extras = extras.map(x => ({ ...x, date: iso(add(parse(x.date), sh)) }))
-    }
-    set({ target: v, extras })
-  }
-
   async function submit() {
     const items = nf.items.map(i => ({ type: i.type, name: i.name.trim() })).filter(i => i.name)
     const err = !nf.title.trim() ? '제목을 입력해주세요.' : !nf.target ? '전환일을 골라주세요.'
       : !items.length ? '대상 품목을 1개 이상 입력해주세요.' : !pickedN ? '할 일을 1건 이상 배정해주세요.' : ''
     if (err) return set({ err })
     const tasks = [
-      ...tpls.filter(picked).map(t => ({ department: t.department, title: t.title, due_date: iso(add(tgt, -daysOf(t))) })),
-      ...nf.extras.map(x => ({ department: x.dept, title: x.title, due_date: x.date })),
+      ...tpls.filter(picked).map(t => ({ department: t.department, title: t.title })),
+      ...nf.extras.map(x => ({ department: x.dept, title: x.title })),
     ]
     setBusy(true)
     const { data, error } = await supabase.rpc('create_change', {
@@ -152,17 +131,18 @@ export default function NewChange({ nf, setNf, onDone }) {
       <div className="card nf">
         <h3 className="nf-t">1. 기본 정보</h3>
         <label htmlFor="nf-title">제목</label>
-        <input id="nf-title" value={nf.title} onChange={e => set({ title: e.target.value, err: '' })} placeholder="예: 곰곰 교자만두 → 교자만두 포장지 변경" />
+        <input id="nf-title" value={nf.title} onChange={e => set({ title: e.target.value, err: '' })} placeholder="예: 쿠팡_곰곰 교자만두_포장지 변경" />
+        <p className="hint nf-hint">업체명_제품명_간단한 내용 순서로 적어주세요</p>
         <label htmlFor="nf-desc">변경 내용</label>
         <textarea id="nf-desc" rows={2} value={nf.desc} onChange={e => set({ desc: e.target.value })} placeholder="무엇이 어떻게 바뀌는지" />
         <label htmlFor="nf-reason">변경 사유</label>
         <input id="nf-reason" value={nf.reason} onChange={e => set({ reason: e.target.value })} placeholder="예: 고객사 요청" />
-        <label htmlFor="nf-target">신규 포장지 전환일</label>
-        <input id="nf-target" type="date" value={nf.target} onChange={e => changeTarget(e.target.value)} />
+        <label htmlFor="nf-target">전환일 (변경 적용일)</label>
+        <input id="nf-target" type="date" value={nf.target} onChange={e => set({ target: e.target.value, err: '' })} />
       </div>
 
       <div className="card nf">
-        <h3 className="nf-t">2. 대상 품목 <small>이번 변경으로 포장재가 바뀌는 제품·포장재를 종류별로 빠짐없이</small></h3>
+        <h3 className="nf-t">2. 대상 품목 <small>이번 변경이 적용되는 제품·자재를 빠짐없이</small></h3>
         {nf.items.map((it, i) => (
           <div className="nf-item" key={i}>
             <select value={it.type} aria-label="품목 종류" onChange={e => set({ items: nf.items.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })}>
@@ -176,7 +156,7 @@ export default function NewChange({ nf, setNf, onDone }) {
       </div>
 
       <div className="card nf">
-        <h3 className="nf-t">3. 부서별 할 일 배정 <small>체크해서 빼거나 추가하고, 마감일은 눌러서 바꾸세요</small></h3>
+        <h3 className="nf-t">3. 부서별 할 일 배정 <small>체크해서 빼거나, 필요한 할 일을 추가하세요</small></h3>
         <div className="pbox">
           <div className="pb-h"><b>배정 목록</b><span>저장한 목록이나 종결된 변경의 배정을 불러와서 쓸 수 있습니다</span></div>
           <div className="pb-row">
@@ -206,8 +186,8 @@ export default function NewChange({ nf, setNf, onDone }) {
           {nf.presetMode === 'save' && (
             <div className="pb-form">
               <label htmlFor="p-name">새 배정 목록 이름</label>
-              <input id="p-name" autoFocus value={pName} onChange={e => setPName(e.target.value)} placeholder="예: 김말이 박스 변경용" />
-              <p className="note">아래에 체크·추가된 할 일 {pickedN}건이 바꾼 마감 일수(전환 며칠 전)까지 함께 저장됩니다.</p>
+              <input id="p-name" autoFocus value={pName} onChange={e => setPName(e.target.value)} placeholder="예: 원료 변경용" />
+              <p className="note">아래에 체크·추가된 할 일 {pickedN}건이 함께 저장됩니다.</p>
               {nf.presetErr && <p className="err">{nf.presetErr}</p>}
               <div className="pb-row"><button type="button" className="btn sm" onClick={() => presetAction('save')}>저장</button><button type="button" className="btn sm ghost" onClick={() => set({ presetMode: null })}>취소</button></div>
             </div>
@@ -222,7 +202,7 @@ export default function NewChange({ nf, setNf, onDone }) {
           )}
           {nf.presetMode === 'over' && (
             <div className="pb-form">
-              <p>"<b>{curP.name}</b>"의 할 일을 아래에 지금 체크·추가된 <b>{pickedN}건</b>(바꾼 마감 일수 포함)으로 바꿀까요?</p>
+              <p>"<b>{curP.name}</b>"의 할 일을 아래에 지금 체크·추가된 <b>{pickedN}건</b>으로 바꿀까요?</p>
               {nf.presetErr && <p className="err">{nf.presetErr}</p>}
               <div className="pb-row"><button type="button" className="btn sm" onClick={() => presetAction('over')}>덮어쓰기</button><button type="button" className="btn sm ghost" onClick={() => set({ presetMode: null })}>취소</button></div>
             </div>
@@ -256,48 +236,32 @@ export default function NewChange({ nf, setNf, onDone }) {
             <section key={d} className={'dept nf-d' + (n === 0 ? ' none' : '')}>
               <div className="grp"><span className="dn">{d}</span><span className="st">{n ? n + '건 배정' : '배정 없음'}</span></div>
               {rows.map(t => {
-                const on = picked(t), dv = daysOf(t), chg = dv !== t.days_before
+                const on = picked(t)
                 return (
-                  <div key={t.id} className={'nf-row ed' + (on ? '' : ' off')}>
+                  <div key={t.id} className={'nf-row' + (on ? '' : ' off')}>
                     <input type="checkbox" id={'pk' + t.id} checked={on} onChange={e => set({ picks: { ...nf.picks, [t.id]: e.target.checked }, presetUsed: null, err: '' })} />
-                    <div>
-                      <label htmlFor={'pk' + t.id} className="nf-tt">{t.title}</label>
-                      <div className="nf-dl">
-                        <input type="date" aria-label={t.title + ' 마감일'} disabled={!on || !tgt} value={tgt ? iso(add(tgt, -dv)) : ''}
-                          onChange={e => { if (e.target.value) set({ days: { ...nf.days, [t.id]: diffDays(nf.target, e.target.value) }, presetUsed: null }) }} />
-                        <small>{dayTxt(dv)}{chg && <> · <span className="chg">변경됨</span></>}</small>
-                        {chg && <button type="button" className="link rst" onClick={() => set({ days: { ...nf.days, [t.id]: t.days_before } })}>기본값({dayTxt(t.days_before).replace('전환 ', '')})</button>}
-                      </div>
-                    </div>
+                    <label htmlFor={'pk' + t.id} className="nf-tt">{t.title}</label>
                   </div>
                 )
               })}
               {ex.map(({ e, i }) => (
-                <div key={'x' + i} className="nf-row add ed">
+                <div key={'x' + i} className="nf-row add">
                   <span className="new">추가</span>
-                  <div>
-                    <span className="nf-tt">{e.title}</span>
-                    <div className="nf-dl">
-                      <input type="date" aria-label={e.title + ' 마감일'} value={e.date}
-                        onChange={ev => { if (ev.target.value) set({ extras: nf.extras.map((x, j) => (j === i ? { ...x, date: ev.target.value } : x)), presetUsed: null }) }} />
-                      {tgt && <small>{dayTxt(diffDays(nf.target, e.date))}</small>}
-                    </div>
-                  </div>
+                  <span className="nf-tt">{e.title}</span>
                   <button type="button" className="x" aria-label="추가한 할 일 삭제" onClick={() => set({ extras: nf.extras.filter((_, j) => j !== i) })}>✕</button>
                 </div>
               ))}
               {nf.addDept === d ? (
                 <div className="nf-add">
                   <input autoFocus value={addTitle} onChange={e => setAddTitle(e.target.value)} placeholder="할 일 내용" aria-label="추가할 할 일" />
-                  <input type="date" value={addDate} onChange={e => setAddDate(e.target.value)} aria-label="마감일" />
                   <button type="button" className="btn sm" onClick={() => {
-                    if (!addTitle.trim() || !addDate) return toast('할 일 내용과 마감일을 입력해주세요')
-                    set({ extras: [...nf.extras, { dept: d, title: addTitle.trim(), date: addDate }], addDept: null, presetUsed: null, err: '' })
+                    if (!addTitle.trim()) return toast('할 일 내용을 입력해주세요')
+                    set({ extras: [...nf.extras, { dept: d, title: addTitle.trim() }], addDept: null, presetUsed: null, err: '' })
                   }}>추가</button>
                   <button type="button" className="btn sm ghost" onClick={() => set({ addDept: null })}>취소</button>
                 </div>
               ) : (
-                <button type="button" className="link nf-plus" onClick={() => { setAddTitle(''); setAddDate(tgt ? iso(add(tgt, -7)) : ''); set({ addDept: d }) }}>+ {d} 할 일 추가</button>
+                <button type="button" className="link nf-plus" onClick={() => { setAddTitle(''); set({ addDept: d }) }}>+ {d} 할 일 추가</button>
               )}
             </section>
           )

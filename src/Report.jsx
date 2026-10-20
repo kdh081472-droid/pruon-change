@@ -23,13 +23,14 @@ export default function Report({ cid, onClose }) {
     return () => document.removeEventListener('keydown', on)
   })
 
-  const ts = [...c.tasks].sort((a, b) => ORDER.indexOf(a.department) - ORDER.indexOf(b.department) || parse(a.due_date) - parse(b.due_date))
+  const ts = [...c.tasks].sort((a, b) => ORDER.indexOf(a.department) - ORDER.indexOf(b.department) || String(a.created_at).localeCompare(String(b.created_at)))
+  const deptsIn = [...ORDER.filter(d => ts.some(t => t.department === d)), ...[...new Set(ts.map(t => t.department))].filter(d => !ORDER.includes(d))]
   const tmap = {}
   ts.forEach(t => { tmap[t.id] = t })
   const clogs = db.changeLogs.filter(x => x.change_id === cid)
   const tlogs = db.taskLogs.filter(x => x.change_id === cid)
   const targetChanges = clogs.filter(x => x.action === '전환일 변경')
-  const lateDone = t => t.status !== '대기' && t.done_at && stampFull(t.done_at).slice(0, 10) > t.due_date
+  const lateDone = t => t.status !== '대기' && t.done_at && stampFull(t.done_at).slice(0, 10) > c.target_date   // 전환일 이후 처리
   const msgs = db.messages.filter(m => m.change_id === cid).sort((a, b) => a.id - b.id)
   const docNo = 'CHG-' + String(c.created_at).slice(0, 4) + '-' + c.id.slice(0, 6).toUpperCase()
 
@@ -161,24 +162,23 @@ export default function Report({ cid, onClose }) {
             <div><b>{ts.length}</b>전체 할 일</div>
             <div><b>{nDone}</b>확인완료</div>
             <div><b>{nNa}</b>해당없음</div>
-            <div><b>{nLate}</b>마감 후 처리</div>
+            <div><b>{nLate}</b>전환일 후 처리</div>
             <div><b>{targetChanges.length}</b>전환일 변경</div>
           </div>
 
           <h2>3. 부서별 처리 결과</h2>
           <table className="rt">
-            <thead><tr><th>부서</th><th>할 일</th><th>마감</th><th>결과</th><th>확인 메모</th><th>처리자</th></tr></thead>
+            <thead><tr><th>부서</th><th>할 일</th><th>결과</th><th>확인 메모</th><th>처리자</th></tr></thead>
             <tbody>
-              {ORDER.filter(d => ts.some(t => t.department === d)).map(d => {
+              {deptsIn.map(d => {
                 const xs = ts.filter(t => t.department === d)
                 return xs.map((t, i) => (
                   <tr key={t.id}>
                     {i === 0 && <td rowSpan={xs.length} className="rd">{d}</td>}
                     <td>{t.is_extra && '[추가 배정] '}{t.title}</td>
-                    <td className="c">{md(t.due_date)}</td>
                     <td className="c">
                       {t.status === '대기' ? (c.close_type === '중단' ? <span className="lt">중단(미처리)</span> : '대기') : t.status}
-                      {lateDone(t) && <><br /><span className="lt">마감 후 처리</span></>}
+                      {lateDone(t) && <><br /><span className="lt">전환일 후 처리</span></>}
                     </td>
                     <td>{t.memo || ''}</td>
                     <td className="c">{t.done_by ? <><PersonR id={t.done_by} /><br />{stamp(t.done_at)}</> : '-'}</td>

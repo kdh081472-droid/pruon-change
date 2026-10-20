@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ORDER } from './supabase.js'
 import { useApp, Person, MsgText } from './ctx.jsx'
 import OrgTree from './Org.jsx'
-import { add, dd, ddLabel, iso, md, stamp, todayMid } from './util.js'
+import { md, stamp } from './util.js'
 
 export default function Sheet() {
   const app = useApp()
@@ -62,16 +62,14 @@ function useFocus() {
 
 /* ---------- 할 일 처리 ---------- */
 function TaskSheet({ tid, close }) {
-  const { db, me, viewer, wide, C, openChat } = useApp()
+  const { db, me, viewer, C, isLate } = useApp()
   const t = db.tasks.find(x => x.id === tid)
   const [mode, setMode] = useState(null)
   if (!t) return <><Top tag="" close={close} /><p className="empty">이 할 일을 찾을 수 없습니다.</p></>
   const c = C(t.change_id)
   const mineT = t.department === me.department
-  const n = dd(t.due_date)
-  const canDue = !viewer && c.status === '진행중' && t.status === '대기' && mineT
   const st = t.status === '대기'
-    ? <span className={n < 0 ? 'late' : ''}>{ddLabel(n)}</span>
+    ? <span className={isLate(t) ? 'late' : ''}>{isLate(t) ? '전환일 지남 · 대기' : '대기'}</span>
     : <span className="ok">{t.status === '완료' ? '✓ 확인완료' : '해당없음'}</span>
   const linked = db.messages.filter(m => m.task_id === t.id && !m.deleted)
   const logs = db.taskLogs.filter(x => x.task_id === t.id).sort((a, b) => a.id - b.id)
@@ -79,7 +77,6 @@ function TaskSheet({ tid, close }) {
   let actions = null
   if (mode === '완료' || mode === '해당없음') actions = <StatusForm t={t} mode={mode} back={() => setMode(null)} close={close} />
   else if (mode === '취소') actions = <CancelForm t={t} c={c} back={() => setMode(null)} close={close} />
-  else if (mode === '마감') actions = <DueForm t={t} back={() => setMode(null)} close={close} />
   else {
     const a = []
     if (!viewer && mineT && t.status === '대기' && c.status === '진행중') {
@@ -88,10 +85,9 @@ function TaskSheet({ tid, close }) {
     }
     if (!viewer && mineT && t.status !== '대기' && !(c.status === '종결' && c.close_type === '중단'))
       a.push(<button key="c" type="button" className="btn warn full" onClick={() => setMode('취소')}>확인 취소</button>)
-    if (canDue) a.push(<button key="m" type="button" className="btn ghost full" onClick={() => setMode('마감')}>마감일 변경</button>)
     actions = (
       <>
-        {viewer && <div className="lock">임원 계정은 보기 전용입니다. 처리는 {t.department} 부서가 합니다.</div>}
+        {viewer && <div className="lock">보기 전용 계정입니다. 처리는 {t.department} 부서가 합니다.</div>}
         {!viewer && !mineT && t.status === '대기' && <div className="lock">{t.department} 부서만 처리할 수 있습니다.</div>}
         {!viewer && c.status === '종결' && c.close_type === '중단' && <div className="lock">중단 종결된 변경입니다. 처리하려면 먼저 "다시 진행"을 해주세요.</div>}
         {a.length > 0 && <div className="s-acts">{a}</div>}
@@ -105,7 +101,7 @@ function TaskSheet({ tid, close }) {
       <div className="s-title">{t.title}</div>
       <dl className="kv">
         <dt>상태</dt><dd>{st}</dd>
-        <dt>마감일</dt><dd className="mono">{t.due_date}</dd>
+        <dt>전환일</dt><dd className="mono">{c.target_date}</dd>
         <dt>담당</dt><dd>{t.department}</dd>
       </dl>
       {t.is_extra && (
@@ -189,36 +185,6 @@ function CancelForm({ t, c, back, close }) {
   )
 }
 
-function DueForm({ t, back, close }) {
-  const { run } = useApp()
-  const [date, setDate] = useState(t.due_date)
-  const [reason, setReason] = useState('')
-  const { busy, err, setErr, go } = useBusy()
-  const save = () => go(async () => {
-    if (!date) return { error: '새 마감일을 골라주세요.' }
-    if (date === t.due_date) return { error: '기존과 같은 날짜입니다.' }
-    if (!reason.trim()) return { error: '변경 사유를 입력해주세요.' }
-    const r = await run('change_task_due', { p_task_id: t.id, p_new_due: date, p_reason: reason.trim() }, `마감일을 ${md(date)}로 바꿨습니다`)
-    if (!r.error) close()
-    return r
-  })
-  return (
-    <>
-      <div className="form">
-        <label htmlFor="f-date">새 마감일</label>
-        <input type="date" id="f-date" value={date} onChange={e => { setDate(e.target.value); setErr('') }} />
-        <label htmlFor="f-reason">변경 사유 (필수)</label>
-        <input id="f-reason" value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 신규 포장지 입고 일정 변경" />
-        {err && <p className="err">{err}</p>}
-      </div>
-      <div className="s-acts">
-        <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '저장 중…' : '변경 저장'}</button>
-        <button type="button" className="btn ghost" onClick={back}>취소</button>
-      </div>
-    </>
-  )
-}
-
 /* ---------- 전환일 변경 ---------- */
 function TargetSheet({ cid, close }) {
   const { C, run } = useApp()
@@ -229,7 +195,7 @@ function TargetSheet({ cid, close }) {
   const save = () => go(async () => {
     if (!date || date === c.target_date) return { error: '기존과 다른 날짜를 골라주세요.' }
     if (!reason.trim()) return { error: '변경 사유를 입력해주세요.' }
-    const r = await run('change_target', { p_change: cid, p_new: date, p_reason: reason.trim() }, `전환일을 ${md(date)}로 바꿨습니다 · 대기 중인 마감일도 함께 이동`)
+    const r = await run('change_target', { p_change: cid, p_new: date, p_reason: reason.trim() }, `전환일을 ${md(date)}로 바꿨습니다`)
     if (!r.error) close()
     return r
   })
@@ -241,8 +207,8 @@ function TargetSheet({ cid, close }) {
         <label htmlFor="f-date">새 전환일 (현재 {md(c.target_date)})</label>
         <input type="date" id="f-date" value={date} onChange={e => { setDate(e.target.value); setErr('') }} />
         <label htmlFor="f-reason">변경 사유 (필수)</label>
-        <input id="f-reason" value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 신규 포장지 입고 1주 지연" />
-        <p className="note">대기 중인 할 일의 마감일도 같은 날짜만큼 함께 이동합니다. 끝난 할 일은 그대로입니다.</p>
+        <input id="f-reason" value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 신규 자재 입고 1주 지연" />
+        <p className="note">바뀐 날짜와 사유는 이력에 남고 결과 보고서에도 들어갑니다.</p>
         {err && <p className="err">{err}</p>}
       </div>
       <div className="s-acts">
@@ -277,7 +243,7 @@ function StopSheet({ cid, close }) {
       </div>
       <div className="form">
         <label htmlFor="f-reason">중단 사유 (필수)</label>
-        <textarea id="f-reason" ref={ref} rows={3} value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 고객사 요청으로 포장 변경 계획 철회" />
+        <textarea id="f-reason" ref={ref} rows={3} value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 고객사 요청으로 변경 계획 철회" />
         {err && <p className="err">{err}</p>}
       </div>
       <div className="s-acts">
@@ -325,13 +291,12 @@ function AssignSheet({ cid, close }) {
   const c = C(cid)
   const [dept, setDept] = useState(ORDER[0])
   const [title, setTitle] = useState('')
-  const [date, setDate] = useState(iso(add(todayMid(), 7)))
   const [reason, setReason] = useState('')
   const { busy, err, setErr, go } = useBusy()
   const save = () => go(async () => {
-    if (!title.trim() || !date) return { error: '할 일과 마감일을 입력해주세요.' }
+    if (!title.trim()) return { error: '할 일 내용을 입력해주세요.' }
     if (!reason.trim()) return { error: '배정 사유를 입력해주세요.' }
-    const r = await run('assign_task', { p_change: cid, p_dept: dept, p_title: title.trim(), p_due: date, p_reason: reason.trim() }, `${dept} 부서에 할 일을 배정했습니다`)
+    const r = await run('assign_task', { p_change: cid, p_dept: dept, p_title: title.trim(), p_reason: reason.trim() }, `${dept} 부서에 할 일을 배정했습니다`)
     if (!r.error) close()
     return r
   })
@@ -345,8 +310,6 @@ function AssignSheet({ cid, close }) {
         <select id="f-dept" value={dept} onChange={clr(setDept)}>{ORDER.map(d => <option key={d}>{d}</option>)}</select>
         <label htmlFor="f-title">할 일</label>
         <input id="f-title" value={title} onChange={clr(setTitle)} placeholder="예: 번들 띠지 신규 도안 확인" />
-        <label htmlFor="f-date">마감일</label>
-        <input type="date" id="f-date" value={date} onChange={clr(setDate)} />
         <label htmlFor="f-reason">배정 사유 (필수)</label>
         <textarea id="f-reason" rows={2} value={reason} onChange={clr(setReason)} placeholder="예: 번들 띠지에도 구 제품명 표기가 있어 함께 교체 필요" />
         <p className="note">배정한 사람·부서·사유가 이력에 남고, 결과 보고서에도 들어갑니다.</p>

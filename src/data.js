@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { supabase } from './supabase.js'
+import { supabase, setDepts } from './supabase.js'
 
 // Supabase는 한 번에 최대 1000줄까지 주므로 나눠서 모두 가져옴
-async function fetchAll(table, orderCols, build) {
+async function fetchAll(table, orderCols, build, cols = '*') {
   const size = 1000
   const out = []
   for (let from = 0; ; from += size) {
-    let q = supabase.from(table).select('*')
+    let q = supabase.from(table).select(cols)
     orderCols.forEach(c => { q = q.order(c, { ascending: true }) })
     if (build) q = build(q)
     const { data, error } = await q.range(from, from + size - 1)
@@ -22,8 +22,10 @@ function shortTitle(t) {
 }
 
 export function buildDb(raw) {
+  setDepts(raw.depts)
   const people = {}
-  raw.profiles.forEach(p => { people[p.id] = p })
+  raw.profiles.forEach(p => { people[p.id] = p })   // 퇴사자 포함 (지난 기록 이름 표시용)
+  const active = raw.profiles.filter(p => !p.left_at)
   const tasksBy = {}
   raw.tasks.forEach(t => { (tasksBy[t.change_id] = tasksBy[t.change_id] || []).push(t) })
   const itemsBy = {}
@@ -44,7 +46,8 @@ export function buildDb(raw) {
   raw.reads.forEach(r => { reads[r.user_id + '|' + r.change_id] = r.last_read_id })
   return {
     people,
-    profiles: raw.profiles,
+    profiles: active,                  // 재직자만 (조직도·@부르기·안 읽은 사람 수)
+    depts: raw.depts,
     changes,
     changeMap,
     tasks: raw.tasks,
@@ -58,19 +61,20 @@ export function buildDb(raw) {
 }
 
 export async function loadRaw() {
-  const [profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads] = await Promise.all([
-    fetchAll('profiles', ['id']),
+  const [profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts] = await Promise.all([
+    fetchAll('profiles', ['id'], null, 'id,name,email,department,created_at,left_at'),
     fetchAll('change_requests', ['created_at', 'id']),
     fetchAll('change_items', ['id']),
-    fetchAll('tasks', ['due_date', 'created_at', 'id']),
+    fetchAll('tasks', ['created_at', 'id']),
     fetchAll('task_logs', ['id']),
     fetchAll('change_logs', ['id']),
     fetchAll('assign_presets', ['created_at', 'id']),
-    fetchAll('templates', ['sort_order', 'id'], q => q.eq('change_type', '포장지 변경')),
+    fetchAll('templates', ['sort_order', 'id'], q => q.eq('change_type', '포장지 변경').eq('active', true)),
     fetchAll('messages', ['id']),
     fetchAll('message_reads', ['user_id', 'change_id']),
+    fetchAll('departments', ['sort_order', 'name']),
   ])
-  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads }
+  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts }
 }
 
 // 앱 전체 데이터: 처음에 한 번 모두 불러오고, 누가 무엇을 바꾸면 실시간으로 다시 불러옴
@@ -107,7 +111,7 @@ export function useAppData(userId) {
     alive.current = true
     reload()
     const ch = supabase.channel('pruon-live')
-    ;['messages', 'message_reads', 'tasks', 'change_requests', 'assign_presets'].forEach(table => {
+    ;['messages', 'message_reads', 'tasks', 'change_requests', 'assign_presets', 'departments', 'templates'].forEach(table => {
       ch.on('postgres_changes', { event: '*', schema: 'public', table }, soon)
     })
     ch.subscribe()

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { supabase, ORDER, VIEWER } from './supabase.js'
+import { supabase, isViewDept } from './supabase.js'
 import { useAppData } from './data.js'
 import { Ctx, Person, ICON, useWidth, WIDE, useApp as useAppCtx } from './ctx.jsx'
 import { dd, iso, todayMid, errText } from './util.js'
-import { MineTab, LateTab, NewChatBlock } from './Mine.jsx'
-import TimelineTab, { LateBlock, Calendar, ProductCard } from './Timeline.jsx'
+import { MineTab, StatusTab, NewChatBlock } from './Mine.jsx'
+import TimelineTab, { Calendar, ProductCard } from './Timeline.jsx'
+import Admin from './Admin.jsx'
 import Sidebar, { DockEmpty } from './Sidebar.jsx'
 import ChatList from './ChatList.jsx'
 import Sheet from './Sheets.jsx'
@@ -30,9 +31,18 @@ export default function Dashboard({ session }) {
   const [nf, setNf] = useState(null)
   const [sel, setSel] = useState(null)          // PC 넓은 화면에서 고른 제품
   const wide = useWidth() >= WIDE
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminMode, setAdminMode] = useState(false)
 
   const me = db && db.people[uid]
-  const viewer = !!me && me.department === VIEWER
+  const viewer = !!me && (isViewDept(me.department) || !!me.left_at)
+  // 관리자 여부는 본인만 확인 가능 (다른 사람 화면에는 표시 안 됨)
+  useEffect(() => {
+    if (!me) return
+    supabase.rpc('my_is_admin').then(({ data }) => { setIsAdmin(!!data); if (!data) setAdminMode(false) })
+  }, [me && me.department, me && me.left_at, db])
+  // 퇴사 처리된 계정이면 로그아웃
+  useEffect(() => { if (me && me.left_at) { const t = setTimeout(() => supabase.auth.signOut(), 2500); return () => clearTimeout(t) } }, [me && me.left_at])
 
   useEffect(() => {
     if (me && tab === null) setTab(viewer ? 'late' : 'mine')
@@ -57,7 +67,9 @@ export default function Dashboard({ session }) {
     if (!db || !me) return null
     const C = id => db.changeMap[id]
     const tOf = cid => (db.changeMap[cid] ? db.changeMap[cid].tasks : [])
-    const isLate = t => t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중' && dd(t.due_date) < 0
+    // 전환일이 지났는데 아직 처리 안 된 할 일 (마감일 기능은 없음)
+    const isLate = t => t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중' && dd(C(t.change_id).target_date) < 0
+    const overdue = c => !!c && c.status === '진행중' && dd(c.target_date) < 0 && c.tasks.some(t => t.status === '대기')
     const myRead = cid => db.reads[uid + '|' + cid] || 0
     const unread = cid => db.messages.filter(m => m.change_id === cid && m.id > myRead(cid) && m.user_id !== uid && !m.deleted)
     const mentionsMe = m => (m.mention_users || []).includes(uid) || (m.mention_depts || []).includes(me.department)
@@ -81,7 +93,7 @@ export default function Dashboard({ session }) {
       setTimeout(() => { const el = document.getElementById('p' + cid); el && el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 80)
     }
     return {
-      db, me, uid, viewer, wide, ui, setUi, C, tOf, isLate, unread, mentionsMe, unreadCnt, run, reload, toast,
+      db, me, uid, viewer, wide, ui, setUi, C, tOf, isLate, overdue, unread, isAdmin, setAdminMode, mentionsMe, unreadCnt, run, reload, toast,
       sheet, setSheet,
       openTask: tid => setSheet({ kind: 'task', tid }),
       openSheet: (kind, cid) => setSheet({ kind, cid }),
@@ -90,28 +102,30 @@ export default function Dashboard({ session }) {
       openReport: cid => setReportCid(cid),
       goChange, markReadLocal,
     }
-  }, [db, me, uid, viewer, wide, ui, sheet, reload, toast, markReadLocal])
+  }, [db, me, uid, viewer, wide, ui, sheet, reload, toast, markReadLocal, isAdmin])
 
   if (err && !db) return <Fail msg={'불러오지 못했습니다: ' + err} />
   if (!db) return <div className="auth"><div className="auth-card"><p className="muted">불러오는 중…</p></div></div>
   if (!me) return <Fail msg="프로필이 없습니다. 가입이 제대로 끝나지 않았을 수 있습니다. 로그아웃 후 다시 가입하거나 관리자에게 문의해주세요." />
+  if (me.left_at) return <Fail msg="퇴사 처리된 계정입니다. 잠시 후 로그아웃됩니다." />
   if (!app || !tab) return null
+  if (adminMode && isAdmin) return <Ctx.Provider value={app}><Admin onExit={() => setAdminMode(false)} />{toastMsg && <div className="toast" role="status">{toastMsg}</div>}</Ctx.Provider>
 
   const myOpenN = db.tasks.filter(t => t.department === me.department && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length
   const unreadAll = db.changes.reduce((n, c) => n + app.unread(c.id).length, 0)
   const tabs = viewer
-    ? [['late', '지연 현황'], ['timeline', '타임라인'], ['chat', '대화']]
+    ? [['late', '진행 현황'], ['timeline', '타임라인'], ['chat', '대화']]
     : [['mine', '내 할 일'], ['timeline', '타임라인'], ['chat', '대화'], ['new', '변경 등록']]
-  const title = { chat: '대화', mine: '내 할 일', late: '지연 현황', timeline: wide ? '전체 일정 · 달력' : '타임라인', new: '변경 등록', settings: '내 정보', product: '' }[tab]
+  const title = { chat: '대화', mine: '내 할 일', late: '진행 현황', timeline: wide ? '전체 일정 · 달력' : '타임라인', new: '변경 등록', settings: '내 정보', product: '' }[tab]
 
   const content = (
     <>
       {viewer && tab !== 'settings' && tab !== 'product' && (
-        <div className="ro"><b>임원 · 보기 전용</b><span>모든 일정과 이력을 볼 수 있고, 처리·수정 버튼은 없습니다 (대화는 쓸 수 있음)</span></div>
+        <div className="ro"><b>{me.department} · 보기 전용</b><span>모든 일정과 이력을 볼 수 있고, 처리·수정 버튼은 없습니다 (대화는 쓸 수 있음)</span></div>
       )}
       {!wide && (tab === 'mine' || tab === 'late') && <NewChatBlock />}
       {tab === 'mine' && <MineTab />}
-      {tab === 'late' && <LateTab />}
+      {tab === 'late' && <StatusTab />}
       {tab === 'timeline' && (wide ? <Overview /> : <TimelineTab />)}
       {tab === 'product' && (sel && db.changeMap[sel] ? <ProductCard c={db.changeMap[sel]} forceOpen /> : <div className="card empty">왼쪽 목록에서 제품을 골라주세요.</div>)}
       {tab === 'new' && !viewer && (
@@ -135,15 +149,15 @@ export default function Dashboard({ session }) {
   if (wide) {
     return (
       <Ctx.Provider value={app}>
-        <div className="wide-wrap">
-          <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} />
+        <div className={'wide-wrap' + (tab === 'timeline' ? ' no-dock' : '')}>
+          <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} />
           <div className="wide-main">
             <div className="wide-in">
               {tab !== 'product' && <h1 className="page-t wide-t">{title}</h1>}
               {content}
             </div>
           </div>
-          {tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : <DockEmpty />}
+          {tab === 'timeline' ? null : tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : <DockEmpty />}
         </div>
         {overlays}
       </Ctx.Provider>
@@ -185,17 +199,10 @@ export default function Dashboard({ session }) {
   )
 }
 
-// 넓은 화면의 '전체 일정 · 달력': 지연 목록 + 달력
+// 넓은 화면의 '전체 일정 · 달력': 두 달 달력 (전환일만)
 function Overview() {
   const app = useAppCtx()
-  const live = app.db.changes.filter(c => c.status === '진행중')
-  return (
-    <>
-      <LateBlock />
-      <div className="sec-t"><h2>달력</h2></div>
-      <Calendar list={live} searching={false} />
-    </>
-  )
+  return <Calendar list={app.db.changes} searching={false} />
 }
 
 function Fail({ msg }) {

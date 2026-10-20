@@ -1,19 +1,10 @@
-import { ORDER } from './supabase.js'
 import { useApp, Person } from './ctx.jsx'
-import { dd, ddLabel, md, parse, snip, stamp } from './util.js'
+import { DBadge } from './Timeline.jsx'
+import { md, parse, snip, stamp } from './util.js'
 
-function DateBox({ date, late }) {
-  const d = parse(date)
-  return (
-    <span className={'cal' + (late ? ' late' : '')}>
-      <b>{d.getDate()}</b><span>{d.getMonth() + 1}월</span>
-    </span>
-  )
-}
-
-/* ---------- 내 할 일 (제품별) · 처리한 일 ---------- */
+/* ---------- 내 할 일 (제품별, 전환일이 가까운 순) · 처리한 일 ---------- */
 export function MineTab() {
-  const { db, me, C, isLate, openTask, ui, setUi } = useApp()
+  const { db, me, C, isLate, overdue, openTask, goChange, ui, setUi } = useApp()
   const list = db.tasks.filter(t => t.department === me.department && t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중')
   const done = db.tasks.filter(t => t.department === me.department && t.status !== '대기' && C(t.change_id))
   const late = list.filter(isLate).length
@@ -22,7 +13,7 @@ export function MineTab() {
     <>
       <div className="stats two">
         <div className="stat"><div className="k">남은 할 일</div><div className="v">{list.length}</div></div>
-        <div className={'stat' + (late ? ' alert' : '')}><div className="k">지연</div><div className="v">{late}</div></div>
+        <div className={'stat' + (late ? ' alert' : '')}><div className="k">전환일 지남</div><div className="v">{late}</div></div>
       </div>
       <div className="seg mine-seg" role="tablist">
         <button type="button" role="tab" className={view === 'todo' ? 'on' : ''} onClick={() => setUi(u => ({ ...u, mineView: 'todo' }))}>할 일 {list.length}</button>
@@ -43,10 +34,10 @@ export function MineTab() {
         {head}
         <p className="hint" style={{ margin: '0 4px 10px' }}>눌러서 확인 메모·처리 이력을 보고, 잘못 처리한 건은 <b>확인 취소</b>할 수 있습니다.</p>
         {cids.map(cid => {
-          const c = C(cid), closed = c.status === '종결'
+          const c = C(cid)
           return (
             <div className="card done-card" key={cid}>
-              <div className="m-h"><span className="t">{c.title}</span><span className={'d' + (closed ? ' cl' : '')}>{closed ? (c.close_type === '중단' ? '중단 종결' : '종결') : '진행중 · 전환 ' + md(c.target_date)}</span></div>
+              <button type="button" className="mg-h" onClick={() => goChange(cid)}><span className="t">{c.title}</span><span className="d">전환 {md(c.target_date)} <DBadge c={c} /></span></button>
               {by[cid].sort((a, b) => String(b.done_at).localeCompare(String(a.done_at))).map(t => {
                 const na = t.status === '해당없음'
                 return (
@@ -55,7 +46,7 @@ export function MineTab() {
                     <span>
                       <span className="tt">{t.title}</span>
                       <span className="memo-l">“{t.memo}”</span>
-                      <span className="when"><Person id={t.done_by} /> · {stamp(t.done_at)} · 마감 {md(t.due_date)}</span>
+                      <span className="when"><Person id={t.done_by} /> · {stamp(t.done_at)}</span>
                     </span>
                     <span className="arr">›</span>
                   </button>
@@ -75,20 +66,18 @@ export function MineTab() {
     <>
       {head}
       {cids.map(cid => {
-        const c = C(cid)
+        const c = C(cid), od = overdue(c)
         return (
-          <div className="card" key={cid}>
-            <div className="m-h"><span className="t">{c.title}</span><span className="d">전환 {md(c.target_date)}</span></div>
-            {by[cid].sort((a, b) => parse(a.due_date) - parse(b.due_date)).map(t => {
-              const n = dd(t.due_date)
-              return (
-                <button type="button" key={t.id} className="m-i" onClick={() => openTask(t.id)}>
-                  <DateBox date={t.due_date} late={n < 0} />
-                  <span><span className="tt">{t.title}</span><span className={'when' + (n < 0 ? ' late' : '')}>{ddLabel(n)}</span></span>
-                  <span className="arr">›</span>
-                </button>
-              )
-            })}
+          <div className={'card mg' + (od ? ' od' : '')} key={cid}>
+            <button type="button" className="mg-h" onClick={() => goChange(cid)}><span className="t">{c.title}</span><span className="d">전환 {md(c.target_date)} <DBadge c={c} /></span></button>
+            {od && <p className="mg-warn">전환일이 지났습니다. 남은 할 일을 바로 처리해주세요.</p>}
+            {by[cid].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))).map(t => (
+              <button type="button" key={t.id} className={'t2' + (od ? ' late' : '')} onClick={() => openTask(t.id)}>
+                <span className={'tc2 ' + (od ? 'late' : 'wait')}>{od ? '전환일 지남' : '대기'}</span>
+                <span className="t2-tx"><span className="t2-t">{t.is_extra && <span className="asg">배정</span>}{t.title}</span></span>
+                <span className="arr">›</span>
+              </button>
+            ))}
           </div>
         )
       })}
@@ -96,71 +85,39 @@ export function MineTab() {
   )
 }
 
-/* ---------- 지연 현황 (임원) ---------- */
-export function LateTab() {
-  const { db, C, tOf, isLate, openTask, goChange } = useApp()
-  const live = db.changes.filter(c => c.status === '진행중')
-  const lt = db.tasks.filter(isLate).sort((a, b) => parse(a.due_date) - parse(b.due_date))
-  const soon = db.tasks.filter(t => { const n = dd(t.due_date); return t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중' && n >= 0 && n <= 7 })
-    .sort((a, b) => parse(a.due_date) - parse(b.due_date))
-  const lateC = live.filter(c => tOf(c.id).some(isLate)).length
-  const by = {}
-  lt.forEach(t => { (by[t.department] = by[t.department] || []).push(t) })
+/* ---------- 진행 현황 (보기 전용 부서 첫 화면) ---------- */
+export function StatusTab() {
+  const { db, tOf, overdue, goChange } = useApp()
+  const live = db.changes.filter(c => c.status === '진행중').sort((a, b) => parse(a.target_date) - parse(b.target_date))
+  const odN = live.filter(overdue).length
   const closedN = db.changes.filter(c => c.status === '종결').length
   return (
     <>
       <div className="stats">
         <div className="stat"><div className="k">진행 중 변경</div><div className="v">{live.length}</div></div>
-        <div className={'stat' + (lt.length ? ' alert' : '')}><div className="k">지연 할 일</div><div className="v">{lt.length}</div></div>
-        <div className="stat"><div className="k">7일 이내 마감</div><div className="v">{soon.length}</div></div>
+        <div className={'stat' + (odN ? ' alert' : '')}><div className="k">전환일 지남</div><div className="v">{odN}</div></div>
+        <div className="stat"><div className="k">종결</div><div className="v">{closedN}</div></div>
       </div>
-      <div className="sec-t"><h2>지연 중인 할 일{lateC ? ' · 제품 ' + lateC + '건' : ''}</h2></div>
-      {!lt.length ? <div className="late-box ok">지연된 할 일이 없습니다.</div> : (
-        <div className="late-box">
-          {ORDER.filter(d => by[d]).map(d => (
-            <div className="lb-d" key={d}>
-              <span className="lb-dn">{d}<small>{by[d].length}건</small></span>
-              <div className="lb-list">
-                {by[d].map(t => (
-                  <button type="button" key={t.id} className="lb-i" onClick={() => openTask(t.id)}>
-                    <span className="lb-t">{t.title}</span>
-                    <span className="lb-m">{C(t.change_id).short} · 마감 {md(t.due_date)} · <b>{-dd(t.due_date)}일 지연</b></span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="sec-t"><h2>7일 이내 마감</h2></div>
-      {!soon.length ? <div className="card empty">7일 안에 마감되는 할 일이 없습니다.</div> : (
-        <div className="card">
-          {soon.map(t => (
-            <button type="button" key={t.id} className="m-i" onClick={() => openTask(t.id)}>
-              <DateBox date={t.due_date} />
-              <span><span className="tt">{t.title}</span><span className="when">{t.department} · {C(t.change_id).short} · {ddLabel(dd(t.due_date))}</span></span>
-              <span className="arr">›</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="sec-t"><h2>제품별 진행</h2></div>
       {!live.length ? <div className="card empty">진행 중인 변경이 없습니다.</div> : (
-        <div className="card">
-          {[...live].sort((a, b) => parse(a.target_date) - parse(b.target_date)).map(c => {
-            const ts = tOf(c.id), dn = ts.filter(t => t.status !== '대기').length, ln = ts.filter(isLate).length
-            const pct = ts.length ? Math.round((dn / ts.length) * 100) : 0
+        <div className="sgrid2">
+          {live.map(c => {
+            const ts = tOf(c.id), left = ts.filter(t => t.status === '대기'), od = overdue(c)
+            const pct = ts.length ? Math.round(((ts.length - left.length) / ts.length) * 100) : 0
+            const rem = {}
+            left.forEach(t => { rem[t.department] = (rem[t.department] || 0) + 1 })
             return (
-              <button type="button" key={c.id} className="pv" onClick={() => goChange(c.id)}>
-                <span className="pv-t"><b>{c.title}</b><span className="pv-d">D-{dd(c.target_date)} · 전환 {md(c.target_date)}</span></span>
-                <span className="pv-bar"><i style={{ width: pct + '%' }} /></span>
-                <span className="pv-m">{ts.length}건 중 {dn}건 처리 · {ts.length - dn}건 남음{ln ? <> · <span className="late">지연 {ln}건</span></> : null}</span>
+              <button type="button" key={c.id} className={'card sc2' + (od ? ' od' : '')} onClick={() => goChange(c.id)}>
+                <span className="sc2-h"><b>{c.title}</b><DBadge c={c} /></span>
+                <span className="sc2-m">전환 {md(c.target_date)} · {ts.length - left.length}/{ts.length} 처리 ({pct}%)</span>
+                <span className={'bar2' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>
+                <span className="sc2-m">{left.length ? '아직 안 끝난 부서' : '모든 부서 처리 완료'}</span>
+                {left.length > 0 && <span className="chips2">{Object.entries(rem).map(([d, n]) => <span key={d} className={'dc2' + (od ? ' late' : '')}>{d} {n}</span>)}</span>}
               </button>
             )
           })}
         </div>
       )}
-      {closedN > 0 && <p className="hint" style={{ margin: '10px 4px 0' }}>종결된 변경 {closedN}건과 결과 보고서는 타임라인 탭에서 검색하거나 "종결된 변경 보기"로 볼 수 있습니다.</p>}
+      {closedN > 0 && <p className="hint" style={{ margin: '10px 4px 0' }}>종결된 변경 {closedN}건과 결과 보고서는 타임라인에서 검색하거나 "종결된 변경 보기"로 볼 수 있습니다.</p>}
     </>
   )
 }

@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { ORDER, VIEWER } from './supabase.js'
+import { ORDER, VIEW_DEPTS, isViewDept } from './supabase.js'
 import { useApp } from './ctx.jsx'
 
-// 조직도: 가입한 사람을 부서별로 (임원 → 개발·품질·구매·영업·생산·물류). 부서는 처음에 접힌 상태
+// 조직도: 가입한 사람을 부서별로 (보기 전용 부서 → 업무 부서 순). 부서는 처음에 접힌 상태. 퇴사자는 빠짐
 export default function OrgTree({ inSheet }) {
   const { db, me } = useApp()
   const [openD, setOpenD] = useState({})
-  const depts = [VIEWER, ...ORDER]
+  const depts = [...VIEW_DEPTS, ...ORDER]
   return (
     <div className={'org-tree' + (inSheet ? ' in-sheet' : '')}>
       <div className="org-root">푸르온</div>
@@ -17,7 +17,7 @@ export default function OrgTree({ inSheet }) {
           <div key={d} className={'org-d' + (d === me.department ? ' mine' : '')}>
             <button type="button" className="org-dh" aria-expanded={open} onClick={() => setOpenD(o => ({ ...o, [d]: !o[d] }))}>
               <span className="ar">{open ? '▾' : '▸'}</span><b>{d}</b><span className="cnt">{us.length}명</span>
-              {d === VIEWER && <span className="ro-tag">보기 전용</span>}
+              {isViewDept(d) && <span className="ro-tag">보기 전용</span>}
             </button>
             {open && (
               <ul>

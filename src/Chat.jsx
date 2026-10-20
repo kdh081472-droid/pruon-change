@@ -66,10 +66,10 @@ export default function Chat({ cid, onClose, docked }) {
     if (tk.ch === '/') {
       items = [...c.tasks]
         .filter(t => !q2 || norm(t.department + t.title).includes(q2))
-        .sort((a, b) => ORDER.indexOf(a.department) - ORDER.indexOf(b.department) || parse(a.due_date) - parse(b.due_date))
+        .sort((a, b) => ORDER.indexOf(a.department) - ORDER.indexOf(b.department) || String(a.created_at).localeCompare(String(b.created_at)))
         .map(t => ({
           kind: 'task', v: t.id,
-          node: <><span className="pd-d">{SHORT[t.department]}</span><span className="pd-t">{t.title}</span><span className={'pd-s' + (isLate(t) ? ' late' : '')}>{t.status === '대기' ? md(t.due_date) : t.status}</span></>,
+          node: <><span className="pd-d">{SHORT[t.department]}</span><span className="pd-t">{t.title}</span><span className={'pd-s' + (isLate(t) ? ' late' : '')}>{t.status === '대기' ? (isLate(t) ? '전환일 지남' : '대기') : t.status}</span></>,
         }))
     } else {
       items = [

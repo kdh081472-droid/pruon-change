@@ -12,13 +12,13 @@ function matches(c, q) {
 }
 
 // PC 넓은 화면의 왼쪽: 계정 · 메뉴 · 검색 · 조직도 · 제품 목록
-export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN }) {
-  const { db, me, viewer, tOf, isLate, unread, mentionsMe } = useApp()
+export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, onAdmin }) {
+  const { db, me, viewer, tOf, overdue, unread, mentionsMe } = useApp()
   const [q, setQ] = useState('')
   const [showClosed, setShowClosed] = useState(false)
   const [orgOpen, setOrgOpen] = useState(false)
   const nav = viewer
-    ? [['late', '지연 현황', 'late'], ['timeline', '전체 일정 · 달력', 'timeline']]
+    ? [['late', '진행 현황', 'late'], ['timeline', '전체 일정 · 달력', 'timeline']]
     : [['mine', '내 할 일', 'mine'], ['timeline', '전체 일정 · 달력', 'timeline'], ['new', '변경 등록', 'new']]
   const searching = q.trim().length > 0
   const live = db.changes.filter(c => c.status === '진행중' && matches(c, q)).sort((a, b) => parse(a.target_date) - parse(b.target_date))
@@ -27,7 +27,7 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN }) {
   const item = c => {
     const ts = tOf(c.id)
     const dn = ts.filter(t => t.status !== '대기').length
-    const lt = ts.filter(isLate).length
+    const od = overdue(c)
     const mineN = ts.filter(t => t.department === me.department && t.status === '대기').length
     const u = unread(c.id)
     const closed = c.status === '종결'
@@ -35,16 +35,15 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN }) {
     const pct = ts.length ? Math.round((dn / ts.length) * 100) : 0
     const n = dd(c.target_date)
     return (
-      <button type="button" key={c.id} className={'si' + (tab === 'product' && sel === c.id ? ' on' : '') + (closed ? ' closed' : '')} onClick={() => onSelect(c.id)}>
+      <button type="button" key={c.id} className={'si' + (tab === 'product' && sel === c.id ? ' on' : '') + (closed ? ' closed' : '') + (od ? ' od' : '')} onClick={() => onSelect(c.id)}>
         <span className="si-t">{c.title}</span>
         <span className="si-m">
-          <b className={!closed && n <= 7 ? 'soon' : ''}>{closed ? (stopped ? '중단 종결' : '종결') : n >= 0 ? 'D-' + n : 'D+' + -n}</b> · 전환 {md(c.target_date)}
+          <b className={od ? 'odb' : !closed && n <= 7 ? 'soon' : ''}>{closed ? (stopped ? '중단 종결' : '종결') : od ? '전환일 지남 D+' + -n : n >= 0 ? 'D-' + n : 'D+' + -n}</b> · 전환 {md(c.target_date)}
           {u.length > 0 && <span className="ub">{u.some(mentionsMe) ? '@' : ''}{u.length}</span>}
         </span>
-        <span className="si-bar"><i style={{ width: pct + '%' }} /></span>
+        <span className={'si-bar' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>
         <span className="si-s">
           {dn}/{ts.length} 처리
-          {lt > 0 && <> · <span className="late">지연 {lt}</span></>}
           {mineN > 0 && !closed && !viewer && <> · <span className="mine">우리 {mineN}</span></>}
         </span>
       </button>
@@ -85,6 +84,11 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN }) {
         </button>
         {(showClosed || searching) && done.map(item)}
       </div>
+      {isAdmin && (
+        <div className="sd-admin">
+          <button type="button" className="admin-btn" onClick={onAdmin}>{ICON.key}관리자 모드</button>
+        </div>
+      )}
     </aside>
   )
 }
