@@ -52,10 +52,28 @@ export default function Dashboard({ session }) {
     if (!me || tab === null) return
     if (viewer && (tab === 'mine' || tab === 'new')) setTab('late')
     if (wide && tab === 'chat') setTab(viewer ? 'late' : 'mine')
-    if (!wide && tab === 'product') { setTab('timeline'); if (sel) setUi(u => ({ ...u, open: { ...u.open, [sel]: true } })) }
     if (!viewer && tab === 'late') setTab('mine')
     if (viewer) setUi(u => (u.calMine ? { ...u, calMine: false } : u))
   }, [viewer, me, tab, wide, sel])
+
+  // 창 폭이 바뀌어도 보던 화면을 이어서 보여주기 (PC ↔ 휴대폰 화면)
+  const prevWide = useRef(wide)
+  useEffect(() => {
+    if (prevWide.current === wide || !me || tab === null) { prevWide.current = wide; return }
+    prevWide.current = wide
+    if (!wide) {
+      // PC → 좁은 화면: 제품 화면은 '제품별'에서 그 제품을 펼친 채로, PC 달력은 '달력'으로
+      if (tab === 'product') {
+        setTab('timeline')
+        setUi(u => ({ ...u, view: 'timeline', q: '', open: sel ? { ...u.open, [sel]: true } : u.open }))
+        if (sel) setTimeout(() => { const el = document.getElementById('p' + sel); el && el.scrollIntoView({ block: 'start' }) }, 80)
+      } else if (tab === 'timeline') setUi(u => ({ ...u, view: 'calendar' }))
+    } else if (tab === 'timeline' && ui.view !== 'calendar') {
+      // 좁은 화면 '제품별' → PC: 펼친 제품이 있으면 그 제품 화면, 없으면 달력
+      const openIds = Object.keys(ui.open).filter(k => ui.open[k] && db && db.changeMap[k])
+      if (openIds.length) { setSel(openIds[openIds.length - 1]); setTab('product') }
+    }
+  }, [wide])
 
   const toast = useCallback(m => {
     setToastMsg(m)
@@ -152,8 +170,8 @@ export default function Dashboard({ session }) {
         <div className={'wide-wrap' + (tab === 'timeline' ? ' no-dock' : '')}>
           <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} />
           <div className="wide-main">
-            <div className="wide-in">
-              {tab !== 'product' && <h1 className="page-t wide-t">{title}</h1>}
+            <div className={'wide-in' + (tab === 'timeline' ? ' full' : '')}>
+              {tab !== 'product' && tab !== 'timeline' && <h1 className="page-t wide-t">{title}</h1>}
               {content}
             </div>
           </div>
@@ -202,7 +220,7 @@ export default function Dashboard({ session }) {
 // 넓은 화면의 '전체 일정 · 달력': 두 달 달력 (전환일만)
 function Overview() {
   const app = useAppCtx()
-  return <Calendar list={app.db.changes} searching={false} />
+  return <Calendar list={app.db.changes} searching={false} title="전체 일정 · 달력" />
 }
 
 function Fail({ msg }) {

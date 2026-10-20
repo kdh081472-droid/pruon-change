@@ -83,7 +83,8 @@ export function ChatMini({ c }) {
 
 /* ---------- 제품 카드: 위에 요약, 펼치면 부서별 할 일 목록 ---------- */
 export function ProductCard({ c, forceOpen }) {
-  const { db, me, viewer, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport } = useApp()
+  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport } = useApp()
+  const pcView = !!forceOpen && wide        // PC 제품 화면: 버튼은 제목 줄 오른쪽, 대화 버튼 없음
   const [openDept, setOpenDept] = useState({})
   const ts = tOf(c.id)
   const left = ts.filter(t => t.status === '대기')
@@ -118,11 +119,12 @@ export function ProductCard({ c, forceOpen }) {
   }
 
   const head = (
-    <div className={'p-h2' + (forceOpen ? ' fixed' : '')} role={forceOpen ? undefined : 'button'} tabIndex={forceOpen ? undefined : 0} aria-expanded={forceOpen ? undefined : isOpen} onClick={toggle}
+    <div className={'p-h2' + (forceOpen ? ' fixed' : '') + (pcView ? ' pcv' : '')} role={forceOpen ? undefined : 'button'} tabIndex={forceOpen ? undefined : 0} aria-expanded={forceOpen ? undefined : isOpen} onClick={toggle}
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggle() } }}>
       <div className="p2-top">
-        <span className="p-title"><ChatMini c={c} />{!forceOpen && <span className="chev">▶</span>}{c.title}</span>
-        <DBadge c={c} />
+        <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.title}</span>
+        {pcView && acts}
+        <span className="dd-big"><DBadge c={c} /></span>
       </div>
       <div className="p2-meta">
         <span className="mono">전환 {md(c.target_date)}</span>
@@ -132,7 +134,7 @@ export function ProductCard({ c, forceOpen }) {
         {mine > 0 && !closed && !viewer && <span className="mine">우리 부서 {mine}건</span>}
       </div>
       <span className={'bar2' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>
-      {acts}
+      {!pcView && acts}
       {stopped && <span className="stopr">중단 사유: {c.close_reason} · <Person id={c.closed_by} /></span>}
     </div>
   )
@@ -157,12 +159,23 @@ export function ProductCard({ c, forceOpen }) {
           <div><dt>등록</dt><dd><Person id={c.created_by} fallback={c.created_by_dept} /></dd></div>
         </dl>
         {od && <div className="od-band">전환일이 {-dd(c.target_date)}일 지났는데 남은 할 일이 {left.length}건 있습니다. 변경 전 상태로 생산·출고되지 않도록 바로 확인해주세요.</div>}
+        {tlogs.length > 0 && (
+          <div className="hist">
+            <h3>전환일 변경 이력</h3>
+            <ol>
+              {tlogs.map(x => (
+                <li key={x.id}>{md(x.old_date)} → <b>{md(x.new_date)}</b> · {x.memo} — <Person id={x.user_id} />, {stamp(x.created_at)}</li>
+              ))}
+            </ol>
+          </div>
+        )}
+        <div className="dg-grid">
         {groups.map(({ d, xs }) => {
           const r = xs.filter(t => t.status === '대기').length
           const open = r > 0 || !!openDept[d]
           const isMine = d === me.department
           return (
-            <section key={d} className={'dg2' + (r && od ? ' od' : '') + (isMine ? ' mine' : '')}>
+            <section key={d} className={'dg2' + (r && od ? ' od' : '') + (isMine ? ' mine' : '') + (r ? '' : ' done')}>
               <button type="button" className="dg2-h" disabled={r > 0} aria-expanded={open} onClick={() => setOpenDept(o => ({ ...o, [d]: !o[d] }))}>
                 <b>{d}</b>{isMine && !viewer && <span className="me">우리 부서</span>}
                 <span className="sp" />
@@ -189,6 +202,7 @@ export function ProductCard({ c, forceOpen }) {
             </section>
           )
         })}
+        </div>
         {extras.length > 0 && (
           <div className="hist asg-h">
             <h3>할 일 배정 이력 {extras.length}</h3>
@@ -202,23 +216,13 @@ export function ProductCard({ c, forceOpen }) {
             </ol>
           </div>
         )}
-        {tlogs.length > 0 && (
-          <div className="hist">
-            <h3>전환일 변경 이력</h3>
-            <ol>
-              {tlogs.map(x => (
-                <li key={x.id}>{md(x.old_date)} → <b>{md(x.new_date)}</b> · {x.memo} — <Person id={x.user_id} />, {stamp(x.created_at)}</li>
-              ))}
-            </ol>
-          </div>
-        )}
       </div>
     </div>
   )
 }
 
 /* ---------- 달력: 이번 달 + 다음 달, 전환일만 ---------- */
-export function Calendar({ list, searching }) {
+export function Calendar({ list, searching, title }) {
   const { ui, setUi, overdue, tOf, goChange } = useApp()
   const m0 = parse(ui.calMonth)
   const months = [m0, new Date(m0.getFullYear(), m0.getMonth() + 1, 1)]
@@ -262,17 +266,20 @@ export function Calendar({ list, searching }) {
   return (
     <>
       <div className="cal2-top">
-        <button type="button" className="chipb" onClick={() => move(-1)} aria-label="이전 달">◀</button>
-        <button type="button" className="chipb" onClick={thisMonth}>이번 달</button>
-        <button type="button" className="chipb" onClick={() => move(1)} aria-label="다음 달">▶</button>
+        {title && <h1 className="page-t">{title}</h1>}
+        <span className="cal2-nav">
+          <button type="button" className="chipb" onClick={() => move(-1)} aria-label="이전 달">◀</button>
+          <button type="button" className="chipb" onClick={thisMonth}>이번 달</button>
+          <button type="button" className="chipb" onClick={() => move(1)} aria-label="다음 달">▶</button>
+        </span>
+        <span className="g-foot cal2-legend">
+          <span><i style={{ background: 'var(--accent)' }} />진행 중</span>
+          <span><i style={{ background: 'var(--late)' }} />전환일 지남 (남은 할 일 있음)</span>
+          <span><i style={{ background: 'var(--done)' }} />종결</span>
+        </span>
         {searching && <span className="cal-q">검색: "{ui.q}" · 제품 {list.length}건</span>}
       </div>
       <div className="cal2">{months.map(grid)}</div>
-      <div className="g-foot cal2-legend">
-        <span><i style={{ background: 'var(--accent)' }} />진행 중</span>
-        <span><i style={{ background: 'var(--late)' }} />전환일 지남 (남은 할 일 있음)</span>
-        <span><i style={{ background: 'var(--done)' }} />종결</span>
-      </div>
       {sel ? (
         <div className="card day-card">
           <div className="m-h">

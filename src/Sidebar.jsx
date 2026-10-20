@@ -59,6 +59,10 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, 
           {viewer && <small className="ro-t">보기 전용</small>}
           <span className="gear">{ICON.settings}</span>
         </button>
+        <button type="button" className="sd-h tog sd-org" aria-expanded={orgOpen} onClick={() => setOrgOpen(!orgOpen)}>
+          {orgOpen ? '▾' : '▸'} 조직도 <b>{db.profiles.length}명</b>
+        </button>
+        {orgOpen && <div className="sd-orgbox"><OrgTree /></div>}
       </div>
       <nav className="sd-nav">
         {nav.map(([k, label, ic]) => (
@@ -73,10 +77,6 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, 
         <input type="search" placeholder="제품 검색 (종결 포함)" value={q} onChange={e => setQ(e.target.value)} autoComplete="off" aria-label="제품 검색" />
       </div>
       <div className="sd-list">
-        <button type="button" className="sd-h tog" aria-expanded={orgOpen} onClick={() => setOrgOpen(!orgOpen)}>
-          {orgOpen ? '▾' : '▸'} 조직도 <b>{db.profiles.length}명</b>
-        </button>
-        {orgOpen && <OrgTree />}
         <div className="sd-h">진행 중 <b>{live.length}</b></div>
         {live.length ? live.map(item) : <p className="hint" style={{ padding: '6px 10px' }}>{searching ? '맞는 제품이 없습니다' : '진행 중인 변경이 없습니다'}</p>}
         <button type="button" className="sd-h tog" onClick={() => setShowClosed(!showClosed)}>
