@@ -18,8 +18,8 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, 
   const [showClosed, setShowClosed] = useState(false)
   const [orgOpen, setOrgOpen] = useState(false)
   const nav = viewer
-    ? [['late', '진행 현황', 'late'], ['timeline', '전체 일정 · 달력', 'timeline']]
-    : [['mine', '내 할 일', 'mine'], ['timeline', '전체 일정 · 달력', 'timeline'], ['new', '변경 등록', 'new']]
+    ? [['late', '진행 현황', 'late'], ['timeline', '전체 일정 · 달력', 'timeline'], ['summary', '전체 요약', 'table']]
+    : [['mine', '내 할 일', 'mine'], ['timeline', '전체 일정 · 달력', 'timeline'], ['summary', '전체 요약', 'table'], ['new', '변경 등록', 'new']]
   const searching = q.trim().length > 0
   const live = db.changes.filter(c => c.status === '진행중' && matches(c, q)).sort((a, b) => parse(a.target_date) - parse(b.target_date))
   const done = db.changes.filter(c => c.status === '종결' && matches(c, q)).sort((a, b) => String(b.closed_at).localeCompare(String(a.closed_at)))

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ORDER } from './supabase.js'
 import { useApp, Person, ICON } from './ctx.jsx'
+import Summary from './Summary.jsx'
 import { dd, iso, md, norm, parse, todayMid, stamp, snip } from './util.js'
 
 function matches(c, q) {
@@ -25,18 +26,19 @@ export default function TimelineTab() {
   const list = db.changes.filter(c => (searching || c.status === '진행중') && matches(c, ui.q))
   return (
     <>
-      <div className="tool">
-        <div className="search">
+      <div className={'tool' + (ui.view === 'summary' ? ' tool-sum' : '')}>
+        {ui.view !== 'summary' && <div className="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
           <input type="search" placeholder="제품 검색 (예: 곰곰 교자만두)" value={ui.q} autoComplete="off" aria-label="제품 검색"
             onChange={e => setUi(u => ({ ...u, q: e.target.value }))} />
-        </div>
+        </div>}
         <div className="seg" role="tablist">
           <button type="button" role="tab" className={ui.view === 'timeline' ? 'on' : ''} onClick={() => setUi(u => ({ ...u, view: 'timeline' }))}>제품별</button>
           <button type="button" role="tab" className={ui.view === 'calendar' ? 'on' : ''} onClick={() => setUi(u => ({ ...u, view: 'calendar' }))}>달력</button>
+          <button type="button" role="tab" className={ui.view === 'summary' ? 'on' : ''} onClick={() => setUi(u => ({ ...u, view: 'summary' }))}>요약</button>
         </div>
       </div>
-      {ui.view === 'calendar'
+      {ui.view === 'summary' ? <Summary /> : ui.view === 'calendar'
         ? <Calendar list={searching ? list : db.changes} searching={searching} />
         : <TimelineList list={list} searching={searching} />}
     </>

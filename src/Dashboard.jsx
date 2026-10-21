@@ -6,6 +6,7 @@ import { dd, iso, todayMid, errText } from './util.js'
 import { MineTab, StatusTab, NewChatBlock } from './Mine.jsx'
 import TimelineTab, { Calendar, ProductCard } from './Timeline.jsx'
 import Admin from './Admin.jsx'
+import Summary from './Summary.jsx'
 import Sidebar, { DockEmpty } from './Sidebar.jsx'
 import ChatList from './ChatList.jsx'
 import Sheet from './Sheets.jsx'
@@ -68,6 +69,9 @@ export default function Dashboard({ session }) {
         setUi(u => ({ ...u, view: 'timeline', q: '', open: sel ? { ...u.open, [sel]: true } : u.open }))
         if (sel) setTimeout(() => { const el = document.getElementById('p' + sel); el && el.scrollIntoView({ block: 'start' }) }, 80)
       } else if (tab === 'timeline') setUi(u => ({ ...u, view: 'calendar' }))
+      else if (tab === 'summary') { setTab('timeline'); setUi(u => ({ ...u, view: 'summary' })) }
+    } else if (tab === 'timeline' && ui.view === 'summary') {
+      setTab('summary')
     } else if (tab === 'timeline' && ui.view !== 'calendar') {
       // 좁은 화면 '제품별' → PC: 펼친 제품이 있으면 그 제품 화면, 없으면 달력
       const openIds = Object.keys(ui.open).filter(k => ui.open[k] && db && db.changeMap[k])
@@ -134,7 +138,7 @@ export default function Dashboard({ session }) {
   const tabs = viewer
     ? [['late', '진행 현황'], ['timeline', '타임라인'], ['chat', '대화']]
     : [['mine', '내 할 일'], ['timeline', '타임라인'], ['chat', '대화'], ['new', '변경 등록']]
-  const title = { chat: '대화', mine: '내 할 일', late: '진행 현황', timeline: wide ? '전체 일정 · 달력' : '타임라인', new: '변경 등록', settings: '내 정보', product: '' }[tab]
+  const title = { chat: '대화', mine: '내 할 일', late: '진행 현황', timeline: wide ? '전체 일정 · 달력' : '타임라인', summary: '전체 요약', new: '변경 등록', settings: '내 정보', product: '' }[tab]
 
   const content = (
     <>
@@ -145,6 +149,7 @@ export default function Dashboard({ session }) {
       {tab === 'mine' && <MineTab />}
       {tab === 'late' && <StatusTab />}
       {tab === 'timeline' && (wide ? <Overview /> : <TimelineTab />)}
+      {tab === 'summary' && wide && <Summary />}
       {tab === 'product' && (sel && db.changeMap[sel] ? <ProductCard c={db.changeMap[sel]} forceOpen /> : <div className="card empty">왼쪽 목록에서 제품을 골라주세요.</div>)}
       {tab === 'new' && !viewer && (
         <NewChange nf={nf || emptyForm(db)} setNf={setNf} onDone={cid => { setNf(null); app.goChange(cid) }} />
@@ -167,15 +172,15 @@ export default function Dashboard({ session }) {
   if (wide) {
     return (
       <Ctx.Provider value={app}>
-        <div className={'wide-wrap' + (tab === 'timeline' ? ' no-dock' : '')}>
+        <div className={'wide-wrap' + (tab === 'timeline' || tab === 'summary' ? ' no-dock' : '')}>
           <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} />
           <div className="wide-main">
-            <div className={'wide-in' + (tab === 'timeline' ? ' full' : '')}>
+            <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' ? ' full' : '')}>
               {tab !== 'product' && tab !== 'timeline' && <h1 className="page-t wide-t">{title}</h1>}
               {content}
             </div>
           </div>
-          {tab === 'timeline' ? null : tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : <DockEmpty />}
+          {tab === 'timeline' || tab === 'summary' ? null : tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : <DockEmpty />}
         </div>
         {overlays}
       </Ctx.Provider>

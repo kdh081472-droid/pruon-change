@@ -846,3 +846,80 @@ html, body { max-width: 100%; overflow-x: hidden }
 .mon2 h3 { margin: 0 0 6px }
 .cal2 { margin-bottom: 12px }
 @media (min-width: 1100px) { .c2 { min-height: clamp(60px, calc((100vh - 360px) / 6), 130px) } }
+
+/* ===== 3.2차: 전체 요약 표 ===== */
+.tool-sum .seg { flex: 1 }
+.tool-sum .seg button { flex: 1 }
+.sum { min-width: 0 }
+.sum-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px }
+.sum-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 99px; padding: 6px 12px; font-size: 13px; font-weight: 600 }
+.sum-chip b { font-family: var(--mono); font-size: 12px; color: var(--muted) }
+.sum-chip.late { color: var(--late) }
+.sum-chip.on { background: var(--ink); border-color: var(--ink); color: var(--surface) }
+.sum-chip.on b { color: inherit; opacity: .8 }
+.sum-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px }
+.sum-search { min-width: 220px }
+.sum-tools .btn, .sum-pop .btn { font-size: 13px; padding: 8px 12px }
+.sum-tools .btn:disabled { opacity: .45 }
+.sum-count { font-size: 13px; color: var(--muted); margin-left: auto; white-space: nowrap }
+.sum-count b { color: var(--ink); font-family: var(--mono) }
+.sum-active { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px }
+.sum-af { border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.sum-tw { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); overflow: auto; max-height: calc(100vh - 290px); max-height: calc(100dvh - 290px); -webkit-overflow-scrolling: touch }
+.sum-t { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px }
+.sum-t th { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); text-align: left; padding: 0; white-space: nowrap }
+.sum-t th.c0 { left: 0; z-index: 3 }
+.sum-hb { display: flex; align-items: center; gap: 4px; width: 100%; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--muted); padding: 10px 10px; text-align: left; white-space: nowrap }
+.sum-hb .ic { font-size: 10px; color: var(--faint) }
+.sum-t th.f .sum-hb, .sum-t th.s .sum-hb { color: var(--accent) }
+.sum-t th.f .ic, .sum-t th.s .ic { color: var(--accent) }
+.sum-t td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--text) }
+.sum-t tbody tr { cursor: pointer }
+.sum-t tbody tr:hover td { background: var(--accent-soft) }
+.sum-t td.c0 { position: sticky; left: 0; z-index: 1; background: var(--surface); min-width: 180px; max-width: 260px; box-shadow: 1px 0 0 var(--line) }
+.sum-t th.c0 { box-shadow: 1px 0 0 var(--line) }
+.sum-t td.c0 b { color: var(--ink); font-weight: 600 }
+.sum-t td.wrap { min-width: 160px; max-width: 260px; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere }
+.sum-t td.nw { white-space: nowrap }
+.sum-t td.num { font-family: var(--mono); font-size: 12.5px; white-space: nowrap }
+.sum-t td.num.soon { color: var(--accent); font-weight: 600 }
+.sum-t mark { background: #ffe58a; color: inherit; border-radius: 2px; padding: 0 1px }
+.sum-t .faint { color: var(--faint) }
+.sum-empty { text-align: center; color: var(--muted); padding: 36px 12px !important; cursor: default }
+.sst { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap }
+.sst.live { background: var(--accent-soft); color: var(--accent) }
+.sst.late { background: var(--late-soft); color: var(--late) }
+.sst.done { background: var(--bg); color: var(--muted) }
+.sst.stop { background: var(--bg); color: var(--late) }
+.spg { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap }
+.spg i { display: block; width: 54px; height: 6px; border-radius: 99px; background: var(--rail); overflow: hidden }
+.spg em { display: block; height: 100%; background: var(--accent) }
+.spg.late em { background: var(--late) }
+.sum-pop { position: fixed; z-index: 60; width: 300px; max-width: calc(100vw - 16px); background: var(--surface); border-radius: 14px; box-shadow: 0 10px 40px rgba(18, 26, 51, .22); border: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 8px }
+.sum-pop h4 { margin: 4px 0 0; font-size: 12px; color: var(--muted) }
+.sum-pop input[type=text], .sum-pop input[type=date] { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); width: 100%; min-width: 0 }
+.sum-pop .srt { display: grid; grid-template-columns: 1fr 1fr; gap: 6px }
+.sum-pop .srt button { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 9px; padding: 7px 6px; font-size: 13px; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 1px }
+.sum-pop .srt small { font-size: 11px; color: var(--muted); font-weight: 500 }
+.sum-pop .srt button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent) }
+.sum-pop .vals { max-height: 210px; overflow: auto; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 9px; padding: 4px }
+.sum-pop .vals label { display: flex; align-items: center; gap: 8px; padding: 6px; font-size: 13.5px; color: var(--text); cursor: pointer; border-radius: 6px }
+.sum-pop .vals label:hover { background: var(--bg) }
+.sum-pop .vals input { width: 17px; height: 17px; accent-color: var(--accent); flex: none }
+.sum-pop .vals .vt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.sum-pop .vals .n { font-family: var(--mono); font-size: 11.5px; color: var(--faint) }
+.sum-pop .rng { display: flex; flex-direction: column; gap: 6px }
+.sum-pop .rng label { display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted) }
+.sum-pop .ft { display: flex; justify-content: space-between; gap: 6px; margin-top: 4px }
+@media (max-width: 1099px) {
+  .sum-tw { max-height: calc(100dvh - 330px); min-height: 240px }
+  .sum-t td.c0 { min-width: 140px; max-width: 170px }
+  .sum-t td.wrap { min-width: 140px; max-width: 200px }
+  .sum-count { margin-left: 0 }
+}
+@media (max-width: 600px) {
+  .sum-chips { gap: 5px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none }
+  .sum-chip { padding: 5px 10px; font-size: 12.5px; flex: none }
+  .sum-search { min-width: 0; flex: 1 1 100% }
+  .sum-tools .btn { margin-left: auto; order: 3 }
+}
