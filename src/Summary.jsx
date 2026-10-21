@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from './ctx.jsx'
 import { dd, iso, todayMid, stampFull } from './util.js'
 
-// 전체 요약: 모든 변경을 한 표로 (엑셀 내려받기의 "변경" 시트와 같은 항목 + 처리 현황)
+// 전체 요약: 모든 변경을 한 표로 (엑셀 내려받기의 "변경" 시트 항목에서 처음전환일 뺌 + 처리 현황)
 // 검색은 단어 순서와 상관없이, 머리글마다 정렬·필터
 
 const norm = s => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, '')
@@ -14,7 +14,6 @@ const COLS = [
   { k: 'status', label: '상태', type: 'cat' },
   { k: 'pct', label: '처리 현황', type: 'num' },
   { k: 'target', label: '전환일', type: 'date' },
-  { k: 'first', label: '처음전환일', type: 'date' },
   { k: 'desc', label: '변경내용', type: 'text', cls: 'wrap' },
   { k: 'reason', label: '변경사유', type: 'text', cls: 'wrap' },
   { k: 'items', label: '대상품목', type: 'text', cls: 'wrap' },
@@ -47,7 +46,7 @@ export default function Summary() {
     const status = c.status === '종결' ? (c.close_type === '중단' ? '중단 종결' : '종결') : overdue(c) ? '전환일 지남' : '진행 중'
     return {
       id: c.id, title: c.title, status, done: d, total: n, pct: n ? Math.round((d / n) * 100) : 0,
-      target: c.target_date, first: c.first_target_date || c.target_date,
+      target: c.target_date,
       desc: c.description || '', reason: c.reason || '', items: c.itemsText === '-' ? '' : c.itemsText,
       by: p ? `${p.name} (${p.email.split('@')[0]})` : '', dept: c.created_by_dept || '',
       reg: ymd(c.created_at), closed: ymd(c.closed_at), stop: c.close_reason || '',
