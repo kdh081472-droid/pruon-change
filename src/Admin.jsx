@@ -4,6 +4,9 @@ import { useApp, ICON, useWidth, WIDE } from './ctx.jsx'
 import { errText, md, stampFull } from './util.js'
 import Report from './Report.jsx'
 
+// 마지막 접속 = 앱을 쓴 시각 (없으면 마지막 로그인 시각)
+const seenOf = u => u.last_seen_at || u.last_sign_in_at || null
+
 // 관리자 모드: 관리 기능만 (업무 화면은 모두 꺼짐). 관리자 여부는 서버가 매번 다시 검사함
 const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat']]
 
@@ -136,7 +139,7 @@ function UsersTab({ users, err, act }) {
                     )}
                   </td>
                   <td className="mono">{stampFull(u.created_at).slice(2, 10)}</td>
-                  <td className="mono">{u.last_sign_in_at ? stampFull(u.last_sign_in_at).slice(2, 10) : '-'}</td>
+                  <td className="mono" style={{ whiteSpace: 'nowrap' }}>{seenOf(u) ? stampFull(seenOf(u)).slice(2) : '-'}</td>
                   <td>{u.left_at ? <span className="st off">퇴사</span> : <><span className="st on">재직</span>{u.is_admin && <span className="st adm">관리자</span>}</>}</td>
                   <td>
                     <div className="acts">
@@ -383,7 +386,7 @@ function StatTab({ users }) {
   useEffect(() => { supabase.rpc('admin_db_size').then(({ data }) => setSize(typeof data === 'number' ? data : Number(data) || null)) }, [])
   const act = (users || []).filter(u => !u.left_at)
   const now = Date.now()
-  const days = u => (u.last_sign_in_at ? Math.floor((now - new Date(u.last_sign_in_at)) / 86400000) : null)
+  const days = u => (seenOf(u) ? Math.floor((now - new Date(seenOf(u))) / 86400000) : null)
   const recent = act.filter(u => days(u) !== null && days(u) < 7).length
   const idle = act.filter(u => days(u) === null || days(u) >= 7).sort((a, b) => (days(b) ?? 9999) - (days(a) ?? 9999))
   const live = db.changes.filter(c => c.status === '진행중').length
@@ -401,7 +404,7 @@ function StatTab({ users }) {
       const T = c => (db.changeMap[c] ? db.changeMap[c].title : '')
       const S = ts => (ts ? stampFull(ts) : '')
       const sheets = {
-        가입자: (users || []).map(u => ({ 이름: u.name, 이메일: u.email, 부서: u.department, 상태: u.left_at ? '퇴사' : '재직', 관리자: u.is_admin ? 'O' : '', 가입일: S(u.created_at), 마지막접속: S(u.last_sign_in_at), 퇴사일: S(u.left_at) })),
+        가입자: (users || []).map(u => ({ 이름: u.name, 이메일: u.email, 부서: u.department, 상태: u.left_at ? '퇴사' : '재직', 관리자: u.is_admin ? 'O' : '', 가입일: S(u.created_at), 마지막접속: S(seenOf(u)), 퇴사일: S(u.left_at) })),
         부서: depts.map(d => ({ 순서: d.sort_order, 부서: d.name, 짧은이름: d.short, 종류: d.kind === '업무' ? '업무 부서' : '보기 전용' })),
         변경: db.changes.map(c => ({ 제목: c.title, 상태: c.status, 종결구분: c.close_type || '', 전환일: c.target_date, 처음전환일: c.first_target_date || '', 변경내용: c.description || '', 변경사유: c.reason || '', 대상품목: c.itemsText, 등록자: P(c.created_by), 등록부서: c.created_by_dept, 등록일: S(c.created_at), 종결일: S(c.closed_at), 중단사유: c.close_reason || '' })),
         할일: db.tasks.map(t => ({ 변경: T(t.change_id), 부서: t.department, 할일: t.title, 상태: t.status, 메모: t.memo || '', 처리자: P(t.done_by), 처리일시: S(t.done_at), 추가배정: t.is_extra ? 'O' : '', 배정사유: t.assign_reason || '' })),

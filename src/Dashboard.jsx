@@ -42,6 +42,14 @@ export default function Dashboard({ session }) {
     if (!me) return
     supabase.rpc('my_is_admin').then(({ data }) => { setIsAdmin(!!data); if (!data) setAdminMode(false) })
   }, [me && me.department, me && me.left_at, db])
+  // 마지막 접속 시각 기록: 앱을 열 때 + 앱 화면으로 돌아올 때 (서버에서 10분에 한 번만 저장)
+  useEffect(() => {
+    if (!me || me.left_at) return
+    const touch = () => { if (document.visibilityState === 'visible') supabase.rpc('touch_seen').then(() => {}, () => {}) }
+    touch()
+    document.addEventListener('visibilitychange', touch)
+    return () => document.removeEventListener('visibilitychange', touch)
+  }, [me && me.id, me && me.left_at])
   // 퇴사 처리된 계정이면 로그아웃
   useEffect(() => { if (me && me.left_at) { const t = setTimeout(() => supabase.auth.signOut(), 2500); return () => clearTimeout(t) } }, [me && me.left_at])
 
