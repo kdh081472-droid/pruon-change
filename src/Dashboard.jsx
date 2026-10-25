@@ -131,6 +131,7 @@ export default function Dashboard({ session }) {
       selectProduct,
       openReport: cid => setReportCid(cid),
       goChange, markReadLocal,
+      goSummary: () => { setSheet(null); setTab('summary'); setTimeout(() => { const el = document.querySelector('.wide-main'); el && el.scrollTo(0, 0) }, 0) },
     }
   }, [db, me, uid, viewer, wide, ui, sheet, reload, toast, markReadLocal, isAdmin])
 
@@ -154,7 +155,7 @@ export default function Dashboard({ session }) {
       {tab === 'mine' && <MineTab />}
       {tab === 'timeline' && (wide ? <Overview /> : <TimelineTab />)}
       {tab === 'summary' && wide && <Summary />}
-      {tab === 'product' && (sel && db.changeMap[sel] ? <ProductCard c={db.changeMap[sel]} forceOpen /> : <div className="card empty">왼쪽 목록에서 제품을 골라주세요.</div>)}
+      {tab === 'product' && (sel && db.changeMap[sel] ? <ProductCard c={db.changeMap[sel]} forceOpen /> : <div className="card empty">요약에서 제품을 골라주세요.</div>)}
       {tab === 'new' && !viewer && (
         <NewChange nf={nf || emptyForm(db)} setNf={setNf} onDone={cid => { setNf(null); app.goChange(cid) }} />
       )}
@@ -172,12 +173,12 @@ export default function Dashboard({ session }) {
     </>
   )
 
-  // PC 넓은 화면: 왼쪽 목록 · 가운데 작업 · 오른쪽 대화 (달력·요약·등록·내 정보는 대화 칸 없이 넓게)
+  // PC 넓은 화면: 왼쪽 메뉴 · 가운데 작업 · 오른쪽 대화 (달력·요약·등록·내 정보는 대화 칸 없이 넓게)
   const noDock = ['timeline', 'summary', 'new', 'settings'].includes(tab)
   if (wide) {
     return (
       <Ctx.Provider value={app}>
-        <div className={'wide-wrap' + (noDock ? ' no-dock' : '') + (tab === 'summary' && !ui.sumList ? ' slim' : '')}>
+        <div className={'wide-wrap' + (noDock ? ' no-dock' : '')}>
           <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} />
           <div className="wide-main">
             <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '')}>

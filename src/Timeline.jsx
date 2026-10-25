@@ -85,11 +85,12 @@ export function ChatMini({ c }) {
 
 /* ---------- 제품 카드: 위에 요약, 펼치면 부서별 할 일 목록 ---------- */
 export function ProductCard({ c, forceOpen }) {
-  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport, isAdmin, run, toast } = useApp()
+  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport, isAdmin, run, toast, goSummary } = useApp()
   const pcView = !!forceOpen && wide        // PC 제품 화면: 버튼은 제목 줄 오른쪽, 대화 버튼 없음
   const [openDept, setOpenDept] = useState({})
   const [ord, setOrd] = useState(null)        // 우리 부서 할 일 순서 (저장되기 전 화면에 먼저 반영)
   const [drag, setDrag] = useState(null)
+  const [histAll, setHistAll] = useState(false)
   const ts = tOf(c.id)
   useEffect(() => { setOrd(null) }, [ts])
   const left = ts.filter(t => t.status === '대기')
@@ -130,19 +131,20 @@ export function ProductCard({ c, forceOpen }) {
     <div className={'p-h2' + (forceOpen ? ' fixed' : '') + (pcView ? ' pcv' : '')} role={forceOpen ? undefined : 'button'} tabIndex={forceOpen ? undefined : 0} aria-expanded={forceOpen ? undefined : isOpen} onClick={toggle}
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggle() } }}>
       <div className="p2-top">
+        {pcView && <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>}
         <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.title}</span>
         {pcView && acts}
         <span className="dd-big"><DBadge c={c} /></span>
       </div>
-      <div className="p2-meta">
+      {!pcView && <div className="p2-meta">
         {!pcView && <span className="mono">전환 {md(c.target_date)}</span>}
         {tlogs.length > 0 && <span className="chg">전환일 변경됨</span>}
         {clogs.length > tlogs.length && <span className="chg">내용 수정됨</span>}
         <span>{ts.length - left.length}/{ts.length} 처리</span>
         {left.length > 0 && <span className={od ? 'late' : ''}>{stopped ? '중단 ' + left.length + '건' : '남은 ' + left.length + '건'}</span>}
         {mine > 0 && !closed && !viewer && <span className="mine">우리 부서 {mine}건</span>}
-      </div>
-      <span className={'bar2' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>
+      </div>}
+      {!pcView && <span className={'bar2' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>}
       {!isOpen && !closed && left.length > 0 && (
         <span className="rem-ch">
           {ORDER.filter(d => left.some(t => t.department === d)).map(d => <span key={d} className={'sdp' + (od ? ' late' : '')}>{d} {left.filter(t => t.department === d).length}</span>)}
@@ -175,19 +177,39 @@ export function ProductCard({ c, forceOpen }) {
   }
   const extras = ts.filter(t => t.is_extra).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
 
-  return (
-    <div className={'card pc2 open' + (od ? ' od' : '')} id={'p' + c.id}>
-      {head}
-      <div className="p-b">
-        <dl className="kv2">
+  const kv = <dl className="kv2">
           <div><dt>전환일</dt><dd className="mono">{c.target_date.replace(/-/g, '.')}</dd></div>
           <div><dt>대상</dt><dd>{c.itemsText}</dd></div>
           {c.description && <div><dt>변경 내용</dt><dd>{c.description}</dd></div>}
           {c.reason && <div><dt>변경 사유</dt><dd>{c.reason}</dd></div>}
           <div><dt>등록</dt><dd><Person id={c.created_by} fallback={c.created_by_dept} /></dd></div>
         </dl>
+  const histLine = x => (x.action === '전환일 변경'
+    ? <>전환일 {md(x.old_date)} → <b>{md(x.new_date)}</b> · {x.memo} — <Person id={x.user_id} />, {stamp(x.created_at)}</>
+    : <><b>내용 수정</b> · {String(x.detail || '').split('\n').join(' / ')} — <Person id={x.user_id} />, {stamp(x.created_at)}</>)
+
+  return (
+    <div className={'card pc2 open' + (od ? ' od' : '') + (pcView ? ' pcv-card' : '')} id={'p' + c.id}>
+      {pcView ? (
+        <div className="pc-stick">
+          {head}
+          {kv}
+          {clogs.length > 0 && (
+            <div className={'hist-mini' + (histAll ? ' all' : '')}>
+              <b>변경 이력 {clogs.length}</b>
+              {histAll
+                ? <ol>{clogs.slice().reverse().map(x => <li key={x.id}>{histLine(x)}</li>)}</ol>
+                : <span className="hm-last">최근: {histLine(clogs[clogs.length - 1])}</span>}
+              {clogs.length > 0 && <button type="button" onClick={() => setHistAll(v => !v)}>{histAll ? '접기 ▴' : '전체 보기 ▾'}</button>}
+            </div>
+          )}
+        </div>
+      ) : head}
+      <div className="p-b">
+        {!pcView && kv}
+        
         {od && <div className="od-band">전환일이 {-dd(c.target_date)}일 지났는데 남은 할 일이 {left.length}건 있습니다. 변경 전 상태로 생산·출고되지 않도록 바로 확인해주세요.</div>}
-        {clogs.length > 0 && (
+        {!pcView && clogs.length > 0 && (
           <div className="hist">
             <h3>변경 이력</h3>
             <ol>

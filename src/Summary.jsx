@@ -11,19 +11,16 @@ const ymd = ts => (ts ? stampFull(ts).slice(0, 10) : '')
 const STATUS_CLS = { '진행 중': 'live', '전환일 지남': 'late', 종결: 'done', '중단 종결': 'stop' }
 
 const COLS = [
-  { k: 'title', label: '제목', type: 'text', cls: 'c0' },
-  { k: 'status', label: '상태', type: 'cat' },
-  { k: 'pct', label: '처리 현황', type: 'num', unit: '%', numLabel: '처리율 몇 % 이상' },
-  { k: 'target', label: '전환일', type: 'date' },
-  { k: 'left', label: '남은 부서', type: 'text', sortKey: 'leftN', cls: 'remw' },
-  { k: 'chat', label: '대화', type: 'num', unit: '개', numLabel: '안 읽은 글 몇 개 이상' },
-  { k: 'desc', label: '변경내용', type: 'text', cls: 'wrap' },
-  { k: 'reason', label: '변경사유', type: 'text', cls: 'wrap' },
-  { k: 'items', label: '대상품목', type: 'text', cls: 'wrap' },
-  { k: 'by', label: '등록자', type: 'cat', sortKey: 'bySort', catSort: 'bySort' },
-  { k: 'reg', label: '등록일', type: 'date' },
-  { k: 'closed', label: '종결일', type: 'date' },
-  { k: 'stop', label: '중단사유', type: 'text', cls: 'wrap' },
+  { k: 'title', label: '제목', type: 'text', cls: 'c0', w: 240, min: 140 },
+  { k: 'status', label: '상태', type: 'cat', w: 104, min: 84 },
+  { k: 'pct', label: '처리', type: 'num', unit: '%', numLabel: '처리율 몇 % 이상', w: 130, min: 96 },
+  { k: 'target', label: '전환일', type: 'date', w: 100, min: 86 },
+  { k: 'desc', label: '변경내용', type: 'text', cls: 'sub', w: 180, min: 80 },
+  { k: 'reason', label: '변경사유', type: 'text', cls: 'sub', w: 150, min: 80 },
+  { k: 'items', label: '대상품목', type: 'text', cls: 'sub', w: 180, min: 80 },
+  { k: 'by', label: '등록자', type: 'cat', sortKey: 'bySort', catSort: 'bySort', cls: 'sub1', w: 116, min: 80 },
+  { k: 'reg', label: '등록일', type: 'date', cls: 'subd', w: 90, min: 76 },
+  { k: 'closed', label: '종결일', type: 'date', cls: 'subd', w: 90, min: 76 },
 ]
 const colOf = k => COLS.find(c => c.k === k)
 
@@ -35,7 +32,14 @@ function Hl({ text, words }) {
 }
 
 export default function Summary() {
-  const { db, overdue, goChange, ui, setUi, unread, mentionsMe } = useApp()
+  const { db, uid, overdue, goChange, ui, setUi, unread, mentionsMe } = useApp()
+  // 칸 폭: 내 계정 + 이 PC 브라우저에만 저장 (다른 사람 화면에는 영향 없음)
+  const wKey = 'pruon_sumw_' + uid
+  const [ws, setWs] = useState(() => {
+    try { const o = JSON.parse(localStorage.getItem(wKey) || '{}'); return COLS.map(c => Math.max(c.min, +o[c.k] || c.w)) } catch (_) { return COLS.map(c => c.w) }
+  })
+  const saveWs = a => { try { localStorage.setItem(wKey, JSON.stringify(Object.fromEntries(COLS.map((c, i) => [c.k, a[i]])))) } catch (_) {} }
+  const rz = useRef(null)
   const st = ui.sum || { q: '', sort: { k: 'target', dir: 'asc' }, f: {}, chip: null }
   const setSt = patch => setUi(u => ({ ...u, sum: { ...(u.sum || st), ...patch } }))
   const [pop, setPop] = useState(null)        // { k, x, y }
@@ -73,7 +77,7 @@ export default function Summary() {
       if (st.chip && r.status !== st.chip) return false
       if (st.onlyNew && !r.chat) return false
       if (ws.length) {
-        const hay = norm(COLS.map(c => r[c.k]).join(' '))
+        const hay = norm(COLS.map(c => r[c.k]).join(' ') + ' ' + r.stop)
         if (!ws.every(w => hay.includes(w))) return false        // 단어 순서 상관없이 모두 포함
       }
       for (const [k, f] of Object.entries(st.f)) {
@@ -125,16 +129,15 @@ export default function Summary() {
 
   const cell = (r, c) => {
     const v = r[c.k]
-    if (c.k === 'title') return <td key={c.k} className="c0"><b><Hl text={v} words={words} /></b></td>
-    if (c.k === 'status') return <td key={c.k} className="nw"><span className={'sst ' + STATUS_CLS[v]}>{v}</span></td>
+    if (c.k === 'title') return <td key={c.k} className="c0"><div className="cl2"><b><Hl text={v} words={words} /></b>{r.chat > 0 && <span className="tdot" title={'안 읽은 대화 ' + r.chat + '개' + (r.chatAt ? ' (나를 부른 글 있음)' : '')}>{r.chatAt ? '@' : ''}{r.chat}</span>}</div></td>
+    if (c.k === 'status') return <td key={c.k} className="ctr"><span className={'sst ' + STATUS_CLS[v]}>{v}</span></td>
     if (c.k === 'pct') return <td key={c.k}><span className={'spg' + (r.status === '전환일 지남' ? ' late' : '')}><i><em style={{ width: v + '%' }} /></i>{r.done}/{r.total}</span></td>
-    if (c.k === 'left') return <td key={c.k} className="remw">{r.remList.length ? r.remList.map(([x, k]) => <span key={x} className={'sdp' + (r.status === '전환일 지남' ? ' late' : '')}>{x} {k}</span>) : <span className="faint">-</span>}</td>
-    if (c.k === 'chat') return <td key={c.k} className="nw">{r.chat ? <span className="sur">{r.chatAt ? '@ ' : ''}{r.chat}</span> : <span className="faint">-</span>}</td>
-    if (c.type === 'date') {
-      const soon = c.k === 'target' && r.status === '진행 중' && v >= today && dd(v) <= 7
-      return <td key={c.k} className={'num' + (soon ? ' soon' : '')}>{v ? v.slice(2).replace(/-/g, '.') : '-'}</td>
+    if (c.k === 'target') {
+      const n = dd(v), live = r.status === '진행 중' || r.status === '전환일 지남'
+      return <td key={c.k} className="num ctr k">{v.slice(2).replace(/-/g, '.')}{live && <span className={'tdd' + (n < 0 || n <= 7 ? ' hot' : '')}>{n === 0 ? 'D-day' : n > 0 ? 'D-' + n : 'D+' + -n}</span>}</td>
     }
-    return <td key={c.k} className={c.cls || 'nw'}>{v ? <Hl text={v} words={words} /> : <span className="faint">-</span>}</td>
+    if (c.type === 'date') return <td key={c.k} className="num ctr subd">{v ? v.slice(2).replace(/-/g, '.') : '-'}</td>
+    return <td key={c.k} className={c.cls || 'nw'}>{v ? <div className={c.cls === 'sub1' ? 'cl1' : 'cl2'}><Hl text={v} words={words} /></div> : <span className="faint">-</span>}</td>
   }
 
   return (
@@ -153,6 +156,7 @@ export default function Summary() {
         </label>
         <button type="button" className="btn sm ghost" disabled={!anyFilter} onClick={() => { setSt({ q: '', chip: null, onlyNew: false, f: {} }); setPop(null) }}>필터 모두 지우기</button>
         <span className="sum-count"><b>{list.length}</b> / {rows.length}건</span>
+        <button type="button" className="btn sm ghost sum-wreset" title="머리글 사이 세로선을 끌면 칸 폭을 바꿀 수 있습니다 (내 화면에만 저장)" onClick={() => { const a = COLS.map(c => c.w); setWs(a); saveWs(a) }}>칸 폭 기본으로</button>
       </div>
       {Object.keys(st.f).length > 0 && (
         <div className="sum-active">
@@ -163,23 +167,29 @@ export default function Summary() {
         </div>
       )}
       <div className="sum-tw" ref={tw} onScroll={() => pop && place(pop.k)}>
-        <table className="sum-t">
+        <table className="sum-t" style={{ width: ws.reduce((a, b) => a + b, 0) }}>
+          <colgroup>{COLS.map((c, i) => <col key={c.k} style={{ width: ws[i] }} />)}</colgroup>
           <thead>
             <tr>
-              {COLS.map(c => {
+              {COLS.map((c, ci) => {
                 const f = st.f[c.k], s = st.sort.k === c.k
                 return (
                   <th key={c.k} data-k={c.k} className={(c.cls === 'c0' ? 'c0 ' : '') + (f ? 'f ' : '') + (s ? 's' : '')}>
                     <button type="button" className="sum-hb" aria-label={c.label + ' 정렬·필터'} onClick={() => openPop(c.k)}>
                       {c.label}<span className="ic">{s ? (st.sort.dir === 'asc' ? '▲' : '▼') : f ? '●' : '▾'}{s && f ? ' ●' : ''}</span>
                     </button>
+                    <span className={'sum-rz' + (rz.current && rz.current.i === ci ? ' on' : '')} role="separator" aria-orientation="vertical" aria-label={c.label + ' 칸 폭 조절'}
+                      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) {} rz.current = { i: ci, x: e.clientX, w0: ws[ci] } }}
+                      onPointerMove={e => { const d = rz.current; if (!d || d.i !== ci) return; const nw = Math.max(c.min, Math.round(d.w0 + e.clientX - d.x)); if (nw !== ws[ci]) setWs(a => { const b = a.slice(); b[ci] = nw; return b }) }}
+                      onPointerUp={e => { try { e.currentTarget.releasePointerCapture(e.pointerId) } catch (_) {} if (rz.current) { rz.current = null; setWs(a => { saveWs(a); return a.slice() }) } }}
+                      onDoubleClick={e => { e.stopPropagation(); setWs(a => { const b = a.slice(); b[ci] = c.w; saveWs(b); return b }) }} />
                   </th>
                 )
               })}
             </tr>
           </thead>
           <tbody>
-            {list.map(r => <tr key={r.id} onClick={() => goChange(r.id)}>{COLS.map(c => cell(r, c))}</tr>)}
+            {list.map(r => <tr key={r.id} className={r.status === '종결' || r.status === '중단 종결' ? 'fin' : ''} onClick={() => goChange(r.id)}>{COLS.map(c => cell(r, c))}</tr>)}
             {!list.length && <tr><td colSpan={COLS.length} className="sum-empty">조건에 맞는 변경이 없습니다. 검색어를 줄이거나 필터를 지워보세요.</td></tr>}
           </tbody>
         </table>
