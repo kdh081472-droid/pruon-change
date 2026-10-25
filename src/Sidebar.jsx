@@ -13,15 +13,21 @@ function matches(c, q) {
 
 // PC 넓은 화면의 왼쪽: 계정 · 메뉴 · 검색 · 조직도 · 제품 목록
 export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, onAdmin }) {
-  const { db, me, viewer, tOf, overdue, unread, mentionsMe } = useApp()
+  const { db, me, viewer, tOf, overdue, unread, mentionsMe, ui, setUi } = useApp()
   const [q, setQ] = useState('')
   const [showClosed, setShowClosed] = useState(false)
   const [orgOpen, setOrgOpen] = useState(false)
-  const nav = viewer
-    ? [['late', '진행 현황', 'late'], ['timeline', '전체 일정 · 달력', 'timeline'], ['summary', '전체 요약', 'table']]
-    : [['mine', '내 할 일', 'mine'], ['timeline', '전체 일정 · 달력', 'timeline'], ['summary', '전체 요약', 'table'], ['new', '변경 등록', 'new']]
+  // 메뉴: 내 할 일 / 전체 일정(달력·요약) / 변경 등록  — 휴대폰 '전체 일정' 탭과 같은 이름
+  const navTop = viewer ? [] : [['mine', '내 할 일', 'mine']]
+  const navAll = [['timeline', '달력', 'timeline'], ['summary', '요약', 'table']]
+  const navEnd = viewer ? [] : [['new', '변경 등록', 'new']]
+  const slim = tab === 'summary' && !ui.sumList          // 요약 화면: 표를 넓게 보도록 제품 목록 접기
+  const onlyMine = !viewer && !!ui.onlyMine               // 우리 부서 남은 할 일이 있는 것만
   const searching = q.trim().length > 0
-  const live = db.changes.filter(c => c.status === '진행중' && matches(c, q)).sort((a, b) => parse(a.target_date) - parse(b.target_date))
+  const hasMine = c => tOf(c.id).some(t => t.department === me.department && t.status === '대기')
+  const liveAll = db.changes.filter(c => c.status === '진행중' && matches(c, q))
+  const mineN = liveAll.filter(hasMine).length
+  const live = liveAll.filter(c => !onlyMine || hasMine(c)).sort((a, b) => parse(a.target_date) - parse(b.target_date))
   const done = db.changes.filter(c => c.status === '종결' && matches(c, q)).sort((a, b) => String(b.closed_at).localeCompare(String(a.closed_at)))
 
   const item = c => {
@@ -65,25 +71,36 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, 
         {orgOpen && <div className="sd-orgbox"><OrgTree /></div>}
       </div>
       <nav className="sd-nav">
-        {nav.map(([k, label, ic]) => (
-          <button key={k} type="button" className={'sn' + (tab === k ? ' on' : '')} onClick={() => setTab(k)}>
-            {ICON[ic]}<span>{label}</span>
-            {k === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
+        {[...navTop, null, ...navAll, ...navEnd].map(x => x === null ? <div key="g" className="sn-g">전체 일정</div> : (
+          <button key={x[0]} type="button" className={'sn' + (navAll.some(n => n[0] === x[0]) ? ' sub' : '') + (tab === x[0] ? ' on' : '')} onClick={() => setTab(x[0])}>
+            {ICON[x[2]]}<span>{x[1]}</span>
+            {x[0] === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
           </button>
         ))}
       </nav>
+      {slim ? (
+        <button type="button" className="sd-expand" onClick={() => setUi(u => ({ ...u, sumList: true }))}>▸ 제품 목록 펼치기</button>
+      ) : (<>
+      {tab === 'summary' && <button type="button" className="sd-expand fold" onClick={() => setUi(u => ({ ...u, sumList: false }))}>◂ 제품 목록 접기 (표 넓게)</button>}
       <div className="search sd-search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
         <input type="search" placeholder="제품 검색 (종결 포함)" value={q} onChange={e => setQ(e.target.value)} autoComplete="off" aria-label="제품 검색" />
       </div>
+      {!viewer && (
+        <div className="seg sd-only" role="tablist" aria-label="목록 보기">
+          <button type="button" role="tab" className={onlyMine ? '' : 'on'} onClick={() => setUi(u => ({ ...u, onlyMine: false }))}>전체 {liveAll.length}</button>
+          <button type="button" role="tab" className={onlyMine ? 'on' : ''} onClick={() => setUi(u => ({ ...u, onlyMine: true }))}>우리 부서 남은 것 {mineN}</button>
+        </div>
+      )}
       <div className="sd-list">
-        <div className="sd-h">진행 중 <b>{live.length}</b></div>
-        {live.length ? live.map(item) : <p className="hint" style={{ padding: '6px 10px' }}>{searching ? '맞는 제품이 없습니다' : '진행 중인 변경이 없습니다'}</p>}
+        <div className="sd-h">진행 중 <b>{live.length}</b>{onlyMine && ' · 우리 부서 할 일 있는 것'}</div>
+        {live.length ? live.map(item) : <p className="hint" style={{ padding: '6px 10px' }}>{searching ? '맞는 제품이 없습니다' : onlyMine ? '우리 부서가 처리할 일이 없습니다' : '진행 중인 변경이 없습니다'}</p>}
         <button type="button" className="sd-h tog" onClick={() => setShowClosed(!showClosed)}>
           {showClosed || searching ? '▾' : '▸'} 종결 <b>{done.length}</b>
         </button>
         {(showClosed || searching) && done.map(item)}
       </div>
+      </>)}
       {isAdmin && (
         <div className="sd-admin">
           <button type="button" className="admin-btn" onClick={onAdmin}>{ICON.key}관리자 모드</button>

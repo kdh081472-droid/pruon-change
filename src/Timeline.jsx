@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ORDER } from './supabase.js'
 import { useApp, Person, ICON } from './ctx.jsx'
 import Summary from './Summary.jsx'
@@ -85,10 +85,13 @@ export function ChatMini({ c }) {
 
 /* ---------- 제품 카드: 위에 요약, 펼치면 부서별 할 일 목록 ---------- */
 export function ProductCard({ c, forceOpen }) {
-  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport } = useApp()
+  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport, isAdmin, run, toast } = useApp()
   const pcView = !!forceOpen && wide        // PC 제품 화면: 버튼은 제목 줄 오른쪽, 대화 버튼 없음
   const [openDept, setOpenDept] = useState({})
+  const [ord, setOrd] = useState(null)        // 우리 부서 할 일 순서 (저장되기 전 화면에 먼저 반영)
+  const [drag, setDrag] = useState(null)
   const ts = tOf(c.id)
+  useEffect(() => { setOrd(null) }, [ts])
   const left = ts.filter(t => t.status === '대기')
   const mine = left.filter(t => t.department === me.department).length
   const isOpen = !!ui.open[c.id] || !!forceOpen
@@ -97,6 +100,8 @@ export function ProductCard({ c, forceOpen }) {
   const od = overdue(c)
   const pct = ts.length ? Math.round(((ts.length - left.length) / ts.length) * 100) : 0
   const tlogs = db.changeLogs.filter(x => x.change_id === c.id && x.action === '전환일 변경')
+  const clogs = db.changeLogs.filter(x => x.change_id === c.id && (x.action === '전환일 변경' || x.action === '내용 수정'))
+  const canEdit = !viewer && !closed && (me.department === c.created_by_dept || isAdmin)
   const toggle = () => { if (!forceOpen) setUi(u => ({ ...u, open: { ...u.open, [c.id]: !u.open[c.id] } })) }
   const stop = fn => e => { e.stopPropagation(); fn() }
 
@@ -113,6 +118,7 @@ export function ProductCard({ c, forceOpen }) {
   } else if (isOpen) {
     acts = (
       <span className="p-acts">
+        {canEdit && <button type="button" className="pill" onClick={stop(() => openSheet('edit', c.id))}>내용 수정</button>}
         <button type="button" className="pill" onClick={stop(() => openSheet('target', c.id))}>전환일 변경</button>
         <button type="button" className="pill" onClick={stop(() => openSheet('assign', c.id))}>+ 할 일 배정</button>
         <button type="button" className="pill stop" onClick={stop(() => openSheet('stop', c.id))}>중단 종결</button>
@@ -131,11 +137,17 @@ export function ProductCard({ c, forceOpen }) {
       <div className="p2-meta">
         {!pcView && <span className="mono">전환 {md(c.target_date)}</span>}
         {tlogs.length > 0 && <span className="chg">전환일 변경됨</span>}
+        {clogs.length > tlogs.length && <span className="chg">내용 수정됨</span>}
         <span>{ts.length - left.length}/{ts.length} 처리</span>
         {left.length > 0 && <span className={od ? 'late' : ''}>{stopped ? '중단 ' + left.length + '건' : '남은 ' + left.length + '건'}</span>}
         {mine > 0 && !closed && !viewer && <span className="mine">우리 부서 {mine}건</span>}
       </div>
       <span className={'bar2' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>
+      {!isOpen && !closed && left.length > 0 && (
+        <span className="rem-ch">
+          {ORDER.filter(d => left.some(t => t.department === d)).map(d => <span key={d} className={'sdp' + (od ? ' late' : '')}>{d} {left.filter(t => t.department === d).length}</span>)}
+        </span>
+      )}
       {!pcView && acts}
       {stopped && <span className="stopr">중단 사유: {c.close_reason} · <Person id={c.closed_by} /></span>}
     </div>
@@ -146,7 +158,21 @@ export function ProductCard({ c, forceOpen }) {
   const groups = ORDER.map(d => ({ d, xs: ts.filter(t => t.department === d) }))
     .concat([...new Set(ts.map(t => t.department))].filter(d => !ORDER.includes(d)).map(d => ({ d, xs: ts.filter(t => t.department === d) })))
     .filter(g => g.xs.length)
-  groups.sort((a, b) => (a.xs.some(t => t.status === '대기') ? 0 : 1) - (b.xs.some(t => t.status === '대기') ? 0 : 1))
+  // 남은 할 일 있는 우리 부서 → 남은 할 일 있는 부서 → 모두 처리한 부서
+  const rank = g => (g.xs.some(t => t.status === '대기') ? (g.d === me.department && !viewer ? 0 : 1) : 2)
+  groups.sort((a, b) => rank(a) - rank(b))
+  const canOrder = !viewer && !closed
+  const mineIds = ts.filter(t => t.department === me.department).map(t => t.id)
+  const curOrd = ord || mineIds
+  const saveOrd = async ids => {
+    setOrd(ids)
+    const r = await run('reorder_tasks', { p_change: c.id, p_ids: ids })
+    if (r.error) { setOrd(null); toast(r.error) }
+  }
+  const moveTo = (from, to) => {
+    if (to < 0 || to >= curOrd.length || from === to) return
+    const ids = curOrd.slice(); const [x] = ids.splice(from, 1); ids.splice(to, 0, x); saveOrd(ids)
+  }
   const extras = ts.filter(t => t.is_extra).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
 
   return (
@@ -161,12 +187,17 @@ export function ProductCard({ c, forceOpen }) {
           <div><dt>등록</dt><dd><Person id={c.created_by} fallback={c.created_by_dept} /></dd></div>
         </dl>
         {od && <div className="od-band">전환일이 {-dd(c.target_date)}일 지났는데 남은 할 일이 {left.length}건 있습니다. 변경 전 상태로 생산·출고되지 않도록 바로 확인해주세요.</div>}
-        {tlogs.length > 0 && (
+        {clogs.length > 0 && (
           <div className="hist">
-            <h3>전환일 변경 이력</h3>
+            <h3>변경 이력</h3>
             <ol>
-              {tlogs.map(x => (
-                <li key={x.id}>{md(x.old_date)} → <b>{md(x.new_date)}</b> · {x.memo} — <Person id={x.user_id} />, {stamp(x.created_at)}</li>
+              {clogs.map(x => (
+                <li key={x.id}>
+                  {x.action === '전환일 변경'
+                    ? <>전환일 {md(x.old_date)} → <b>{md(x.new_date)}</b> · {x.memo}</>
+                    : <><b>내용 수정</b><span className="ch-d">{x.detail}</span></>}
+                  {' '}— <Person id={x.user_id} />, {stamp(x.created_at)}
+                </li>
               ))}
             </ol>
           </div>
@@ -179,26 +210,43 @@ export function ProductCard({ c, forceOpen }) {
           return (
             <section key={d} className={'dg2' + (r && od ? ' od' : '') + (isMine ? ' mine' : '') + (r ? '' : ' done')}>
               <button type="button" className="dg2-h" disabled={r > 0} aria-expanded={open} onClick={() => setOpenDept(o => ({ ...o, [d]: !o[d] }))}>
-                <b>{d}</b>{isMine && !viewer && <span className="me">우리 부서</span>}
+                <b>{d}</b>{isMine && !viewer && <span className="me">우리 부서</span>}{isMine && canOrder && r > 0 && xs.length > 1 && <span className="ord-h">{wide ? '끌어서 순서 변경' : '▲▼로 순서 변경'}</span>}
                 <span className="sp" />
                 {r > 0
                   ? <span className="dg2-n">{stopped ? '중단 ' + r + '건' : '남은 ' + r + '건'}</span>
                   : <><span className="dg2-ok">✓ {xs.length}건 모두 처리</span><span className="caret">{open ? '▾' : '▸'}</span></>}
               </button>
-              {open && xs.map(t => {
+              {open && (isMine && canOrder ? xs.slice().sort((p, q) => curOrd.indexOf(p.id) - curOrd.indexOf(q.id)) : xs).map((t, i) => {
                 const late = isLate(t)
                 const on = sheet && sheet.kind === 'task' && sheet.tid === t.id
+                const movable = isMine && canOrder && xs.length > 1
+                const idx = movable ? curOrd.indexOf(t.id) : i
                 return (
-                  <button type="button" key={t.id} className={'t2' + (late ? ' late' : '') + (on ? ' on' : '')} onClick={() => openTask(t.id)}>
-                    <span className={'tc2 ' + (t.status === '완료' ? 'ok' : t.status === '해당없음' ? 'na' : late ? 'late' : stopped ? 'na' : 'wait')}>
-                      {t.status === '완료' ? '확인완료' : t.status === '해당없음' ? '해당없음' : late ? '전환일 지남' : stopped ? '중단' : '대기'}
-                    </span>
-                    <span className="t2-tx">
-                      <span className="t2-t">{t.is_extra && <span className="asg" title={(t.assigned_dept || '') + ' 부서가 추가 배정'}>배정</span>}{t.title}</span>
-                      {t.status !== '대기' && <span className="t2-who"><Person id={t.done_by} /> · {stamp(t.done_at)} · “{snip(t.memo, 40)}”</span>}
-                    </span>
-                    <span className="arr">›</span>
-                  </button>
+                  <div key={t.id} className={'t2row' + (movable ? ' mv' : '') + (drag && drag.over === idx && drag.from !== idx ? ' over' : '') + (drag && drag.from === idx ? ' dragging' : '')}
+                    draggable={movable && wide}
+                    onDragStart={movable ? e => { try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', t.id) } catch (_) {} setDrag({ from: idx, over: idx }) } : undefined}
+                    onDragOver={movable ? e => { e.preventDefault(); if (drag && drag.over !== idx) setDrag({ ...drag, over: idx }) } : undefined}
+                    onDrop={movable ? e => { e.preventDefault(); if (drag) moveTo(drag.from, idx); setDrag(null) } : undefined}
+                    onDragEnd={movable ? () => setDrag(null) : undefined}>
+                    {movable && wide && <span className="grip" aria-hidden="true">⋮⋮</span>}
+                    <span className="tno">{i + 1}</span>
+                    <button type="button" className={'t2' + (late ? ' late' : '') + (on ? ' on' : '')} onClick={() => openTask(t.id)}>
+                      <span className={'tc2 ' + (t.status === '완료' ? 'ok' : t.status === '해당없음' ? 'na' : late ? 'late' : stopped ? 'na' : 'wait')}>
+                        {t.status === '완료' ? '확인완료' : t.status === '해당없음' ? '해당없음' : late ? '전환일 지남' : stopped ? '중단' : '대기'}
+                      </span>
+                      <span className="t2-tx">
+                        <span className="t2-t">{t.is_extra && <span className="asg" title={(t.assigned_dept || '') + ' 부서가 추가 배정'}>배정</span>}{t.title}</span>
+                        {t.status !== '대기' && <span className="t2-who"><Person id={t.done_by} /> · {stamp(t.done_at)} · “{snip(t.memo, 40)}”</span>}
+                      </span>
+                      <span className="arr">›</span>
+                    </button>
+                    {movable && (
+                      <span className="t2-mv">
+                        <button type="button" aria-label="위로" disabled={idx === 0} onClick={() => moveTo(idx, idx - 1)}>▲</button>
+                        <button type="button" aria-label="아래로" disabled={idx === curOrd.length - 1} onClick={() => moveTo(idx, idx + 1)}>▼</button>
+                      </span>
+                    )}
+                  </div>
                 )
               })}
             </section>

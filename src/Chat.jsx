@@ -177,6 +177,7 @@ export default function Chat({ cid, onClose, docked }) {
 
   const attached = tid ? c.tasks.find(t => t.id === tid) : null
   const ro = replyTo ? list.find(m => m.id === replyTo) : null
+  const [tip, setTip] = useState(false)
   const ctxMsg = ctx ? list.find(m => m.id === ctx.mid) : null
 
   return (
@@ -187,8 +188,9 @@ export default function Chat({ cid, onClose, docked }) {
           <div>
             <span className="s-tag">제품 대화 · {list.filter(m => !m.deleted).length}개</span>
             <b>{c.title}</b>
-            {!closed && <span className="ch-tip">메시지를 누르면 답글·복사(내 글은 수정·삭제도) · 숫자는 안 읽은 사람 수</span>}
+            {!closed && tip && <span className="ch-tip">메시지를 누르면 답글·복사 (내 글은 수정·삭제도) · 내 글 옆 '안 읽음' 숫자는 아직 안 읽은 사람 수</span>}
           </div>
+          {!closed && <button type="button" className={'ch-q' + (tip ? ' on' : '')} aria-label="대화 사용법" aria-expanded={tip} onClick={() => setTip(v => !v)}>?</button>}
           {!docked && <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>}
         </div>
         <div className="ch-list" ref={listRef}>
@@ -200,7 +202,7 @@ export default function Chat({ cid, onClose, docked }) {
             const hl = !mine && mentionsMe(m)
             const o = m.reply_to ? list.find(x => x.id === m.reply_to) : null
             const t = m.task_id ? c.tasks.find(x => x.id === m.task_id) : null
-            const uc = unreadCnt(m)
+            const uc = mine ? unreadCnt(m) : 0
             return (
               <div key={m.id} data-mid={m.id}
                 className={'msg' + (mine ? ' mine' : '') + (hl ? ' hl' : '') + (p && p.department === '임원' ? ' ex' : '') + (flash === m.id ? ' flash' : '')}>
@@ -217,7 +219,7 @@ export default function Chat({ cid, onClose, docked }) {
                     <MsgText m={m} />
                   </div>
                   <span className="side">
-                    {uc > 0 && <span className="rc">{uc}</span>}
+                    {uc > 0 && <span className="rc">안 읽음 {uc}</span>}
                     {m.edited && <span className="ed">수정됨</span>}
                     <span className="tm">{stamp(m.created_at)}</span>
                   </span>

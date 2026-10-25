@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from './ctx.jsx'
+import { ORDER, SHORT } from './supabase.js'
 import { dd, iso, todayMid, stampFull } from './util.js'
 
 // 전체 요약: 모든 변경을 한 표로 (엑셀 내려받기의 "변경" 시트 항목에서 처음전환일 뺌 + 처리 현황)
@@ -12,13 +13,14 @@ const STATUS_CLS = { '진행 중': 'live', '전환일 지남': 'late', 종결: '
 const COLS = [
   { k: 'title', label: '제목', type: 'text', cls: 'c0' },
   { k: 'status', label: '상태', type: 'cat' },
-  { k: 'pct', label: '처리 현황', type: 'num' },
+  { k: 'pct', label: '처리 현황', type: 'num', unit: '%', numLabel: '처리율 몇 % 이상' },
   { k: 'target', label: '전환일', type: 'date' },
+  { k: 'left', label: '남은 부서', type: 'text', sortKey: 'leftN', cls: 'remw' },
+  { k: 'chat', label: '대화', type: 'num', unit: '개', numLabel: '안 읽은 글 몇 개 이상' },
   { k: 'desc', label: '변경내용', type: 'text', cls: 'wrap' },
   { k: 'reason', label: '변경사유', type: 'text', cls: 'wrap' },
   { k: 'items', label: '대상품목', type: 'text', cls: 'wrap' },
-  { k: 'by', label: '등록자', type: 'cat' },
-  { k: 'dept', label: '등록부서', type: 'cat' },
+  { k: 'by', label: '등록자', type: 'cat', sortKey: 'bySort', catSort: 'bySort' },
   { k: 'reg', label: '등록일', type: 'date' },
   { k: 'closed', label: '종결일', type: 'date' },
   { k: 'stop', label: '중단사유', type: 'text', cls: 'wrap' },
@@ -33,7 +35,7 @@ function Hl({ text, words }) {
 }
 
 export default function Summary() {
-  const { db, overdue, goChange, ui, setUi } = useApp()
+  const { db, overdue, goChange, ui, setUi, unread, mentionsMe } = useApp()
   const st = ui.sum || { q: '', sort: { k: 'target', dir: 'asc' }, f: {}, chip: null }
   const setSt = patch => setUi(u => ({ ...u, sum: { ...(u.sum || st), ...patch } }))
   const [pop, setPop] = useState(null)        // { k, x, y }
@@ -43,21 +45,33 @@ export default function Summary() {
   const rows = useMemo(() => db.changes.map(c => {
     const n = c.tasks.length, d = c.tasks.filter(t => t.status !== '대기').length
     const p = db.people[c.created_by]
+    const dept = (p && p.department) || c.created_by_dept || ''
+    const di = ORDER.indexOf(dept)
+    // 남은 부서: 부서 순서 고정, '구매 1 · 생산 1'
+    const rem = {}
+    c.tasks.forEach(t => { if (t.status === '대기') rem[t.department] = (rem[t.department] || 0) + 1 })
+    const remList = ORDER.filter(x => rem[x]).concat(Object.keys(rem).filter(x => !ORDER.includes(x))).map(x => [x, rem[x]])
+    const u = unread(c.id)
     const status = c.status === '종결' ? (c.close_type === '중단' ? '중단 종결' : '종결') : overdue(c) ? '전환일 지남' : '진행 중'
     return {
       id: c.id, title: c.title, status, done: d, total: n, pct: n ? Math.round((d / n) * 100) : 0,
       target: c.target_date,
       desc: c.description || '', reason: c.reason || '', items: c.itemsText === '-' ? '' : c.itemsText,
-      by: p ? `${p.name} (${p.email.split('@')[0]})` : '', dept: c.created_by_dept || '',
+      by: p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''),
+      bySort: String(di < 0 ? 99 : di).padStart(2, '0') + ' ' + (p ? p.name : ''),
+      left: c.status === '종결' ? '' : remList.map(([x, k]) => x + ' ' + k).join(' · '),
+      remList: c.status === '종결' ? [] : remList, leftN: c.status === '종결' ? '' : remList.reduce((a, x) => a + x[1], 0),
+      chat: u.length, chatAt: u.some(mentionsMe),
       reg: ymd(c.created_at), closed: ymd(c.closed_at), stop: c.close_reason || '',
     }
-  }), [db, overdue])
+  }), [db, overdue, unread, mentionsMe])
 
   const words = st.q.trim().split(/\s+/).filter(Boolean)
   const list = useMemo(() => {
     const ws = words.map(norm)
     const out = rows.filter(r => {
       if (st.chip && r.status !== st.chip) return false
+      if (st.onlyNew && !r.chat) return false
       if (ws.length) {
         const hay = norm(COLS.map(c => r[c.k]).join(' '))
         if (!ws.every(w => hay.includes(w))) return false        // 단어 순서 상관없이 모두 포함
@@ -73,8 +87,9 @@ export default function Summary() {
       return true
     })
     const { k, dir } = st.sort
+    const sk = (colOf(k) && colOf(k).sortKey) || k
     return out.sort((a, b) => {
-      const va = a[k], vb = b[k]
+      const va = a[sk], vb = b[sk]
       const ea = va === '' || va == null, eb = vb === '' || vb == null
       if (ea || eb) return ea === eb ? 0 : ea ? 1 : -1          // 빈 칸은 항상 아래로
       const d = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ko')
@@ -104,7 +119,8 @@ export default function Summary() {
     place(k)
   }
   const cnt = s => rows.filter(r => r.status === s).length
-  const anyFilter = st.q || st.chip || Object.keys(st.f).length
+  const anyFilter = st.q || st.chip || st.onlyNew || Object.keys(st.f).length
+  const newN = rows.filter(r => r.chat).length
   const today = iso(todayMid())
 
   const cell = (r, c) => {
@@ -112,6 +128,8 @@ export default function Summary() {
     if (c.k === 'title') return <td key={c.k} className="c0"><b><Hl text={v} words={words} /></b></td>
     if (c.k === 'status') return <td key={c.k} className="nw"><span className={'sst ' + STATUS_CLS[v]}>{v}</span></td>
     if (c.k === 'pct') return <td key={c.k}><span className={'spg' + (r.status === '전환일 지남' ? ' late' : '')}><i><em style={{ width: v + '%' }} /></i>{r.done}/{r.total}</span></td>
+    if (c.k === 'left') return <td key={c.k} className="remw">{r.remList.length ? r.remList.map(([x, k]) => <span key={x} className={'sdp' + (r.status === '전환일 지남' ? ' late' : '')}>{x} {k}</span>) : <span className="faint">-</span>}</td>
+    if (c.k === 'chat') return <td key={c.k} className="nw">{r.chat ? <span className="sur">{r.chatAt ? '@ ' : ''}{r.chat}</span> : <span className="faint">-</span>}</td>
     if (c.type === 'date') {
       const soon = c.k === 'target' && r.status === '진행 중' && v >= today && dd(v) <= 7
       return <td key={c.k} className={'num' + (soon ? ' soon' : '')}>{v ? v.slice(2).replace(/-/g, '.') : '-'}</td>
@@ -126,19 +144,20 @@ export default function Summary() {
           <button key={s} type="button" className={'sum-chip ' + cl + (st.chip === s ? ' on' : '')} onClick={() => setSt({ chip: st.chip === s ? null : s })}>{s}<b>{cnt(s)}</b></button>
         ))}
         <button type="button" className={'sum-chip' + (!st.chip ? ' on' : '')} onClick={() => setSt({ chip: null })}>전체<b>{rows.length}</b></button>
+        <button type="button" className={'sum-chip nw-chip' + (st.onlyNew ? ' on' : '')} onClick={() => setSt({ onlyNew: !st.onlyNew })}>새 대화 있는 것만<b>{newN}</b></button>
       </div>
       <div className="sum-tools">
         <label className="search sum-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
           <input type="search" value={st.q} onChange={e => setSt({ q: e.target.value })} placeholder="검색 (단어 순서 상관없음)" autoComplete="off" aria-label="전체 요약 검색" />
         </label>
-        <button type="button" className="btn sm ghost" disabled={!anyFilter} onClick={() => { setSt({ q: '', chip: null, f: {} }); setPop(null) }}>필터 모두 지우기</button>
+        <button type="button" className="btn sm ghost" disabled={!anyFilter} onClick={() => { setSt({ q: '', chip: null, onlyNew: false, f: {} }); setPop(null) }}>필터 모두 지우기</button>
         <span className="sum-count"><b>{list.length}</b> / {rows.length}건</span>
       </div>
       {Object.keys(st.f).length > 0 && (
         <div className="sum-active">
           {Object.entries(st.f).map(([k, f]) => {
-            const d = f.vals ? (f.vals[0] === '__none__' ? '선택 없음' : f.vals.join(', ')) : f.text ? `"${f.text}" 포함` : f.min != null ? `${f.min}% 이상` : `${f.from || '처음'} ~ ${f.to || '끝'}`
+            const d = f.vals ? (f.vals[0] === '__none__' ? '선택 없음' : f.vals.join(', ')) : f.text ? `"${f.text}" 포함` : f.min != null ? `${f.min}${colOf(k).unit || ''} 이상` : `${f.from || '처음'} ~ ${f.to || '끝'}`
             return <button key={k} type="button" className="sum-af" onClick={() => { const nf = { ...st.f }; delete nf[k]; setSt({ f: nf }) }}>{colOf(k).label}: {d} <span aria-hidden="true">×</span></button>
           })}
         </div>
@@ -178,7 +197,12 @@ function FilterPop({ col, rows, st, setSt, pos, close }) {
     rows.forEach(r => { const v = String(r[col.k]); m[v] = (m[v] || 0) + 1 })
     return m
   }, [rows, col.k])
-  const all = Object.keys(counts).sort((a, b) => a.localeCompare(b, 'ko'))
+  const skey = useMemo(() => {
+    const m = {}
+    if (col.catSort) rows.forEach(r => { m[String(r[col.k])] = r[col.catSort] })
+    return m
+  }, [rows, col.k, col.catSort])
+  const all = Object.keys(counts).sort((a, b) => (col.catSort ? String(skey[a]).localeCompare(String(skey[b]), 'ko') : a.localeCompare(b, 'ko')))
   const [vals, setVals] = useState(f.vals ? f.vals.filter(v => v !== '__none__') : all)
   const [find, setFind] = useState('')
   const [text, setText] = useState(f.text || '')
@@ -241,7 +265,7 @@ function FilterPop({ col, rows, st, setSt, pos, close }) {
       )}
       {col.type === 'num' && (
         <>
-          <h4>처리율 몇 % 이상</h4>
+          <h4>{col.numLabel || '몇 이상'}</h4>
           <input type="text" inputMode="numeric" value={min} onChange={e => setMin(e.target.value)} placeholder="예: 50" />
         </>
       )}

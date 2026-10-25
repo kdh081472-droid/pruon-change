@@ -11,14 +11,11 @@ export function MineTab() {
   const view = ui.mineView || 'todo'
   const head = (
     <>
-      <div className="stats two">
-        <div className="stat"><div className="k">남은 할 일</div><div className="v">{list.length}</div></div>
-        <div className={'stat' + (late ? ' alert' : '')}><div className="k">전환일 지남</div><div className="v">{late}</div></div>
-      </div>
       <div className="seg mine-seg" role="tablist">
-        <button type="button" role="tab" className={view === 'todo' ? 'on' : ''} onClick={() => setUi(u => ({ ...u, mineView: 'todo' }))}>할 일 {list.length}</button>
+        <button type="button" role="tab" className={view === 'todo' ? 'on' : ''} onClick={() => setUi(u => ({ ...u, mineView: 'todo' }))}>처리할 일 {list.length}</button>
         <button type="button" role="tab" className={view === 'done' ? 'on' : ''} onClick={() => setUi(u => ({ ...u, mineView: 'done' }))}>처리한 일 {done.length}</button>
       </div>
+      {late > 0 && view === 'todo' && <div className="late-band">전환일이 지난 할 일 {late}건 — 바로 처리해주세요</div>}
     </>
   )
   if (view === 'done') {
@@ -71,7 +68,7 @@ export function MineTab() {
           <div className={'card mg' + (od ? ' od' : '')} key={cid}>
             <button type="button" className="mg-h" onClick={() => goChange(cid)}><span className="t">{c.title}</span><span className="d">전환 {md(c.target_date)} <DBadge c={c} /></span></button>
             {od && <p className="mg-warn">전환일이 지났습니다. 남은 할 일을 바로 처리해주세요.</p>}
-            {by[cid].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))).map(t => (
+            {by[cid].map(t => (
               <button type="button" key={t.id} className={'t2' + (od ? ' late' : '')} onClick={() => openTask(t.id)}>
                 <span className={'tc2 ' + (od ? 'late' : 'wait')}>{od ? '전환일 지남' : '대기'}</span>
                 <span className="t2-tx"><span className="t2-t">{t.is_extra && <span className="asg">배정</span>}{t.title}</span></span>
@@ -81,43 +78,6 @@ export function MineTab() {
           </div>
         )
       })}
-    </>
-  )
-}
-
-/* ---------- 진행 현황 (보기 전용 부서 첫 화면) ---------- */
-export function StatusTab() {
-  const { db, tOf, overdue, goChange } = useApp()
-  const live = db.changes.filter(c => c.status === '진행중').sort((a, b) => parse(a.target_date) - parse(b.target_date))
-  const odN = live.filter(overdue).length
-  const closedN = db.changes.filter(c => c.status === '종결').length
-  return (
-    <>
-      <div className="stats">
-        <div className="stat"><div className="k">진행 중 변경</div><div className="v">{live.length}</div></div>
-        <div className={'stat' + (odN ? ' alert' : '')}><div className="k">전환일 지남</div><div className="v">{odN}</div></div>
-        <div className="stat"><div className="k">종결</div><div className="v">{closedN}</div></div>
-      </div>
-      {!live.length ? <div className="card empty">진행 중인 변경이 없습니다.</div> : (
-        <div className="sgrid2">
-          {live.map(c => {
-            const ts = tOf(c.id), left = ts.filter(t => t.status === '대기'), od = overdue(c)
-            const pct = ts.length ? Math.round(((ts.length - left.length) / ts.length) * 100) : 0
-            const rem = {}
-            left.forEach(t => { rem[t.department] = (rem[t.department] || 0) + 1 })
-            return (
-              <button type="button" key={c.id} className={'card sc2' + (od ? ' od' : '')} onClick={() => goChange(c.id)}>
-                <span className="sc2-h"><b>{c.title}</b><DBadge c={c} /></span>
-                <span className="sc2-m">전환 {md(c.target_date)} · {ts.length - left.length}/{ts.length} 처리 ({pct}%)</span>
-                <span className={'bar2' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>
-                <span className="sc2-m">{left.length ? '아직 안 끝난 부서' : '모든 부서 처리 완료'}</span>
-                {left.length > 0 && <span className="chips2">{Object.entries(rem).map(([d, n]) => <span key={d} className={'dc2' + (od ? ' late' : '')}>{d} {n}</span>)}</span>}
-              </button>
-            )
-          })}
-        </div>
-      )}
-      {closedN > 0 && <p className="hint" style={{ margin: '10px 4px 0' }}>종결된 변경 {closedN}건과 결과 보고서는 타임라인에서 검색하거나 "종결된 변경 보기"로 볼 수 있습니다.</p>}
     </>
   )
 }

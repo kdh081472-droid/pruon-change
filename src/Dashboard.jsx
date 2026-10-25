@@ -3,7 +3,7 @@ import { supabase, isViewDept } from './supabase.js'
 import { useAppData } from './data.js'
 import { Ctx, Person, ICON, useWidth, WIDE, useApp as useAppCtx } from './ctx.jsx'
 import { dd, iso, todayMid, errText } from './util.js'
-import { MineTab, StatusTab, NewChatBlock } from './Mine.jsx'
+import { MineTab, NewChatBlock } from './Mine.jsx'
 import TimelineTab, { Calendar, ProductCard } from './Timeline.jsx'
 import Admin from './Admin.jsx'
 import Summary from './Summary.jsx'
@@ -54,13 +54,13 @@ export default function Dashboard({ session }) {
   useEffect(() => { if (me && me.left_at) { const t = setTimeout(() => supabase.auth.signOut(), 2500); return () => clearTimeout(t) } }, [me && me.left_at])
 
   useEffect(() => {
-    if (me && tab === null) setTab(viewer ? 'late' : 'mine')
+    if (me && tab === null) setTab(viewer ? (wide ? 'summary' : 'timeline') : 'mine')
   }, [me, viewer, tab])
   // 부서를 임원↔다른 부서로 바꾼 경우 맞는 탭으로
   useEffect(() => {
     if (!me || tab === null) return
-    if (viewer && (tab === 'mine' || tab === 'new')) setTab('late')
-    if (wide && tab === 'chat') setTab(viewer ? 'late' : 'mine')
+    if (viewer && (tab === 'mine' || tab === 'new' || tab === 'late')) setTab(wide ? 'summary' : 'timeline')
+    if (wide && tab === 'chat') setTab(viewer ? 'summary' : 'mine')
     if (!viewer && tab === 'late') setTab('mine')
     if (viewer) setUi(u => (u.calMine ? { ...u, calMine: false } : u))
   }, [viewer, me, tab, wide, sel])
@@ -144,18 +144,14 @@ export default function Dashboard({ session }) {
   const myOpenN = db.tasks.filter(t => t.department === me.department && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length
   const unreadAll = db.changes.reduce((n, c) => n + app.unread(c.id).length, 0)
   const tabs = viewer
-    ? [['late', '진행 현황'], ['timeline', '타임라인'], ['chat', '대화']]
-    : [['mine', '내 할 일'], ['timeline', '타임라인'], ['chat', '대화'], ['new', '변경 등록']]
-  const title = { chat: '대화', mine: '내 할 일', late: '진행 현황', timeline: wide ? '전체 일정 · 달력' : '타임라인', summary: '전체 요약', new: '변경 등록', settings: '내 정보', product: '' }[tab]
+    ? [['timeline', '전체 일정'], ['chat', '대화']]
+    : [['mine', '내 할 일'], ['timeline', '전체 일정'], ['chat', '대화'], ['new', '변경 등록']]
+  const title = { chat: '대화', mine: '내 할 일', timeline: wide ? '달력' : '전체 일정', summary: '요약', new: '변경 등록', settings: '내 정보', product: '' }[tab]
 
   const content = (
     <>
-      {viewer && tab !== 'settings' && tab !== 'product' && (
-        <div className="ro"><b>{me.department} · 보기 전용</b><span>모든 일정과 이력을 볼 수 있고, 처리·수정 버튼은 없습니다 (대화는 쓸 수 있음)</span></div>
-      )}
-      {!wide && (tab === 'mine' || tab === 'late') && <NewChatBlock />}
+      {!wide && tab === 'mine' && <NewChatBlock />}
       {tab === 'mine' && <MineTab />}
-      {tab === 'late' && <StatusTab />}
       {tab === 'timeline' && (wide ? <Overview /> : <TimelineTab />)}
       {tab === 'summary' && wide && <Summary />}
       {tab === 'product' && (sel && db.changeMap[sel] ? <ProductCard c={db.changeMap[sel]} forceOpen /> : <div className="card empty">왼쪽 목록에서 제품을 골라주세요.</div>)}
@@ -176,19 +172,20 @@ export default function Dashboard({ session }) {
     </>
   )
 
-  // PC 넓은 화면: 왼쪽 목록 · 가운데 작업 · 오른쪽 대화
+  // PC 넓은 화면: 왼쪽 목록 · 가운데 작업 · 오른쪽 대화 (달력·요약·등록·내 정보는 대화 칸 없이 넓게)
+  const noDock = ['timeline', 'summary', 'new', 'settings'].includes(tab)
   if (wide) {
     return (
       <Ctx.Provider value={app}>
-        <div className={'wide-wrap' + (tab === 'timeline' || tab === 'summary' ? ' no-dock' : '')}>
+        <div className={'wide-wrap' + (noDock ? ' no-dock' : '') + (tab === 'summary' && !ui.sumList ? ' slim' : '')}>
           <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} />
           <div className="wide-main">
-            <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' ? ' full' : '')}>
+            <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '')}>
               {tab !== 'product' && tab !== 'timeline' && <h1 className="page-t wide-t">{title}</h1>}
               {content}
             </div>
           </div>
-          {tab === 'timeline' || tab === 'summary' ? null : tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : <DockEmpty />}
+          {noDock ? null : tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : <DockEmpty />}
         </div>
         {overlays}
       </Ctx.Provider>
@@ -205,7 +202,7 @@ export default function Dashboard({ session }) {
           </div>
           <div className="top-r">
             <button type="button" className="org-btn" onClick={() => setSheet({ kind: 'org' })} aria-label="조직도">{ICON.org}<span>조직도</span></button>
-            <button type="button" className={'me-chip' + (tab === 'settings' ? ' on' : '')} onClick={() => setTab(tab === 'settings' ? (viewer ? 'late' : 'mine') : 'settings')} aria-label="내 정보">
+            <button type="button" className={'me-chip' + (tab === 'settings' ? ' on' : '')} onClick={() => setTab(tab === 'settings' ? (viewer ? 'timeline' : 'mine') : 'settings')} aria-label="내 정보">
               <Person id={uid} />
               {viewer && <small className="ro-t">보기 전용</small>}
               <span className="gear">{ICON.settings}</span>
@@ -230,10 +227,10 @@ export default function Dashboard({ session }) {
   )
 }
 
-// 넓은 화면의 '전체 일정 · 달력': 두 달 달력 (전환일만)
+// 넓은 화면의 "전체 일정 › 달력": 두 달 달력 (전환일만)
 function Overview() {
   const app = useAppCtx()
-  return <Calendar list={app.db.changes} searching={false} title="전체 일정 · 달력" />
+  return <Calendar list={app.db.changes} searching={false} title="달력" />
 }
 
 function Fail({ msg }) {

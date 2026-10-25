@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ORDER } from './supabase.js'
+import { ORDER, ITEM_TYPES } from './supabase.js'
 import { useApp, Person, MsgText } from './ctx.jsx'
 import OrgTree from './Org.jsx'
 import { md, stamp } from './util.js'
@@ -19,6 +19,7 @@ export default function Sheet() {
   else if (sheet.kind === 'stop') body = <StopSheet cid={sheet.cid} close={close} />
   else if (sheet.kind === 'resume') body = <ResumeSheet cid={sheet.cid} close={close} />
   else if (sheet.kind === 'assign') body = <AssignSheet cid={sheet.cid} close={close} />
+  else if (sheet.kind === 'edit') body = <EditSheet cid={sheet.cid} close={close} />
   else if (sheet.kind === 'org') body = <><Top tag={'가입한 사람 ' + app.db.profiles.length + '명'} close={close} /><div className="s-title">조직도</div><OrgTree inSheet /></>
   return (
     <>
@@ -79,10 +80,7 @@ function TaskSheet({ tid, close }) {
   else if (mode === '취소') actions = <CancelForm t={t} c={c} back={() => setMode(null)} close={close} />
   else {
     const a = []
-    if (!viewer && mineT && t.status === '대기' && c.status === '진행중') {
-      a.push(<button key="d" type="button" className="btn" onClick={() => setMode('완료')}>확인완료</button>)
-      a.push(<button key="n" type="button" className="btn ghost" onClick={() => setMode('해당없음')}>해당없음</button>)
-    }
+    const canDo = !viewer && mineT && t.status === '대기' && c.status === '진행중'
     if (!viewer && mineT && t.status !== '대기' && !(c.status === '종결' && c.close_type === '중단'))
       a.push(<button key="c" type="button" className="btn warn full" onClick={() => setMode('취소')}>확인 취소</button>)
     actions = (
@@ -90,6 +88,7 @@ function TaskSheet({ tid, close }) {
         {viewer && <div className="lock">보기 전용 계정입니다. 처리는 {t.department} 부서가 합니다.</div>}
         {!viewer && !mineT && t.status === '대기' && <div className="lock">{t.department} 부서만 처리할 수 있습니다.</div>}
         {!viewer && c.status === '종결' && c.close_type === '중단' && <div className="lock">중단 종결된 변경입니다. 처리하려면 먼저 "다시 진행"을 해주세요.</div>}
+        {canDo && <QuickForm t={t} close={close} />}
         {a.length > 0 && <div className="s-acts">{a}</div>}
       </>
     )
@@ -125,6 +124,35 @@ function TaskSheet({ tid, close }) {
           <ol>{logs.map(x => <li key={x.id}><b>{x.action}</b> · “{x.memo}” — <Person id={x.user_id} />, {stamp(x.created_at)}</li>)}</ol>
         </div>
       )}
+    </>
+  )
+}
+
+/* 처리 메모를 바로 쓰고, 확인완료 / 해당없음 중 하나로 저장 */
+function QuickForm({ t, close }) {
+  const { run } = useApp()
+  const [memo, setMemo] = useState('')
+  const { busy, err, setErr, go } = useBusy()
+  const ref = useFocus()
+  const save = mode => go(async () => {
+    if (!memo.trim()) return { error: mode === '완료' ? '확인 메모를 입력해주세요. (무엇을 확인했는지)' : '해당없음 사유를 입력해주세요.' }
+    const r = await run('complete_task', { p_task: t.id, p_status: mode, p_memo: memo.trim() },
+      d => (d === '종결' ? '모든 부서 확인 완료 → 자동 종결 · 배정 목록에 추가됨' : (mode === '완료' ? '확인완료' : '해당없음') + ' 저장됨'))
+    if (!r.error) close()
+    return r
+  })
+  return (
+    <>
+      <div className="form">
+        <label htmlFor="f-memo">처리 메모 (필수) — 확인한 내용 또는 해당없음 사유</label>
+        <textarea id="f-memo" ref={ref} rows={3} value={memo} onChange={e => { setMemo(e.target.value); setErr('') }}
+          placeholder="예: 신규 띠지 입고 확인, 번들 포함 / 이번 변경은 박스 변경 없음" />
+        {err && <p className="err">{err}</p>}
+      </div>
+      <div className="s-acts">
+        <button type="button" className="btn" disabled={busy} onClick={() => save('완료')}>{busy ? '저장 중…' : '확인완료로 저장'}</button>
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => save('해당없음')}>해당없음으로 저장</button>
+      </div>
     </>
   )
 }
@@ -317,6 +345,56 @@ function AssignSheet({ cid, close }) {
       </div>
       <div className="s-acts">
         <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '배정 중…' : '배정하기'}</button>
+        <button type="button" className="btn ghost" onClick={close}>취소</button>
+      </div>
+    </>
+  )
+}
+
+/* ---------- 변경 내용 수정 (등록 부서 + 관리자, 진행 중인 건만) ---------- */
+function EditSheet({ cid, close }) {
+  const { C, run } = useApp()
+  const c = C(cid)
+  const [title, setTitle] = useState(c.title)
+  const [desc, setDesc] = useState(c.description || '')
+  const [reason, setReason] = useState(c.reason || '')
+  const [items, setItems] = useState(c.items.length ? c.items.map(i => ({ type: i.item_type, name: i.item_name })) : [{ type: '단품', name: '' }])
+  const { busy, err, setErr, go } = useBusy()
+  const setItem = (i, patch) => { setItems(items.map((x, j) => (j === i ? { ...x, ...patch } : x))); setErr('') }
+  const save = () => go(async () => {
+    if (!title.trim()) return { error: '제목을 입력해주세요.' }
+    if (!items.some(x => x.name.trim())) return { error: '대상 품목을 1개 이상 입력해주세요.' }
+    const r = await run('update_change', { p_change: cid, p_title: title.trim(), p_description: desc.trim(), p_reason: reason.trim(), p_items: items.filter(x => x.name.trim()) }, '내용을 수정했습니다')
+    if (!r.error) close()
+    return r
+  })
+  return (
+    <>
+      <Top tag={c.short} close={close} />
+      <div className="s-title">변경 내용 수정</div>
+      <div className="form">
+        <label htmlFor="e-title">제목</label>
+        <input id="e-title" value={title} onChange={e => { setTitle(e.target.value); setErr('') }} />
+        <label htmlFor="e-desc">변경 내용</label>
+        <textarea id="e-desc" rows={2} value={desc} onChange={e => { setDesc(e.target.value); setErr('') }} />
+        <label htmlFor="e-reason">변경 사유</label>
+        <input id="e-reason" value={reason} onChange={e => { setReason(e.target.value); setErr('') }} />
+        <label>대상 품목</label>
+        {items.map((it, i) => (
+          <div className="ed-item" key={i}>
+            <select aria-label="품목 종류" value={it.type} onChange={e => setItem(i, { type: e.target.value })}>
+              {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+            <input aria-label="품목 이름" value={it.name} onChange={e => setItem(i, { name: e.target.value })} />
+            {items.length > 1 && <button type="button" className="x" aria-label="품목 삭제" onClick={() => setItems(items.filter((_, j) => j !== i))}>✕</button>}
+          </div>
+        ))}
+        <button type="button" className="pill" style={{ alignSelf: 'flex-start' }} onClick={() => setItems([...items, { type: '번들/기획상품', name: '' }])}>+ 품목 추가</button>
+        <p className="note">무엇을 바꿨는지 이력에 남고 결과 보고서에도 들어갑니다. 전환일은 '전환일 변경'에서 바꿉니다.</p>
+        {err && <p className="err">{err}</p>}
+      </div>
+      <div className="s-acts">
+        <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '저장 중…' : '수정 저장'}</button>
         <button type="button" className="btn ghost" onClick={close}>취소</button>
       </div>
     </>

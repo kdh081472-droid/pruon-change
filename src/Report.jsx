@@ -40,6 +40,7 @@ export default function Report({ cid, onClose }) {
     if (x.action === '등록') what = '변경 등록'
     if (x.action === '전환일 변경') what = `전환일 변경 ${md(x.old_date)} → ${md(x.new_date)}`
     if (x.action === '할 일 배정') what = '할 일 배정 → ' + (x.detail || '')
+    if (x.action === '내용 수정') what = '내용 수정 · ' + String(x.detail || '').split('\n').join(' / ')
     if ((x.action === '다시 진행' || x.action === '종결') && x.detail) what = x.action + ' (' + x.detail + ')'
     hist.push({ k: 'c' + x.id, at: x.created_at, who: x.user_id, what, memo: x.memo || '' })
   })

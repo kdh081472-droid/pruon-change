@@ -38,7 +38,7 @@ export default function Admin({ onExit }) {
     dept: <DeptTab users={users} act={act} />,
     tpl: <TplTab act={act} />,
     del: <DeleteTab act={act} openReport={setReportCid} />,
-    stat: <StatTab users={users} />,
+    stat: <StatTab users={users} onGoUsers={() => { setTab('users'); window.scrollTo(0, 0) }} />,
   }[tab]
 
   return (
@@ -379,21 +379,163 @@ function DeleteTab({ act, openReport }) {
 }
 
 /* ---------- 사용 현황 + 엑셀 내려받기 ---------- */
-function StatTab({ users }) {
+/* ---------- 사용 현황 (효과 보고용: 이름 없이 부서·전체 숫자 중심) ---------- */
+const d2n = s => { const [y, m, d] = s.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 86400000) }
+const n2d = n => new Date(n * 86400000).toISOString().slice(0, 10)
+const sday = ts => (ts ? stampFull(ts).slice(0, 10) : '')
+const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : null)
+
+function buckets(from, to) {
+  const a = d2n(from), b = d2n(to), len = b - a + 1
+  const out = []
+  if (len <= 14) {
+    for (let n = a; n <= b; n++) out.push({ s: n, e: n, label: n2d(n).slice(5).replace('-', '/') })
+  } else if (len <= 122) {
+    // 월요일 시작 주 단위 (기간 밖은 잘라냄)
+    let n = a
+    while (n <= b) {
+      const dow = (new Date(n * 86400000).getUTCDay() + 6) % 7          // 월=0
+      const e = Math.min(b, n + (6 - dow))
+      const days = e - n + 1
+      out.push({ s: n, e, label: n2d(n).slice(5).replace('-', '/') + '~', part: days < 7 ? days : 0 })
+      n = e + 1
+    }
+  } else {
+    let n = a
+    while (n <= b) {
+      const d = new Date(n * 86400000)
+      const last = Math.round(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0) / 86400000)
+      const e = Math.min(b, last)
+      out.push({ s: n, e, label: (d.getUTCMonth() + 1) + '월', part: (n !== Math.round(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 86400000) || e !== last) ? e - n + 1 : 0 })
+      n = e + 1
+    }
+  }
+  return out
+}
+
+function StatTab({ users, onGoUsers }) {
   const { db, toast } = useApp()
   const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
+  const today = sday(new Date().toISOString())
+  const [preset, setPreset] = useState('4w')
+  const [cf, setCf] = useState(n2d(d2n(today) - 27))
+  const [ct, setCt] = useState(today)
+  const range = preset === 'month' ? [today.slice(0, 8) + '01', today]
+    : preset === '4w' ? [n2d(d2n(today) - 27), today]
+    : preset === '3m' ? [n2d(d2n(today) - 89), today]
+    : [cf <= ct ? cf : ct, cf <= ct ? ct : cf]
+  const [from, to] = range
+  const len = d2n(to) - d2n(from) + 1
+  const pFrom = n2d(d2n(from) - len), pTo = n2d(d2n(from) - 1)
+  const [acts, setActs] = useState(null)
+  const [aErr, setAErr] = useState('')
   useEffect(() => { supabase.rpc('admin_db_size').then(({ data }) => setSize(typeof data === 'number' ? data : Number(data) || null)) }, [])
+  useEffect(() => {
+    let on = true
+    setActs(null)
+    supabase.rpc('admin_activity', { p_from: pFrom, p_to: to }).then(({ data, error }) => {
+      if (!on) return
+      if (error) { setAErr(errText(error)); setActs([]) } else { setAErr(''); setActs(data || []) }
+    })
+    return () => { on = false }
+  }, [pFrom, to])
+
   const act = (users || []).filter(u => !u.left_at)
-  const now = Date.now()
-  const days = u => (seenOf(u) ? Math.floor((now - new Date(seenOf(u))) / 86400000) : null)
-  const recent = act.filter(u => days(u) !== null && days(u) < 7).length
-  const idle = act.filter(u => days(u) === null || days(u) >= 7).sort((a, b) => (days(b) ?? 9999) - (days(a) ?? 9999))
   const live = db.changes.filter(c => c.status === '진행중').length
   const mb = size ? size / 1048576 : null
   const depts = [...db.depts].sort((a, b) => a.sort_order - b.sort_order)
-  const byDept = depts.map(d => [d, act.filter(u => u.department === d.name).length])
-  const max = Math.max(1, ...byDept.map(x => x[1]))
+  const inR = (d, a, b) => d && d >= a && d <= b
+  const deptOf = uid => (db.people[uid] ? db.people[uid].department : '')
+
+  // 기간별 숫자 계산 (이번 기간 / 바로 앞 같은 길이 기간)
+  const calc = (a, b) => {
+    const reg = db.changes.filter(c => inR(sday(c.created_at), a, b)).length
+    const closedC = db.changes.filter(c => c.status === '종결' && inR(sday(c.closed_at), a, b))
+    const doneC = closedC.filter(c => c.close_type !== '중단')
+    const onTimeC = doneC.filter(c => sday(c.closed_at) <= c.target_date).length
+    const doneT = db.tasks.filter(t => t.status !== '대기' && inR(sday(t.done_at), a, b) && db.changeMap[t.change_id])
+    const onTimeT = doneT.filter(t => sday(t.done_at) <= db.changeMap[t.change_id].target_date).length
+    const usersSet = new Set((acts || []).filter(x => inR(x.d, a, b)).map(x => x.u))
+    const msgs = db.messages.filter(m => !m.deleted && inR(sday(m.created_at), a, b))
+    return { reg, closed: closedC.length, doneC: doneC.length, onTimeC, doneT: doneT.length, onTimeT, users: usersSet, msgs, doneTasks: doneT }
+  }
+  const cur = calc(from, to)
+  const prev = calc(pFrom, pTo)
+  const firstDay = acts && acts.length ? acts.reduce((m, x) => (x.d < m ? x.d : m), acts[0].d) : null
+
+  // 막대그래프: 기간 길이에 따라 하루/주/달 단위
+  const bks = buckets(from, to).map(k => {
+    const a = n2d(k.s), b = n2d(k.e)
+    return { ...k, v: new Set((acts || []).filter(x => inR(x.d, a, b)).map(x => x.u)).size }
+  })
+  const vmax = Math.max(1, ...bks.map(k => k.v))
+
+  // 얼마나 자주 쓰나: 사람별 접속일 → 주당 평균 (이름은 보여주지 않음)
+  const dayCnt = {}
+  ;(acts || []).filter(x => inR(x.d, from, to)).forEach(x => { dayCnt[x.u] = (dayCnt[x.u] || 0) + 1 })
+  const weeks = Math.max(1, len / 7)
+  const freq = { hi: 0, mid: 0, none: 0 }
+  act.forEach(u => { const w = (dayCnt[u.id] || 0) / weeks; if (w >= 3) freq.hi++; else if (w > 0) freq.mid++; else freq.none++ })
+  const fTot = Math.max(1, act.length)
+
+  // 부서별 (순서 고정)
+  const rowsD = depts.map(d => {
+    const people = act.filter(u => u.department === d.name)
+    const used = people.filter(u => cur.users.has(u.id)).length
+    const assigned = db.tasks.filter(t => t.department === d.name && inR(sday(t.created_at), from, to)).length
+    const done = cur.doneTasks.filter(t => t.department === d.name)
+    const onT = done.filter(t => sday(t.done_at) <= db.changeMap[t.change_id].target_date).length
+    const chats = cur.msgs.filter(m => deptOf(m.user_id) === d.name).length
+    return { d, n: people.length, used, assigned, done: done.length, onT: pctOf(onT, done.length), chats, view: d.kind === '보기' }
+  })
+
+  // 계정 점검: 4주 넘게 열지 않은 계정 수 (이름은 가입자 탭에서)
+  const now = Date.now()
+  const idleN = act.filter(u => { const s = seenOf(u); return !s || (now - new Date(s)) / 86400000 >= 28 }).length
+
+  const cmp = (c, p, unit = '') => (p == null ? '' : c === p ? '지난 기간과 같음' : `지난 기간 ${p}${unit}`)
+  const onC = pctOf(cur.onTimeC, cur.doneC), onCp = pctOf(prev.onTimeC, prev.doneC)
+  const onT = pctOf(cur.onTimeT, cur.doneT), onTp = pctOf(prev.onTimeT, prev.doneT)
+  const kpis = [
+    { k: '변경 등록 / 종결', v: `${cur.reg} / ${cur.closed}`, u: '건', s: `지금 진행 중 ${live}건` },
+    { k: '전환일 전에 끝난 변경', v: cur.doneC ? `${cur.onTimeC} / ${cur.doneC}` : '-', u: cur.doneC ? '건' : '', s: onC == null ? '이 기간 종결 없음' : [onC + '%', cmp(onC, onCp, '%')].filter(Boolean).join(' · ') },
+    { k: '전환일 전 처리된 할 일', v: onT == null ? '-' : String(onT), u: onT == null ? '' : '%', s: cur.doneT ? [`${cur.doneT}건 중 ${cur.onTimeT}건`, cmp(onT, onTp, '%')].filter(Boolean).join(' · ') : '이 기간 처리 없음' },
+    { k: '한 번 이상 쓴 사람', v: acts ? `${cur.users.size} / ${act.length}` : '…', u: acts ? '명' : '', s: acts ? [(pctOf(cur.users.size, act.length) ?? 0) + '%', cmp(cur.users.size, prev.users.size, '명')].filter(Boolean).join(' · ') : '' },
+    { k: '앱에서 나눈 대화', v: String(cur.msgs.length), u: '개', s: cmp(cur.msgs.length, prev.msgs.length, '개') },
+  ]
+
+  async function downloadReport() {
+    if (busy) return
+    setBusy(true)
+    try {
+      const XLSX = await import('xlsx')
+      const wb = XLSX.utils.book_new()
+      const sum = [
+        { 항목: '기간', 이번기간: `${from} ~ ${to}`, 지난기간: `${pFrom} ~ ${pTo}` },
+        { 항목: '변경 등록 (건)', 이번기간: cur.reg, 지난기간: prev.reg },
+        { 항목: '변경 종결 (건)', 이번기간: cur.closed, 지난기간: prev.closed },
+        { 항목: '전환일 전에 끝난 변경 (건)', 이번기간: `${cur.onTimeC} / ${cur.doneC}`, 지난기간: `${prev.onTimeC} / ${prev.doneC}` },
+        { 항목: '전환일 전에 끝난 변경 (%)', 이번기간: onC ?? '-', 지난기간: onCp ?? '-' },
+        { 항목: '처리된 할 일 (건)', 이번기간: cur.doneT, 지난기간: prev.doneT },
+        { 항목: '전환일 전 처리 (%)', 이번기간: onT ?? '-', 지난기간: onTp ?? '-' },
+        { 항목: '한 번 이상 쓴 사람 (명)', 이번기간: cur.users.size, 지난기간: prev.users.size },
+        { 항목: '재직 가입자 (명)', 이번기간: act.length, 지난기간: '' },
+        { 항목: '앱에서 나눈 대화 (개)', 이번기간: cur.msgs.length, 지난기간: prev.msgs.length },
+        { 항목: '주 3일 이상 쓴 사람 (명)', 이번기간: freq.hi, 지난기간: '' },
+        { 항목: '주 1~2일 쓴 사람 (명)', 이번기간: freq.mid, 지난기간: '' },
+        { 항목: '이 기간 안 쓴 사람 (명)', 이번기간: freq.none, 지난기간: '' },
+      ]
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sum), '요약')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bks.map(k => ({ 구간: k.label + (k.part ? ` (${k.part}일)` : ''), 시작: n2d(k.s), 끝: n2d(k.e), 쓴사람: k.v }))), '기간별 사용자')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsD.map(r => ({ 부서: r.d.name, 인원: r.n, 쓴사람: r.used, 배정된할일: r.view ? '' : r.assigned, 처리: r.view ? '' : r.done, 전환일전처리_퍼센트: r.view || r.onT == null ? '' : r.onT, 대화: r.chats }))), '부서별')
+      XLSX.writeFile(wb, `푸르온_변경점_사용현황_${from}_${to}.xlsx`)
+      toast('보고용 엑셀을 내려받았습니다')
+    } catch (e) {
+      toast('내려받기에 실패했습니다: ' + errText(e))
+    }
+    setBusy(false)
+  }
 
   async function download() {
     if (busy) return
@@ -431,40 +573,98 @@ function StatTab({ users }) {
 
   return (
     <>
-      <Head title="사용 현황" sub={stampFull(new Date().toISOString()).slice(0, 10) + ' 기준'} />
-      <div className="stats four">
-        <div className="stat"><div className="k">가입자 (재직)</div><div className="v">{users ? act.length : '…'}</div><div className="s">퇴사 {users ? users.length - act.length : '…'}명</div></div>
-        <div className="stat"><div className="k">최근 7일 접속</div><div className="v">{users ? recent : '…'}</div><div className="s">{users && act.length ? '재직자의 ' + Math.round((recent / act.length) * 100) + '%' : ''}</div></div>
-        <div className="stat"><div className="k">진행 중 변경</div><div className="v">{live}</div><div className="s">종결 {db.changes.length - live}건</div></div>
-        <div className="stat"><div className="k">저장 공간</div><div className="v">{mb ? mb.toFixed(1) : '…'}<small> MB</small></div>
-          <div className="meter"><i style={{ width: (mb ? Math.max(1.5, (mb / 500) * 100) : 0) + '%' }} /></div>
-          <div className="s">무료 한도 500MB{mb ? ' 중 ' + ((mb / 500) * 100).toFixed(1) + '%' : ''}</div></div>
+      <Head title="사용 현황" sub="이름 없이 부서·전체 숫자로 봅니다 · 임원 보고용">
+        <button type="button" className="btn" disabled={busy || !acts} onClick={downloadReport}>{busy ? '만드는 중…' : '보고용 엑셀 받기'}</button>
+      </Head>
+      <div className="us-period">
+        <div className="seg" role="tablist" aria-label="기간">
+          {[['month', '이번 달'], ['4w', '최근 4주'], ['3m', '최근 3개월'], ['custom', '직접 선택']].map(([k, l]) => (
+            <button key={k} type="button" role="tab" className={preset === k ? 'on' : ''} onClick={() => setPreset(k)}>{l}</button>
+          ))}
+        </div>
+        {preset === 'custom' ? (
+          <span className="us-dates">
+            <input type="date" aria-label="시작일" value={cf} max={today} onChange={e => e.target.value && setCf(e.target.value)} />
+            <span>~</span>
+            <input type="date" aria-label="종료일" value={ct} max={today} onChange={e => e.target.value && setCt(e.target.value)} />
+          </span>
+        ) : <span className="us-r mono">{from} ~ {to}</span>}
+        <span className="us-cmp">비교: 바로 앞 {len}일 ({pFrom.slice(5)} ~ {pTo.slice(5)})</span>
       </div>
-      <div className="adm-two">
+      {aErr && <p className="err">접속 기록을 불러오지 못했습니다: {aErr} (upgrade5.sql을 실행했는지 확인해주세요)</p>}
+      {firstDay && firstDay > from && <p className="note us-note">접속 기록은 {firstDay}부터 쌓였습니다. 그 전 기간의 '쓴 사람' 숫자는 실제보다 적게 나옵니다. (처리·대화 숫자는 처음부터 정확합니다)</p>}
+
+      <div className="us-kpis">
+        {kpis.map(x => (
+          <div key={x.k} className="stat us-k">
+            <div className="k">{x.k}</div>
+            <div className="v">{x.v}<small> {x.u}</small></div>
+            <div className="s">{x.s}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="adm-two us-two">
         <div className="card adm-card">
-          <h2>부서별 가입자</h2>
-          <div className="bars2">
-            {byDept.map(([d, n]) => (
-              <div key={d.name} className={'bar3' + (d.kind === '보기' ? ' v' : '')}><span>{d.name}</span><span className="tr3"><i style={{ width: (n / max) * 100 + '%' }} /></span><span className="n">{n}</span></div>
+          <h2>{bks.length && bks[0].s === bks[0].e ? '날마다' : len <= 122 ? '주마다' : '달마다'} 쓴 사람 수</h2>
+          <div className="us-bars" role="img" aria-label={bks.map(k => k.label + ' ' + k.v + '명').join(', ')}>
+            {bks.map((k, i) => (
+              <div key={k.s} className={'us-b' + (i === bks.length - 1 ? ' last' : '')}>
+                <span className="n">{acts ? k.v : ''}</span>
+                <i style={{ height: (acts ? Math.max(2, (k.v / vmax) * 100) : 2) + '%' }} />
+                <span className="l">{k.label}{k.part ? <small> ({k.part}일)</small> : null}</span>
+              </div>
             ))}
           </div>
-          <p className="note">회색 막대는 보기 전용 부서입니다.</p>
+          <h3 className="us-h3">얼마나 자주 쓰나 <small>(이름 없이 인원만 · 재직 {act.length}명)</small></h3>
+          <div className="us-freq" role="img" aria-label={`주 3일 이상 ${freq.hi}명, 주 1~2일 ${freq.mid}명, 안 씀 ${freq.none}명`}>
+            <i className="hi" style={{ width: (freq.hi / fTot) * 100 + '%' }} /><i className="mid" style={{ width: (freq.mid / fTot) * 100 + '%' }} /><i className="no" style={{ width: (freq.none / fTot) * 100 + '%' }} />
+          </div>
+          <div className="us-lg"><span><i className="hi" />주 3일 이상 {freq.hi}명</span><span><i className="mid" />주 1~2일 {freq.mid}명</span><span><i className="no" />이 기간 안 씀 {freq.none}명</span></div>
         </div>
         <div className="card adm-card">
-          <h2>7일 넘게 접속하지 않은 사람</h2>
-          {!users ? <p className="muted">불러오는 중…</p> : !idle.length ? <p className="muted">없습니다.</p> : (
-            <div className="idle2">{idle.map(u => <div key={u.id}><span>{u.name} <span className="pn-e">{u.email.split('@')[0]}</span> · {u.department}</span><em>{days(u) === null ? '접속 기록 없음' : days(u) + '일 전'}</em></div>)}</div>
-          )}
-          <p className="note">퇴사자 정리할 때 참고하세요.</p>
+          <h2>부서별 <small className="us-sm">순서 고정 (순위 아님)</small></h2>
+          <div className="us-tw">
+            <table className="us-t">
+              <thead><tr><th>부서</th><th>쓴 사람</th><th>배정된 할 일</th><th>처리</th><th>전환일 전 처리</th><th>대화</th></tr></thead>
+              <tbody>
+                {rowsD.map(r => (
+                  <tr key={r.d.name}>
+                    <td>{r.d.name}</td>
+                    <td>{acts ? `${r.used} / ${r.n}` : '…'}</td>
+                    <td>{r.view ? '–' : r.assigned}</td>
+                    <td>{r.view ? '–' : r.done}</td>
+                    <td>{r.view || r.onT == null ? '–' : r.onT + '%'}</td>
+                    <td>{r.chats}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="note">'쓴 사람'은 기간 중 한 번이라도 연 인원입니다. 접속 횟수·시간은 보여주지 않습니다. 배정·처리는 그 기간에 생기거나 처리된 할 일입니다.</p>
         </div>
       </div>
-      <div className="card adm-card dl3">
-        <div className="tx">
-          <h2>전체 데이터 내려받기</h2>
-          <p>엑셀 파일 1개로 받습니다. 한 달에 한 번, 또는 큰 변경이 종결될 때마다 받아 회사 공유 폴더에 날짜별로 보관하세요.</p>
-          <div className="sheets">{['가입자', '부서', '변경', '할 일', '처리 이력', '대화'].map(x => <span key={x}>{x}</span>)}</div>
+
+      <div className="card adm-card us-idle">
+        <div><b>계정 점검</b> · 4주 넘게 열지 않은 계정 <b className="mono">{users ? idleN : '…'}</b>개 — 퇴사·부서 이동·로그인 문제일 수 있어요</div>
+        <button type="button" className="btn sm ghost" onClick={onGoUsers}>가입자 탭에서 보기 ›</button>
+      </div>
+
+      <div className="adm-two">
+        <div className="card adm-card">
+          <h2>저장 공간</h2>
+          <div className="v us-mb">{mb ? mb.toFixed(1) : '…'}<small> MB</small></div>
+          <div className="meter"><i style={{ width: (mb ? Math.max(1.5, (mb / 500) * 100) : 0) + '%' }} /></div>
+          <p className="note">무료 한도 500MB{mb ? ' 중 ' + ((mb / 500) * 100).toFixed(1) + '%' : ''} · 가입자 재직 {act.length}명 · 퇴사 {users ? users.length - act.length : '…'}명</p>
         </div>
-        <button type="button" className="btn" disabled={busy} onClick={download}>{busy ? '만드는 중…' : '엑셀로 받기'}</button>
+        <div className="card adm-card dl3">
+          <div className="tx">
+            <h2>전체 데이터 내려받기</h2>
+            <p>엑셀 파일 1개로 받습니다. 한 달에 한 번, 또는 큰 변경이 종결될 때마다 받아 회사 공유 폴더에 날짜별로 보관하세요.</p>
+            <div className="sheets">{['가입자', '부서', '변경', '할 일', '처리 이력', '대화'].map(x => <span key={x}>{x}</span>)}</div>
+          </div>
+          <button type="button" className="btn" disabled={busy} onClick={download}>{busy ? '만드는 중…' : '엑셀로 받기'}</button>
+        </div>
       </div>
     </>
   )

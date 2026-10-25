@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase, ORDER, SHORT, ITEM_TYPES } from './supabase.js'
 import { useApp, Person } from './ctx.jsx'
-import { add, iso, todayMid, errText, stampFull } from './util.js'
+import { errText, stampFull } from './util.js'
 
 // 품목 종류별 이름 예시
 const NAME_HINT = {
@@ -15,7 +15,7 @@ const NAME_HINT = {
 
 export function emptyForm() {
   return {
-    title: '', desc: '', reason: '', target: iso(add(todayMid(), 35)),
+    title: '', desc: '', reason: '', target: '',
     items: [{ type: '단품', name: '' }],
     picks: {}, extras: [],
     presetSel: 'base', presetUsed: 'base', presetMode: null, presetErr: '',
@@ -128,6 +128,8 @@ export default function NewChange({ nf, setNf, onDone }) {
 
   return (
     <>
+      <div className="nf-wrap">
+      <div className="nf-col">
       <div className="card nf">
         <h3 className="nf-t">1. 기본 정보</h3>
         <label htmlFor="nf-title">제목</label>
@@ -137,8 +139,8 @@ export default function NewChange({ nf, setNf, onDone }) {
         <textarea id="nf-desc" rows={2} value={nf.desc} onChange={e => set({ desc: e.target.value })} placeholder="무엇이 어떻게 바뀌는지" />
         <label htmlFor="nf-reason">변경 사유</label>
         <input id="nf-reason" value={nf.reason} onChange={e => set({ reason: e.target.value })} placeholder="예: 고객사 요청" />
-        <label htmlFor="nf-target">전환일 (변경 적용일)</label>
-        <input id="nf-target" type="date" value={nf.target} onChange={e => set({ target: e.target.value, err: '' })} />
+        <label htmlFor="nf-target">전환일 (변경 적용일) <span className="req">*필수 · 직접 골라주세요</span></label>
+        <input id="nf-target" type="date" className={!nf.target && nf.err === '전환일을 골라주세요.' ? 'bad' : ''} value={nf.target} onChange={e => set({ target: e.target.value, err: '' })} />
       </div>
 
       <div className="card nf">
@@ -155,6 +157,8 @@ export default function NewChange({ nf, setNf, onDone }) {
         <button type="button" className="pill" onClick={() => set({ items: [...nf.items, { type: '번들/기획상품', name: '' }] })}>+ 품목 추가</button>
       </div>
 
+      </div>
+      <div className="nf-col">
       <div className="card nf">
         <h3 className="nf-t">3. 부서별 할 일 배정 <small>체크해서 빼거나, 필요한 할 일을 추가하세요</small></h3>
         <div className="pbox">
@@ -269,6 +273,8 @@ export default function NewChange({ nf, setNf, onDone }) {
       </div>
       {nf.err && <p className="nf-err">{nf.err}</p>}
       <button type="button" className="btn nf-go" disabled={busy} onClick={submit}>{busy ? '등록 중…' : `변경 등록 · 할 일 ${pickedN}건 배정`}</button>
+      </div>
+      </div>
     </>
   )
 }

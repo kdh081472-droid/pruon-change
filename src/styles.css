@@ -923,3 +923,89 @@ html, body { max-width: 100%; overflow-x: hidden }
   .sum-search { min-width: 0; flex: 1 1 100% }
   .sum-tools .btn { margin-left: auto; order: 3 }
 }
+
+/* ===== 4차: PC 정리 · 내용 수정 · 순서 · 요약 칸 ===== */
+.ch-in textarea, .ch-c textarea { font: inherit; font-size: 15px; line-height: 1.45; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); outline: none }
+.ch-in textarea:focus, .ch-c textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+.ch-q { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 700; padding: 0 }
+.ch-q.on, .ch-q:hover { color: var(--accent); border-color: var(--accent) }
+.rc { color: #a87400; font-family: var(--f); font-weight: 700 }
+.late-band { margin: 0 0 12px; padding: 11px 14px; border-radius: 12px; background: var(--late-soft); color: var(--late); font-size: 14px; font-weight: 700 }
+.t2row { display: flex; align-items: center; gap: 6px; border-radius: 10px }
+.t2row .t2 { flex: 1; min-width: 0 }
+.tno { flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--bg); color: var(--muted); font-family: var(--mono); font-size: 11.5px; font-weight: 600; display: grid; place-items: center }
+.grip { flex: none; width: 14px; color: var(--faint); font-size: 14px; letter-spacing: -3px; cursor: grab; user-select: none }
+.t2row.mv[draggable="true"] { cursor: grab }
+.t2row.dragging { opacity: .5; background: var(--accent-soft) }
+.t2row.over { box-shadow: inset 0 2px 0 var(--accent); background: var(--today) }
+.t2-mv { flex: none; display: flex; gap: 2px }
+.t2-mv button { width: 26px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 10px; padding: 0 }
+.t2-mv button:hover:not(:disabled) { background: var(--bg); color: var(--accent) }
+.t2-mv button:disabled { opacity: .3 }
+.ord-h { font-size: 11.5px; font-weight: 500; color: var(--muted); margin-left: 6px }
+.ch-d { display: block; white-space: pre-line; color: var(--text); font-size: 12.5px; margin: 2px 0 }
+.ed-item { display: grid; grid-template-columns: 150px 1fr auto; gap: 6px; align-items: center }
+.ed-item select, .ed-item input { min-width: 0 }
+.dept-ro { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-size: 15px }
+.dept-ro span { margin-left: auto; font-size: 13px; color: var(--muted) }
+.my-info { max-width: 620px }
+.req { font-weight: 600; color: var(--late); margin-left: 4px; font-size: 12px }
+.nf input.bad { border-color: var(--late); box-shadow: 0 0 0 2px var(--late-soft) }
+.nf-col { display: flex; flex-direction: column; min-width: 0 }
+@media (min-width: 1100px) {
+  .nf-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; max-width: 1240px }
+  .nf-wrap .nf-col > .card { margin-top: 0 }
+  .wide-in.full .nf-wrap + * { max-width: 1240px }
+}
+.sn-g { font-size: 11.5px; font-weight: 700; color: var(--muted); letter-spacing: .04em; padding: 10px 10px 2px }
+.sd-expand { margin: 10px 10px 4px; border: 1px dashed var(--line); background: var(--surface); border-radius: 10px; padding: 9px; font-size: 13px; font-weight: 600; color: var(--muted) }
+.sd-expand:hover { color: var(--accent); border-color: var(--accent) }
+.sd-expand.fold { border-style: solid; margin-bottom: 0 }
+.sd-only { margin: 8px 10px 0; flex: none }
+.sd-only button { flex: 1; padding: 6px 4px; font-size: 12.5px }
+.wide-wrap.slim .sidebar { width: 220px }
+.wide-wrap.slim .wide-main { left: 220px }
+.wide-wrap.slim .sd-admin { margin-top: auto }
+.sdp { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); margin: 0 3px 3px 0; white-space: nowrap }
+.sdp.late { background: var(--late-soft); color: var(--late) }
+.sur { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--late); color: #fff; white-space: nowrap }
+.rem-ch { display: flex; flex-wrap: wrap; margin-top: 6px }
+.sum-chip.nw-chip { margin-left: 8px }
+/* 관리자 사용 현황 (4차) */
+.us-period { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px }
+.us-period .seg button { padding: 7px 12px; font-size: 13px }
+.us-dates { display: inline-flex; align-items: center; gap: 6px }
+.us-dates input { font: inherit; font-family: var(--mono); font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text) }
+.us-r { font-size: 13px; color: var(--text) }
+.us-cmp { font-size: 12px; color: var(--muted) }
+.us-note { margin: -4px 0 12px }
+.us-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px }
+.us-k .v { font-size: 24px }
+.us-k .v small { font-size: 13px; color: var(--muted) }
+.us-k .s { font-size: 12px; color: var(--muted) }
+.us-two { align-items: start }
+.us-bars { display: flex; align-items: stretch; gap: 8px; height: 170px; margin: 10px 0 4px; padding-bottom: 22px; position: relative }
+.us-b { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; position: relative }
+.us-b i { display: block; width: 100%; max-width: 48px; background: #9fb3f2; border-radius: 5px 5px 0 0 }
+.us-b.last i { background: var(--accent) }
+.us-b .n { font-family: var(--mono); font-size: 11.5px; color: var(--text) }
+.us-b .l { position: absolute; bottom: -20px; font-size: 11px; color: var(--muted); white-space: nowrap }
+.us-b .l small { font-size: 10px }
+.us-h3 { font-size: 14px; margin: 18px 0 0; color: var(--ink) }
+.us-h3 small, .us-sm { font-size: 12px; font-weight: 500; color: var(--muted) }
+.us-freq { display: flex; height: 14px; border-radius: 99px; overflow: hidden; margin: 10px 0 8px; background: var(--rail) }
+.us-freq i, .us-lg i { display: block }
+.us-freq .hi, .us-lg .hi { background: var(--accent) } .us-freq .mid, .us-lg .mid { background: #9fb3f2 } .us-freq .no, .us-lg .no { background: #d5dae3 }
+.us-lg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--text) }
+.us-lg span { display: inline-flex; align-items: center; gap: 5px }
+.us-lg i { width: 10px; height: 10px; border-radius: 3px }
+.us-tw { overflow-x: auto }
+.us-t { width: 100%; border-collapse: collapse; font-size: 13px }
+.us-t th { text-align: right; font-size: 12px; color: var(--muted); font-weight: 700; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap }
+.us-t td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); font-family: var(--mono) }
+.us-t th:first-child, .us-t td:first-child { text-align: left; font-family: var(--f); font-weight: 600 }
+.us-idle { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; margin-bottom: 14px }
+.us-idle > div { flex: 1; min-width: 240px }
+.us-mb { font-size: 24px; font-weight: 700; font-family: var(--mono); color: var(--ink) }
+@media (max-width: 1099px) { .us-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+.sum-t td.remw { min-width: 130px; max-width: 220px; white-space: normal }

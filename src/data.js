@@ -26,6 +26,9 @@ export function buildDb(raw) {
   const people = {}
   raw.profiles.forEach(p => { people[p.id] = p })   // 퇴사자 포함 (지난 기록 이름 표시용)
   const active = raw.profiles.filter(p => !p.left_at)
+  // 할 일 순서: 부서가 정한 순서(pos) → 없으면 만든 순서 (새로 배정된 건 맨 끝)
+  const byPos = (a, b) => ((a.pos ?? 1e9) - (b.pos ?? 1e9)) || String(a.created_at).localeCompare(String(b.created_at))
+  raw.tasks.sort(byPos)
   const tasksBy = {}
   raw.tasks.forEach(t => { (tasksBy[t.change_id] = tasksBy[t.change_id] || []).push(t) })
   const itemsBy = {}
