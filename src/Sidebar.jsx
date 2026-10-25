@@ -4,7 +4,7 @@ import OrgTree from './Org.jsx'
 import { NewChatBlock } from './Mine.jsx'
 
 // PC 넓은 화면의 왼쪽: 계정 · 조직도 · 메뉴 (제품은 요약·달력·내 할 일에서 고름)
-export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, onAdmin }) {
+export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, onAdmin, helpOpen, onHelp }) {
   const { db, me, viewer } = useApp()
   const [orgOpen, setOrgOpen] = useState(false)
   // 메뉴: 내 할 일 / 전체 일정(달력·요약) / 변경 등록  — 휴대폰 '전체 일정' 탭과 같은 이름
@@ -33,6 +33,9 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, 
           </button>
         ))}
       </nav>
+      <div className="sd-help">
+        <button type="button" className={'sn' + (helpOpen ? ' on' : '')} onClick={onHelp} aria-expanded={!!helpOpen}>{ICON.help}<span>사용법 물어보기</span></button>
+      </div>
       <div className="sd-fill" />
       {isAdmin && (
         <div className="sd-admin">

@@ -8,7 +8,7 @@ import Report from './Report.jsx'
 const seenOf = u => u.last_seen_at || u.last_sign_in_at || null
 
 // 관리자 모드: 관리 기능만 (업무 화면은 모두 꺼짐). 관리자 여부는 서버가 매번 다시 검사함
-const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat']]
+const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat'], ['help', '도우미 설정', 'help']]
 
 export default function Admin({ onExit }) {
   const app = useApp()
@@ -38,6 +38,7 @@ export default function Admin({ onExit }) {
     dept: <DeptTab users={users} act={act} />,
     tpl: <TplTab act={act} />,
     del: <DeleteTab act={act} openReport={setReportCid} />,
+    help: <HelpTab />,
     stat: <StatTab users={users} onGoUsers={() => { setTab('users'); window.scrollTo(0, 0) }} />,
   }[tab]
 
@@ -666,6 +667,57 @@ function StatTab({ users, onGoUsers }) {
           <button type="button" className="btn" disabled={busy} onClick={download}>{busy ? '만드는 중…' : '엑셀로 받기'}</button>
         </div>
       </div>
+    </>
+  )
+}
+
+/* ---------- 도우미 설정: 사용 설명서 · 하루 질문 한도 ---------- */
+function HelpTab() {
+  const { db, toast } = useApp()
+  const [cfg, setCfg] = useState(null)
+  const [manual, setManual] = useState('')
+  const [total, setTotal] = useState('100')
+  const [per, setPer] = useState('30')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.rpc('admin_help_get')
+    if (error) return setErr(errText(error) + ' (upgrade6.sql을 실행했는지 확인해주세요)')
+    setErr(''); setCfg(data); setManual(data.manual || ''); setTotal(String(data.daily_total)); setPer(String(data.per_user))
+  }, [])
+  useEffect(() => { load() }, [load])
+  const dirty = cfg && (manual !== cfg.manual || String(cfg.daily_total) !== total || String(cfg.per_user) !== per)
+  async function save() {
+    if (busy) return
+    setBusy(true); setErr('')
+    const { error } = await supabase.rpc('admin_help_save', { p_manual: manual, p_total: parseInt(total, 10), p_per_user: parseInt(per, 10) })
+    setBusy(false)
+    if (error) return setErr(errText(error))
+    toast('도우미 설정을 저장했습니다 · 바로 답변에 반영됩니다')
+    load()
+  }
+  const who = cfg && cfg.updated_by && db.people[cfg.updated_by] ? db.people[cfg.updated_by].name : ''
+  return (
+    <>
+      <Head title="도우미 설정" sub="사용법 도우미(AI)가 참고하는 설명서와 하루 질문 한도">
+        <button type="button" className="btn" disabled={!dirty || busy} onClick={save}>{busy ? '저장 중…' : '저장'}</button>
+      </Head>
+      {err && <p className="err">{err}</p>}
+      {!cfg ? (!err && <p className="muted">불러오는 중…</p>) : (
+        <>
+          <div className="stats four">
+            <div className="stat"><div className="k">오늘 질문</div><div className="v">{cfg.today}<small> / {cfg.daily_total}</small></div><div className="s">물어본 사람 {cfg.today_people}명</div></div>
+            <div className="stat"><div className="k">최근 30일 질문</div><div className="v">{cfg.last30}</div><div className="s">모델 {cfg.model}</div></div>
+            <div className="stat"><div className="k">하루 회사 전체 한도</div><div className="v"><input className="hb-num" type="number" min="0" max="10000" value={total} onChange={e => setTotal(e.target.value)} aria-label="하루 회사 전체 질문 수" /></div><div className="s">0이면 도우미 끄기</div></div>
+            <div className="stat"><div className="k">1인 하루 한도</div><div className="v"><input className="hb-num" type="number" min="0" max="1000" value={per} onChange={e => setPer(e.target.value)} aria-label="1인 하루 질문 수" /></div><div className="s">한 사람이 다 쓰지 않도록</div></div>
+          </div>
+          <div className="card adm-card">
+            <h2>사용 설명서 <small className="us-sm">{manual.length.toLocaleString()}자 · 마지막 수정 {cfg.updated_at ? stampFull(cfg.updated_at) : '-'}{who ? ' · ' + who : ''}</small></h2>
+            <p className="note">도우미는 이 설명서에 있는 내용만 근거로 답하고, 없는 내용은 "캡처해서 관리자에게 문의"로 안내합니다. 앱 기능이 바뀌면 여기를 같이 고쳐주세요. ## 제목, - 목록, **굵게** 형식을 쓰면 도우미가 더 잘 이해합니다.</p>
+            <textarea className="hb-manual" value={manual} onChange={e => setManual(e.target.value)} spellCheck={false} aria-label="사용 설명서" />
+          </div>
+        </>
+      )}
     </>
   )
 }

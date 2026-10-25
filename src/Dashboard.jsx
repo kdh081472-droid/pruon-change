@@ -7,6 +7,7 @@ import { MineTab, NewChatBlock } from './Mine.jsx'
 import TimelineTab, { Calendar, ProductCard } from './Timeline.jsx'
 import Admin from './Admin.jsx'
 import Summary from './Summary.jsx'
+import HelpBot from './HelpBot.jsx'
 import Sidebar, { DockEmpty } from './Sidebar.jsx'
 import ChatList from './ChatList.jsx'
 import Sheet from './Sheets.jsx'
@@ -22,6 +23,7 @@ export default function Dashboard({ session }) {
   const [sheet, setSheet] = useState(null)       // {kind:'task', tid} | {kind:'target'|'stop'|'resume'|'assign', cid}
   const [chatCid, setChatCid] = useState(null)
   const [reportCid, setReportCid] = useState(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
   const toastT = useRef(null)
   const t0 = todayMid()
@@ -168,6 +170,7 @@ export default function Dashboard({ session }) {
       {sheet && <Sheet key={sheet.kind + (sheet.tid || sheet.cid || '')} />}
       {!wide && chatCid && db.changeMap[chatCid] && <Chat cid={chatCid} onClose={() => setChatCid(null)} />}
       {reportCid && db.changeMap[reportCid] && <Report cid={reportCid} onClose={() => setReportCid(null)} />}
+      {helpOpen && <HelpBot full={!wide} onClose={() => setHelpOpen(false)} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       {err && <div className="netbar">연결이 불안정합니다. 잠시 후 자동으로 다시 시도합니다.</div>}
     </>
@@ -179,7 +182,7 @@ export default function Dashboard({ session }) {
     return (
       <Ctx.Provider value={app}>
         <div className={'wide-wrap' + (noDock ? ' no-dock' : '')}>
-          <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} />
+          <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
           <div className="wide-main">
             <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '')}>
               {tab !== 'product' && tab !== 'timeline' && <h1 className="page-t wide-t">{title}</h1>}
@@ -202,6 +205,7 @@ export default function Dashboard({ session }) {
             <h1 className="page-t">{title}</h1>
           </div>
           <div className="top-r">
+            <button type="button" className="org-btn help-btn" onClick={() => setHelpOpen(true)} aria-label="사용법 물어보기">{ICON.help}</button>
             <button type="button" className="org-btn" onClick={() => setSheet({ kind: 'org' })} aria-label="조직도">{ICON.org}<span>조직도</span></button>
             <button type="button" className={'me-chip' + (tab === 'settings' ? ' on' : '')} onClick={() => setTab(tab === 'settings' ? (viewer ? 'timeline' : 'mine') : 'settings')} aria-label="내 정보">
               <Person id={uid} />
