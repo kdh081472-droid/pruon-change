@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, ORDER, SIGNUP_DEPTS } from './supabase.js'
 import { useApp, ICON, useWidth, WIDE } from './ctx.jsx'
-import { errText, md, stampFull } from './util.js'
+import { errText, md, stampFull, iso, add, parse, todayMid } from './util.js'
 import Report from './Report.jsx'
 
 // 마지막 접속 = 앱을 쓴 시각 (없으면 마지막 로그인 시각)
@@ -739,24 +739,31 @@ function MiniMd({ text }) {
     return <div key={i} className={num ? 'dg-li num' : ''}>{inline(line, i)}</div>
   })
 }
-const DG_DAYS = [[7, '최근 7일'], [30, '최근 30일'], [90, '최근 90일']]
+const DG_PRE = [['7', '최근 7일'], ['30', '최근 30일'], ['90', '최근 90일'], ['custom', '직접 선택']]
 function HelpDigest({ cfg }) {
   const { toast } = useApp()
-  const [days, setDays] = useState(cfg.digest_days || 30)
-  const [dg, setDg] = useState(cfg.digest ? { text: cfg.digest, at: cfg.digest_at, n: cfg.digest_n, days: cfg.digest_days } : null)
+  const today = iso(todayMid())
+  const back = n => iso(add(todayMid(), -(n - 1)))
+  const [pre, setPre] = useState('30')
+  const [cf, setCf] = useState(cfg.digest_from || back(30))
+  const [ct, setCt] = useState(cfg.digest_to || today)
+  const from = pre === 'custom' ? cf : back(+pre)
+  const to = pre === 'custom' ? ct : today
+  const bad = !from || !to ? '기간을 선택해주세요' : from > to ? '시작일이 종료일보다 늦습니다' : (parse(to) - parse(from)) / 864e5 > 366 ? '기간은 1년 이내로 선택해주세요' : ''
+  const [dg, setDg] = useState(cfg.digest ? { text: cfg.digest, at: cfg.digest_at, n: cfg.digest_n, from: cfg.digest_from, to: cfg.digest_to, days: cfg.digest_days } : null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   async function run() {
-    if (busy) return
+    if (busy || bad) return
     setBusy(true); setErr('')
     try {
-      const { data, error } = await supabase.functions.invoke('help-bot', { body: { mode: 'digest', days } })
+      const { data, error } = await supabase.functions.invoke('help-bot', { body: { mode: 'digest', from, to } })
       if (error) {
         let msg = ''
         try { msg = (await error.context.json()).error } catch (_) {}
         throw new Error(msg || '요약을 만들지 못했습니다. 잠시 후 다시 시도해주세요.')
       }
-      setDg({ text: data.digest, at: new Date().toISOString(), n: data.n, days: data.days })
+      setDg({ text: data.digest, at: new Date().toISOString(), n: data.n, from: data.from, to: data.to })
     } catch (e) { setErr(String((e && e.message) || e)) }
     setBusy(false)
   }
@@ -767,14 +774,22 @@ function HelpDigest({ cfg }) {
     <div className="card adm-card">
       <h2>질문 요약 <small className="us-sm">AI가 질문 기록을 주제별로 정리 · 누를 때만 실행 (약 1~3원)</small></h2>
       <div className="hl-f" role="group" aria-label="요약 기간">
-        {DG_DAYS.map(([d, t]) => <button key={d} type="button" className={'sum-chip' + (days === d ? ' on' : '')} aria-pressed={days === d} disabled={busy} onClick={() => setDays(d)}>{t}</button>)}
-        <button type="button" className="btn sm dg-run" disabled={busy} onClick={run}>{busy ? '요약하는 중… (10~30초)' : '요약하기'}</button>
+        {DG_PRE.map(([k, t]) => <button key={k} type="button" className={'sum-chip' + (pre === k ? ' on' : '')} aria-pressed={pre === k} disabled={busy} onClick={() => { if (k === 'custom') { setCf(from); setCt(to) } setPre(k) }}>{t}</button>)}
+        {pre === 'custom' ? (
+          <span className="us-dates">
+            <input type="date" aria-label="요약 시작일" value={cf} max={today} disabled={busy} onChange={e => e.target.value && setCf(e.target.value)} />
+            <span>~</span>
+            <input type="date" aria-label="요약 종료일" value={ct} max={today} disabled={busy} onChange={e => e.target.value && setCt(e.target.value)} />
+          </span>
+        ) : <span className="us-r mono">{from} ~ {to}</span>}
+        <button type="button" className="btn sm dg-run" disabled={busy || !!bad} onClick={run}>{busy ? '요약하는 중… (10~30초)' : '요약하기'}</button>
       </div>
+      {bad && <p className="err">{bad}</p>}
       {err && <p className="err">{err}</p>}
       {!dg ? <p className="muted">아직 요약한 적이 없습니다. 기간을 고르고 <b>요약하기</b>를 누르세요.</p> : (
         <div className={'dg-box' + (busy ? ' dim' : '')}>
           <div className="dg-meta">
-            <span>{dg.at ? stampFull(dg.at) : ''} 요약 · {dg.days ? '최근 ' + dg.days + '일' : ''} 질문 {dg.n ?? '-'}개 기준</span>
+            <span>{dg.at ? stampFull(dg.at) : ''}에 요약 · 기간 {dg.from && dg.to ? dg.from + ' ~ ' + dg.to : dg.days ? '최근 ' + dg.days + '일' : '-'} · 질문 {dg.n ?? '-'}개 기준</span>
             <button type="button" className="btn ghost sm" onClick={copy}>복사</button>
           </div>
           <div className="dg-body"><MiniMd text={dg.text} /></div>
