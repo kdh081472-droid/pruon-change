@@ -1093,3 +1093,26 @@ html, body { max-width: 100%; overflow-x: hidden }
 .help-btn svg { width: 20px; height: 20px }
 .hb-num { width: 100px; font: inherit; font-family: var(--mono); font-size: 22px; font-weight: 700; padding: 2px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink) }
 .hb-manual { width: 100%; box-sizing: border-box; min-height: 520px; resize: vertical; font-family: var(--mono); font-size: 13px; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text) }
+
+/* ===== 도우미 질문 기록 (관리자) ===== */
+.hl-f { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px }
+.hl-f .btn { margin-left: auto }
+.hl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 560px; overflow-y: auto }
+.hl-row { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--surface) }
+.hl-row.r-못찾음 { border-color: #f1d39b; background: #fff8ec }
+.hl-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted) }
+.hl-at { font-family: var(--mono) }
+.hl-tag { font-weight: 700; color: #a15c00; background: #fdebc8; border-radius: 99px; padding: 1px 8px }
+.r-관계없음 .hl-tag { color: var(--muted); background: var(--bg) }
+.hl-x { margin-left: auto; border: 0; background: none; color: var(--muted); width: 26px; height: 26px; border-radius: 50%; cursor: pointer }
+.hl-x:hover { background: var(--bg); color: var(--text) }
+.hl-q { display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 4px 0 0; font: inherit; font-size: 14.5px; font-weight: 600; color: var(--text); cursor: pointer }
+.hl-q span:first-child { flex: 1; white-space: pre-wrap; word-break: break-word }
+.hl-more { flex: none; font-size: 12px; font-weight: 600; color: var(--accent) }
+.hl-a { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hl-row.r-못찾음 { border-color: #6b5320; background: #2a2416 }
+  :root:not([data-theme="light"]) .hl-tag { color: #f3c46b; background: #3a2f17 }
+}
+:root[data-theme="dark"] .hl-row.r-못찾음 { border-color: #6b5320; background: #2a2416 }
+:root[data-theme="dark"] .hl-tag { color: #f3c46b; background: #3a2f17 }

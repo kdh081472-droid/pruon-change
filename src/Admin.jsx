@@ -707,10 +707,11 @@ function HelpTab() {
         <>
           <div className="stats four">
             <div className="stat"><div className="k">오늘 질문</div><div className="v">{cfg.today}<small> / {cfg.daily_total}</small></div><div className="s">물어본 사람 {cfg.today_people}명</div></div>
-            <div className="stat"><div className="k">최근 30일 질문</div><div className="v">{cfg.last30}</div><div className="s">모델 {cfg.model}</div></div>
+            <div className="stat"><div className="k">최근 30일 질문</div><div className="v">{cfg.last30}</div><div className="s">설명서에서 못 찾음 {cfg.miss30 ?? 0}건</div></div>
             <div className="stat"><div className="k">하루 회사 전체 한도</div><div className="v"><input className="hb-num" type="number" min="0" max="10000" value={total} onChange={e => setTotal(e.target.value)} aria-label="하루 회사 전체 질문 수" /></div><div className="s">0이면 도우미 끄기</div></div>
             <div className="stat"><div className="k">1인 하루 한도</div><div className="v"><input className="hb-num" type="number" min="0" max="1000" value={per} onChange={e => setPer(e.target.value)} aria-label="1인 하루 질문 수" /></div><div className="s">한 사람이 다 쓰지 않도록</div></div>
           </div>
+          <HelpLog />
           <div className="card adm-card">
             <h2>사용 설명서 <small className="us-sm">{manual.length.toLocaleString()}자 · 마지막 수정 {cfg.updated_at ? stampFull(cfg.updated_at) : '-'}{who ? ' · ' + who : ''}</small></h2>
             <p className="note">도우미는 이 설명서에 있는 내용만 근거로 답하고, 없는 내용은 "캡처해서 관리자에게 문의"로 안내합니다. 앱 기능이 바뀌면 여기를 같이 고쳐주세요. ## 제목, - 목록, **굵게** 형식을 쓰면 도우미가 더 잘 이해합니다.</p>
@@ -719,5 +720,54 @@ function HelpTab() {
         </>
       )}
     </>
+  )
+}
+
+/* 질문 기록 (이름 없이 저장됨) */
+const LOG_F = [['전체', '전체'], ['못찾음', '설명서에서 못 찾음'], ['관계없음', '앱과 관계없는 질문']]
+function HelpLog() {
+  const { toast } = useApp()
+  const [f, setF] = useState('전체')
+  const [rows, setRows] = useState(null)
+  const [open, setOpen] = useState({})
+  const [err, setErr] = useState('')
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.rpc('admin_help_log', { p_filter: f, p_limit: 200 })
+    if (error) { setErr(errText(error)); setRows([]); return }
+    setErr(''); setRows(data || [])
+  }, [f])
+  useEffect(() => { setRows(null); load() }, [load])
+  async function del(id) {
+    const { error } = await supabase.rpc('admin_help_log_del', { p_id: id })
+    if (error) return toast(errText(error))
+    setRows(r => r.filter(x => x.id !== id))
+  }
+  return (
+    <div className="card adm-card">
+      <h2>최근 질문 기록 <small className="us-sm">이름·부서 없이 저장 · 180일 지나면 자동 삭제</small></h2>
+      <p className="note">사람들이 어디서 막히는지 보고 설명서나 화면을 고치는 데 쓰세요. <b>설명서에서 못 찾음</b>에 자주 나오는 질문은 위 설명서에 답을 추가하면 다음부터 도우미가 답합니다.</p>
+      <div className="hl-f" role="group" aria-label="질문 기록 보기">
+        {LOG_F.map(([k, t]) => <button key={k} type="button" className={'sum-chip' + (f === k ? ' on' : '')} aria-pressed={f === k} onClick={() => setF(k)}>{t}</button>)}
+        <button type="button" className="btn ghost sm" onClick={load}>새로고침</button>
+      </div>
+      {err && <p className="err">{err}</p>}
+      {!rows ? <p className="muted">불러오는 중…</p> : !rows.length ? <p className="muted">기록이 없습니다.</p> : (
+        <ul className="hl-list">
+          {rows.map(r => (
+            <li key={r.id} className={'hl-row r-' + r.r}>
+              <div className="hl-top">
+                <span className="hl-at">{stampFull(r.at)}</span>
+                {r.r !== '답변' && <span className="hl-tag">{r.r === '못찾음' ? '설명서에서 못 찾음' : '앱과 관계없음'}</span>}
+                <button type="button" className="hl-x" onClick={() => del(r.id)} aria-label="이 기록 지우기" title="이 기록 지우기">✕</button>
+              </div>
+              <button type="button" className="hl-q" aria-expanded={!!open[r.id]} onClick={() => setOpen(o => ({ ...o, [r.id]: !o[r.id] }))}>
+                <span>{r.q}</span><span className="hl-more">{open[r.id] ? '답변 접기' : '답변 보기'}</span>
+              </button>
+              {open[r.id] && <div className="hl-a">{r.a}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

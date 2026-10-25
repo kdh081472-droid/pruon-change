@@ -95,7 +95,7 @@ export default function HelpBot({ onClose, full }) {
           </div>
           <div className="hb-foot">
             <span>{st ? <>오늘 회사 전체 남은 질문 <b>{totalLeft}</b> / {st.total_limit} · 내 남은 질문 <b>{mineLeft}</b></> : ' '}</span>
-            <span>창을 닫으면 대화가 지워져요</span>
+            <span>질문은 이름 없이 저장되어 설명서 개선에 쓰여요</span>
           </div>
         </div>
       </div>
