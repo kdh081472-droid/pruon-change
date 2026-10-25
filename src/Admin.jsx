@@ -711,6 +711,7 @@ function HelpTab() {
             <div className="stat"><div className="k">하루 회사 전체 한도</div><div className="v"><input className="hb-num" type="number" min="0" max="10000" value={total} onChange={e => setTotal(e.target.value)} aria-label="하루 회사 전체 질문 수" /></div><div className="s">0이면 도우미 끄기</div></div>
             <div className="stat"><div className="k">1인 하루 한도</div><div className="v"><input className="hb-num" type="number" min="0" max="1000" value={per} onChange={e => setPer(e.target.value)} aria-label="1인 하루 질문 수" /></div><div className="s">한 사람이 다 쓰지 않도록</div></div>
           </div>
+          <HelpDigest cfg={cfg} />
           <HelpLog />
           <div className="card adm-card">
             <h2>사용 설명서 <small className="us-sm">{manual.length.toLocaleString()}자 · 마지막 수정 {cfg.updated_at ? stampFull(cfg.updated_at) : '-'}{who ? ' · ' + who : ''}</small></h2>
@@ -723,47 +724,124 @@ function HelpTab() {
   )
 }
 
-/* 질문 기록 (이름 없이 저장됨) */
+/* 질문 요약 (AI) — 관리자가 누를 때만 실행, 마지막 결과는 저장됨 */
+function MiniMd({ text }) {
+  const inline = (line, k) => line.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+    p.startsWith('**') && p.endsWith('**') ? <b key={k + '-' + j}>{p.slice(2, -2)}</b> : p)
+  return String(text).split('\n').map((line, i) => {
+    const h2 = line.match(/^##\s+(.*)/), h3 = line.match(/^###\s+(.*)/)
+    if (h3) return <h4 key={i} className="dg-h3">{inline(h3[1], i)}</h4>
+    if (h2) return <h3 key={i} className="dg-h2">{inline(h2[1], i)}</h3>
+    if (!line.trim()) return <div key={i} className="dg-gap" />
+    const bul = line.match(/^(\s*)[-•·*]\s+(.*)/)
+    if (bul) return <div key={i} className={'dg-li' + (bul[1].length >= 2 ? ' sub' : '')}><span className="dg-dot" aria-hidden="true">•</span>{inline(bul[2], i)}</div>
+    const num = /^\s*\d+\.\s/.test(line)
+    return <div key={i} className={num ? 'dg-li num' : ''}>{inline(line, i)}</div>
+  })
+}
+const DG_DAYS = [[7, '최근 7일'], [30, '최근 30일'], [90, '최근 90일']]
+function HelpDigest({ cfg }) {
+  const { toast } = useApp()
+  const [days, setDays] = useState(cfg.digest_days || 30)
+  const [dg, setDg] = useState(cfg.digest ? { text: cfg.digest, at: cfg.digest_at, n: cfg.digest_n, days: cfg.digest_days } : null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  async function run() {
+    if (busy) return
+    setBusy(true); setErr('')
+    try {
+      const { data, error } = await supabase.functions.invoke('help-bot', { body: { mode: 'digest', days } })
+      if (error) {
+        let msg = ''
+        try { msg = (await error.context.json()).error } catch (_) {}
+        throw new Error(msg || '요약을 만들지 못했습니다. 잠시 후 다시 시도해주세요.')
+      }
+      setDg({ text: data.digest, at: new Date().toISOString(), n: data.n, days: data.days })
+    } catch (e) { setErr(String((e && e.message) || e)) }
+    setBusy(false)
+  }
+  async function copy() {
+    try { await navigator.clipboard.writeText(dg.text); toast('요약을 복사했습니다') } catch (_) { toast('복사하지 못했습니다') }
+  }
+  return (
+    <div className="card adm-card">
+      <h2>질문 요약 <small className="us-sm">AI가 질문 기록을 주제별로 정리 · 누를 때만 실행 (약 1~3원)</small></h2>
+      <div className="hl-f" role="group" aria-label="요약 기간">
+        {DG_DAYS.map(([d, t]) => <button key={d} type="button" className={'sum-chip' + (days === d ? ' on' : '')} aria-pressed={days === d} disabled={busy} onClick={() => setDays(d)}>{t}</button>)}
+        <button type="button" className="btn sm dg-run" disabled={busy} onClick={run}>{busy ? '요약하는 중… (10~30초)' : '요약하기'}</button>
+      </div>
+      {err && <p className="err">{err}</p>}
+      {!dg ? <p className="muted">아직 요약한 적이 없습니다. 기간을 고르고 <b>요약하기</b>를 누르세요.</p> : (
+        <div className={'dg-box' + (busy ? ' dim' : '')}>
+          <div className="dg-meta">
+            <span>{dg.at ? stampFull(dg.at) : ''} 요약 · {dg.days ? '최근 ' + dg.days + '일' : ''} 질문 {dg.n ?? '-'}개 기준</span>
+            <button type="button" className="btn ghost sm" onClick={copy}>복사</button>
+          </div>
+          <div className="dg-body"><MiniMd text={dg.text} /></div>
+          <p className="dg-note">AI 요약이라 건수나 묶음이 조금 다를 수 있습니다. '설명서에 추가할 문장 초안'은 내용이 맞는지 확인한 뒤 고쳐서 설명서에 넣어주세요. [확인 필요] 표시는 실제 앱에서 확인할 부분입니다.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* 질문 기록 (이름 없이 저장됨) — 글자가 같은 질문은 한 줄로 묶음 */
 const LOG_F = [['전체', '전체'], ['못찾음', '설명서에서 못 찾음'], ['관계없음', '앱과 관계없는 질문']]
+const normQ = q => String(q).toLowerCase().replace(/[\s?？!.~]+/g, ' ').trim()
 function HelpLog() {
   const { toast } = useApp()
   const [f, setF] = useState('전체')
   const [rows, setRows] = useState(null)
   const [open, setOpen] = useState({})
+  const [group, setGroup] = useState(true)
   const [err, setErr] = useState('')
   const load = useCallback(async () => {
-    const { data, error } = await supabase.rpc('admin_help_log', { p_filter: f, p_limit: 200 })
+    const { data, error } = await supabase.rpc('admin_help_log', { p_filter: f, p_limit: 300 })
     if (error) { setErr(errText(error)); setRows([]); return }
     setErr(''); setRows(data || [])
   }, [f])
   useEffect(() => { setRows(null); load() }, [load])
-  async function del(id) {
-    const { error } = await supabase.rpc('admin_help_log_del', { p_id: id })
-    if (error) return toast(errText(error))
-    setRows(r => r.filter(x => x.id !== id))
+  async function del(ids) {
+    for (const id of ids) {
+      const { error } = await supabase.rpc('admin_help_log_del', { p_id: id })
+      if (error) return toast(errText(error))
+    }
+    setRows(r => r.filter(x => !ids.includes(x.id)))
   }
+  // 묶기: 최신 질문이 대표, 개수·id 목록
+  const items = !rows ? null : !group ? rows.map(r => ({ ...r, ids: [r.id], n: 1 })) : (() => {
+    const m = new Map()
+    for (const r of rows) {
+      const k = normQ(r.q)
+      const g = m.get(k)
+      if (g) { g.n++; g.ids.push(r.id); if (r.r === '못찾음') g.r = '못찾음' } else m.set(k, { ...r, ids: [r.id], n: 1 })
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n || (a.at < b.at ? 1 : -1))
+  })()
   return (
     <div className="card adm-card">
       <h2>최근 질문 기록 <small className="us-sm">이름·부서 없이 저장 · 180일 지나면 자동 삭제</small></h2>
       <p className="note">사람들이 어디서 막히는지 보고 설명서나 화면을 고치는 데 쓰세요. <b>설명서에서 못 찾음</b>에 자주 나오는 질문은 위 설명서에 답을 추가하면 다음부터 도우미가 답합니다.</p>
       <div className="hl-f" role="group" aria-label="질문 기록 보기">
         {LOG_F.map(([k, t]) => <button key={k} type="button" className={'sum-chip' + (f === k ? ' on' : '')} aria-pressed={f === k} onClick={() => setF(k)}>{t}</button>)}
+        <label className="hl-grp"><input type="checkbox" checked={group} onChange={e => setGroup(e.target.checked)} /> 같은 질문 묶기 (많은 순)</label>
         <button type="button" className="btn ghost sm" onClick={load}>새로고침</button>
       </div>
       {err && <p className="err">{err}</p>}
-      {!rows ? <p className="muted">불러오는 중…</p> : !rows.length ? <p className="muted">기록이 없습니다.</p> : (
+      {!items ? <p className="muted">불러오는 중…</p> : !items.length ? <p className="muted">기록이 없습니다.</p> : (
         <ul className="hl-list">
-          {rows.map(r => (
+          {items.map(r => (
             <li key={r.id} className={'hl-row r-' + r.r}>
               <div className="hl-top">
-                <span className="hl-at">{stampFull(r.at)}</span>
+                <span className="hl-at">{group && r.n > 1 ? '최근 ' : ''}{stampFull(r.at)}</span>
+                {r.n > 1 && <span className="hl-n">×{r.n}</span>}
                 {r.r !== '답변' && <span className="hl-tag">{r.r === '못찾음' ? '설명서에서 못 찾음' : '앱과 관계없음'}</span>}
-                <button type="button" className="hl-x" onClick={() => del(r.id)} aria-label="이 기록 지우기" title="이 기록 지우기">✕</button>
+                <button type="button" className="hl-x" onClick={() => del(r.ids)} aria-label={r.n > 1 ? `이 질문 기록 ${r.n}건 지우기` : '이 기록 지우기'} title={r.n > 1 ? `${r.n}건 모두 지우기` : '이 기록 지우기'}>✕</button>
               </div>
               <button type="button" className="hl-q" aria-expanded={!!open[r.id]} onClick={() => setOpen(o => ({ ...o, [r.id]: !o[r.id] }))}>
-                <span>{r.q}</span><span className="hl-more">{open[r.id] ? '답변 접기' : '답변 보기'}</span>
+                <span>{r.q}</span><span className="hl-more">{open[r.id] ? '답변 접기' : r.n > 1 ? '최근 답변 보기' : '답변 보기'}</span>
               </button>
-              {open[r.id] && <div className="hl-a">{r.a}</div>}
+              {open[r.id] && <div className="hl-a"><MiniMd text={r.a || ''} /></div>}
             </li>
           ))}
         </ul>

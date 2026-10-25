@@ -1116,3 +1116,25 @@ html, body { max-width: 100%; overflow-x: hidden }
 }
 :root[data-theme="dark"] .hl-row.r-못찾음 { border-color: #6b5320; background: #2a2416 }
 :root[data-theme="dark"] .hl-tag { color: #f3c46b; background: #3a2f17 }
+
+/* ===== 도우미 질문 요약 · 묶기 ===== */
+.hl-grp { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); margin-left: 6px; cursor: pointer }
+.hl-grp input { width: 16px; height: 16px; accent-color: var(--accent) }
+.hl-n { font-family: var(--mono); font-weight: 700; font-size: 12px; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 1px 8px }
+.dg-run { margin-left: auto }
+.dg-box { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--surface) }
+.dg-box.dim { opacity: .5 }
+.dg-meta { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); margin-bottom: 6px }
+.dg-meta .btn { margin-left: auto }
+.dg-body { font-size: 14px; line-height: 1.65; max-height: 560px; overflow-y: auto; padding-right: 4px }
+.dg-h2 { font-size: 15.5px; margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--ink) }
+.dg-body > .dg-h2:first-child { margin-top: 0; padding-top: 0; border-top: 0 }
+.dg-h3 { font-size: 14px; margin: 10px 0 4px }
+.dg-li { position: relative; padding-left: 16px }
+.dg-li.num { padding-left: 4px }
+.dg-li.sub { padding-left: 32px; color: var(--muted) }
+.dg-dot { position: absolute; left: 3px; color: var(--muted) }
+.dg-li.sub .dg-dot { left: 19px }
+.hl-a { white-space: normal }
+.dg-gap { height: 4px }
+.dg-note { font-size: 12px; color: var(--muted); margin: 10px 0 0 }
