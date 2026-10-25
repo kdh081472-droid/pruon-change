@@ -24,7 +24,7 @@ if ('serviceWorker' in navigator) {
   if (!mine) return                                   // 개발 모드에선 쓰지 않음
   let pending = false, last = 0
   const busy = () => {
-    if (document.querySelector('.sheet, .rp, .chat:not(.docked)')) return true          // 열린 창
+    if (document.querySelector('.sheet, .rp, .chat:not(.docked), .helpbot .hb-q')) return true   // 열린 창, 도우미와 나누던 대화
     for (const el of document.querySelectorAll('textarea, .nf:not(.my-info) input:not([type=checkbox]), .form input')) {
       if (el.value && el.value.trim()) return true                                          // 쓰던 글
     }
