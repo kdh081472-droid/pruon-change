@@ -1176,7 +1176,9 @@ html, body { max-width: 100%; overflow-x: hidden }
 :root { --grp: #6a3fd6; --grp-soft: #f1ecff; --grp-row: #f7f4ff }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --grp: #a98bff; --grp-soft: #2a2145; --grp-row: #1f1a33 } }
 :root[data-theme="dark"] { --grp: #a98bff; --grp-soft: #2a2145; --grp-row: #1f1a33 }
-.nf-item.by-item input:not(.nf-idate) { min-width: 0 }
+.nf .nf-item.by-item select { flex: 0 0 120px; width: 120px; min-width: 0 }
+.nf .nf-item.by-item input:not(.nf-idate) { flex: 1 1 auto; width: auto; min-width: 120px }
+.nf .nf-item.by-item input.nf-idate { flex: 0 0 150px; width: 150px }
 .nf-idate { flex: none; width: 150px; font-family: var(--mono); font-size: 13px; color: var(--muted) }
 .nf-idate.own { color: var(--accent); font-weight: 700; border-color: var(--accent) }
 .nf-mode { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg) }
@@ -1188,7 +1190,7 @@ html, body { max-width: 100%; overflow-x: hidden }
 .nm-seg button.on { background: var(--accent-soft); color: var(--accent) }
 .nm-note { font-size: 12.5px; color: var(--text); margin: 8px 2px 0; line-height: 1.55 }
 .g-chip { display: inline-block; font-size: 11px; font-weight: 700; color: var(--grp); background: var(--grp-soft); border-radius: 99px; padding: 1px 8px; white-space: nowrap; vertical-align: 2px }
-@media (max-width: 559px) { .nf-item.by-item { flex-wrap: wrap } .nf-item.by-item .nf-idate { width: auto; flex: 1 } }
+@media (max-width: 559px) { .nf .nf-item.by-item { flex-wrap: wrap; padding-bottom: 6px; border-bottom: 1px dashed var(--line); margin-bottom: 6px } .nf .nf-item.by-item select { flex: 0 0 104px; width: 104px } .nf .nf-item.by-item input:not(.nf-idate) { flex: 1 1 calc(100% - 112px); min-width: 0 } .nf .nf-item.by-item input.nf-idate { flex: 1 1 0; width: auto; min-width: 0 } }
 .bk-t { margin: 0 20px 6px; font-weight: 700; color: var(--ink) }
 .bk-list { margin: 0 20px 4px; padding: 8px 12px 8px 26px; background: var(--bg); border-radius: 10px; font-size: 13px; line-height: 1.7; max-height: 180px; overflow-y: auto }
 .gt-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700 }
