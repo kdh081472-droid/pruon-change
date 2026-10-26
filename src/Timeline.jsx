@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ORDER } from './supabase.js'
+import { GroupCrumb } from './GroupView.jsx'
 import { useApp, Person, ICON } from './ctx.jsx'
 import Summary from './Summary.jsx'
 import { dd, iso, md, norm, parse, todayMid, stamp, snip } from './util.js'
@@ -85,7 +86,7 @@ export function ChatMini({ c }) {
 
 /* ---------- 제품 카드: 위에 요약, 펼치면 부서별 할 일 목록 ---------- */
 export function ProductCard({ c, forceOpen }) {
-  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport, isAdmin, run, toast, goSummary } = useApp()
+  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport, isAdmin, run, toast, goSummary, goGroup } = useApp()
   const pcView = !!forceOpen && wide        // PC 제품 화면: 버튼은 제목 줄 오른쪽, 대화 버튼 없음
   const [ord, setOrd] = useState(null)        // 우리 부서 할 일 순서 (저장되기 전 화면에 먼저 반영)
   const [drag, setDrag] = useState(null)
@@ -101,7 +102,8 @@ export function ProductCard({ c, forceOpen }) {
   const pct = ts.length ? Math.round(((ts.length - left.length) / ts.length) * 100) : 0
   const tlogs = db.changeLogs.filter(x => x.change_id === c.id && x.action === '전환일 변경')
   const clogs = db.changeLogs.filter(x => x.change_id === c.id && (x.action === '전환일 변경' || x.action === '내용 수정'))
-  const canEdit = !viewer && !closed && (me.department === c.created_by_dept || isAdmin)
+  // 묶음의 품목은 제목·내용을 묶음 화면에서 한꺼번에 고침
+  const canEdit = !viewer && !closed && !c.group && (me.department === c.created_by_dept || isAdmin)
   const toggle = () => { if (!forceOpen) setUi(u => ({ ...u, open: { ...u.open, [c.id]: !u.open[c.id] } })) }
   const stop = fn => e => { e.stopPropagation(); fn() }
 
@@ -130,8 +132,8 @@ export function ProductCard({ c, forceOpen }) {
     <div className={'p-h2' + (forceOpen ? ' fixed' : '') + (pcView ? ' pcv' : '')} role={forceOpen ? undefined : 'button'} tabIndex={forceOpen ? undefined : 0} aria-expanded={forceOpen ? undefined : isOpen} onClick={toggle}
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggle() } }}>
       <div className="p2-top">
-        {pcView && <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>}
-        <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.title}</span>
+        {pcView && !c.group && <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>}
+        <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.group && !pcView && <span className="g-chip g-in" title={'묶음: ' + c.group.title}>{c.group.title.length > 14 ? c.group.title.slice(0, 14) + '…' : c.group.title} {c.kidNo}/{c.group.kids.length}</span>}{c.title}</span>
         {pcView && acts}
         <span className="dd-big"><DBadge c={c} /></span>
       </div>
@@ -188,6 +190,7 @@ export function ProductCard({ c, forceOpen }) {
     <div className={'card pc2 open' + (od ? ' od' : '') + (pcView ? ' pcv-card' : '')} id={'p' + c.id}>
       {pcView ? (
         <div className="pc-stick">
+          {c.group && <GroupCrumb c={c} />}
           {head}
           {kv}
           {clogs.length > 0 && (
@@ -202,6 +205,7 @@ export function ProductCard({ c, forceOpen }) {
         </div>
       ) : head}
       <div className="p-b">
+        {!pcView && c.group && <button type="button" className="g-open" onClick={() => goGroup(c.group.id)}>묶음 보기 › <b>{c.group.title}</b> (품목 {c.group.kids.length}개)</button>}
         {!pcView && kv}
         
         {od && <div className="od-band">전환일이 {-dd(c.target_date)}일 지났는데 남은 할 일이 {left.length}건 있습니다. 변경 전 상태로 생산·출고되지 않도록 바로 확인해주세요.</div>}

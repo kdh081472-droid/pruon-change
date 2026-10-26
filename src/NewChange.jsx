@@ -18,6 +18,7 @@ export function emptyForm() {
     title: '', desc: '', reason: '', target: '',
     items: [{ type: '단품', name: '' }],
     list: null,                 // 할 일 목록 (부서별 순서 그대로) — null이면 기본 목록
+    mode: 'one',                // 'one' 하나로 관리 | 'items' 품목별로 관리 (묶음)
     presetSel: 'base', presetUsed: 'base', presetMode: null, presetErr: '',
     addDept: null, err: '',
   }
@@ -150,12 +151,26 @@ export default function NewChange({ nf, setNf, onDone }) {
   }
 
   async function submit() {
-    const items = nf.items.map(i => ({ type: i.type, name: i.name.trim() })).filter(i => i.name)
+    const items = nf.items.map(i => ({ type: i.type, name: i.name.trim(), target: i.target || '' })).filter(i => i.name)
     const err = !nf.title.trim() ? '제목을 입력해주세요.' : !nf.target ? '전환일을 골라주세요.'
       : !items.length ? '대상 품목을 1개 이상 입력해주세요.' : !pickedN ? '할 일을 1건 이상 배정해주세요.' : ''
     if (err) return set({ err })
     if (edit) return set({ err: '고치고 있는 할 일을 먼저 저장하거나 취소해주세요.' })
     const tasks = currentItems().map(i => ({ department: i.department, title: i.title }))
+    if (byItem) {
+      const names = items.map(i => i.name)
+      if (new Set(names).size !== names.length) return set({ err: '같은 이름의 품목이 있습니다. 품목 이름을 서로 다르게 적어주세요.' })
+      setBusy(true)
+      const { data, error } = await supabase.rpc('create_group', {
+        p_title: nf.title.trim(), p_description: nf.desc.trim(), p_reason: nf.reason.trim(),
+        p_items: items.map(i => ({ type: i.type, name: i.name, target: i.target || nf.target })), p_tasks: tasks,
+      })
+      setBusy(false)
+      if (error) return set({ err: errText(error) })
+      await reload()
+      toast(`등록 완료 · 품목 ${items.length}개 · 할 일 ${tasks.length * items.length}건이 배정되었습니다`)
+      return onDone(data, true)
+    }
     setBusy(true)
     const { data, error } = await supabase.rpc('create_change', {
       p_title: nf.title.trim(), p_description: nf.desc.trim(), p_reason: nf.reason.trim(),
@@ -168,6 +183,8 @@ export default function NewChange({ nf, setNf, onDone }) {
     onDone(data)
   }
 
+  const namedN = nf.items.filter(i => i.name.trim()).length
+  const byItem = nf.mode === 'items' && namedN >= 2
   const opt = p => <option key={p.id} value={p.id}>{p.name}{p.fixed ? '' : ' · ' + p.items.length + '건'}</option>
   const sc0 = curP.source_change_id ? C(curP.source_change_id) : null
 
@@ -184,22 +201,38 @@ export default function NewChange({ nf, setNf, onDone }) {
         <textarea id="nf-desc" rows={2} value={nf.desc} onChange={e => set({ desc: e.target.value })} placeholder="무엇이 어떻게 바뀌는지" />
         <label htmlFor="nf-reason">변경 사유</label>
         <input id="nf-reason" value={nf.reason} onChange={e => set({ reason: e.target.value })} placeholder="예: 고객사 요청" />
-        <label htmlFor="nf-target">전환일 (변경 적용일) <span className="req">*필수 · 직접 골라주세요</span></label>
+        <label htmlFor="nf-target">{byItem ? '공통 전환일' : '전환일 (변경 적용일)'} <span className="req">*필수 · 직접 골라주세요</span></label>
         <input id="nf-target" type="date" className={!nf.target && nf.err === '전환일을 골라주세요.' ? 'bad' : ''} value={nf.target} onChange={e => set({ target: e.target.value, err: '' })} />
       </div>
 
       <div className="card nf">
         <h3 className="nf-t">2. 대상 품목 <small>이번 변경이 적용되는 제품·자재를 빠짐없이</small></h3>
         {nf.items.map((it, i) => (
-          <div className="nf-item" key={i}>
+          <div className={'nf-item' + (byItem ? ' by-item' : '')} key={i}>
             <select value={it.type} aria-label="품목 종류" onChange={e => set({ items: nf.items.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })}>
               {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
             <input value={it.name} placeholder={NAME_HINT[it.type] || '품목 이름'} aria-label="품목 이름" onChange={e => set({ items: nf.items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)), err: '' })} />
+            {byItem && (
+              <input type="date" className={'nf-idate' + (it.target && it.target !== nf.target ? ' own' : '')} value={it.target || nf.target || ''} aria-label={(it.name || '품목') + ' 전환일'} title="이 품목만 전환일이 다르면 바꾸세요"
+                onChange={e => set({ items: nf.items.map((x, j) => (j === i ? { ...x, target: e.target.value === nf.target ? '' : e.target.value } : x)) })} />
+            )}
             {nf.items.length > 1 && <button type="button" className="x" aria-label="품목 삭제" onClick={() => set({ items: nf.items.filter((_, j) => j !== i) })}>✕</button>}
           </div>
         ))}
-        <button type="button" className="pill" onClick={() => set({ items: [...nf.items, { type: '번들/기획상품', name: '' }] })}>+ 품목 추가</button>
+        <button type="button" className="pill" onClick={() => set({ items: [...nf.items, { type: nf.items.length ? nf.items[nf.items.length - 1].type : '단품', name: '' }] })}>+ 품목 추가</button>
+        {namedN >= 2 && (
+          <div className="nf-mode">
+            <div className="nm-h">관리 방식</div>
+            <div className="nm-seg" role="radiogroup" aria-label="관리 방식">
+              <button type="button" role="radio" aria-checked={!byItem} className={!byItem ? 'on' : ''} onClick={() => set({ mode: 'one', err: '' })}><b>하나로 관리</b><small>할 일·대화 1세트</small></button>
+              <button type="button" role="radio" aria-checked={byItem} className={byItem ? 'on' : ''} onClick={() => set({ mode: 'items', err: '' })}><b>품목별로 관리</b><small>품목마다 할 일·대화·상태 따로</small></button>
+            </div>
+            {byItem
+              ? <p className="nm-note">아래 할 일 <b>{pickedN}건</b>이 품목 <b>{namedN}개</b>에 똑같이 배정됩니다 → 모두 <b>{pickedN * namedN}건</b>. 품목마다 전환일이 다르면 품목 옆 날짜를 바꾸세요. 등록 후 품목 추가·빼기, 품목별 할 일 추가 배정도 됩니다.</p>
+              : <p className="nm-note">품목 {namedN}개를 변경 1건으로 묶어 할 일 {pickedN}건만 배정합니다.</p>}
+          </div>
+        )}
       </div>
 
       </div>
@@ -341,7 +374,7 @@ export default function NewChange({ nf, setNf, onDone }) {
         })}
       </div>
       {nf.err && <p className="nf-err">{nf.err}</p>}
-      <button type="button" className="btn nf-go" disabled={busy} onClick={submit}>{busy ? '등록 중…' : `변경 등록 · 할 일 ${pickedN}건 배정`}</button>
+      <button type="button" className="btn nf-go" disabled={busy} onClick={submit}>{busy ? '등록 중…' : byItem ? `변경 등록 · 품목 ${namedN}개 · 할 일 ${pickedN * namedN}건 배정` : `변경 등록 · 할 일 ${pickedN}건 배정`}</button>
       </div>
       </div>
     </>

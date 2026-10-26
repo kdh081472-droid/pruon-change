@@ -27,7 +27,7 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, 
       </div>
       <nav className="sd-nav">
         {[...navTop, null, ...navAll, ...navEnd].map(x => x === null ? <div key="g" className="sn-g">전체 일정</div> : (
-          <button key={x[0]} type="button" className={'sn' + (navAll.some(n => n[0] === x[0]) ? ' sub' : '') + (tab === x[0] || (tab === 'product' && x[0] === 'summary') ? ' on' : '')} onClick={() => setTab(x[0])}>
+          <button key={x[0]} type="button" className={'sn' + (navAll.some(n => n[0] === x[0]) ? ' sub' : '') + (tab === x[0] || ((tab === 'product' || tab === 'group') && x[0] === 'summary') ? ' on' : '')} onClick={() => setTab(x[0])}>
             {ICON[x[2]]}<span>{x[1]}</span>
             {x[0] === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
           </button>

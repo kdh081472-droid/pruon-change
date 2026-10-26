@@ -187,7 +187,7 @@ export default function Chat({ cid, onClose, docked }) {
         <div className="ch-h">
           <div>
             <span className="s-tag">제품 대화 · {list.filter(m => !m.deleted).length}개</span>
-            <b>{c.title}</b>
+            <b>{c.title}</b>{c.group && <small className="ch-g">묶음 · {c.group.title}</small>}
             {!closed && tip && <span className="ch-tip">메시지를 누르면 답글·복사 (내 글은 수정·삭제도) · 내 글 옆 '안 읽음' 숫자는 아직 안 읽은 사람 수</span>}
           </div>
           {!closed && <button type="button" className={'ch-q' + (tip ? ' on' : '')} aria-label="대화 사용법" aria-expanded={tip} onClick={() => setTip(v => !v)}>?</button>}

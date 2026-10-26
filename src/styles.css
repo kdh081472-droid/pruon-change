@@ -1145,9 +1145,8 @@ html, body { max-width: 100%; overflow-x: hidden }
 :root[data-theme="dark"] { --mint: #3fd1b9; --mint-soft: #12302b; --mint-line: #1f4a43; --mint-ink: #6fe3cf }
 .dg2-h { cursor: default }
 .dg-grid .dg2.mine { border-color: var(--line); box-shadow: inset 4px 0 0 var(--accent) }
-.dg-grid .dg2.done { background: var(--mint-soft); border: 2px solid var(--mint); padding: 3px 11px 7px }
+.dg-grid .dg2.done { background: var(--surface); border: 2px solid var(--mint); padding: 3px 11px 7px }
 .dg-grid .dg2.done.mine { box-shadow: inset 4px 0 0 var(--accent) }
-.dg-grid .dg2.done .t2row + .t2row, .dg-grid .dg2.done .t2 { border-color: var(--mint-line) }
 .dg2.done .dg2-ok { color: var(--mint-ink); font-weight: 700 }
 
 /* ===== 변경 등록: 할 일 순서 끌기 · 내용 고치기 ===== */
@@ -1172,3 +1171,120 @@ html, body { max-width: 100%; overflow-x: hidden }
 .nr-ed { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px }
 .nr-ed input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 8px 10px; border: 1.5px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--text) }
 .nr-eb { display: flex; gap: 6px; justify-content: flex-end }
+
+/* ===== 품목별 관리 (묶음) ===== */
+:root { --grp: #6a3fd6; --grp-soft: #f1ecff; --grp-row: #f7f4ff }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --grp: #a98bff; --grp-soft: #2a2145; --grp-row: #1f1a33 } }
+:root[data-theme="dark"] { --grp: #a98bff; --grp-soft: #2a2145; --grp-row: #1f1a33 }
+.nf-item.by-item input:not(.nf-idate) { min-width: 0 }
+.nf-idate { flex: none; width: 150px; font-family: var(--mono); font-size: 13px; color: var(--muted) }
+.nf-idate.own { color: var(--accent); font-weight: 700; border-color: var(--accent) }
+.nf-mode { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg) }
+.nm-h { font-size: 13px; font-weight: 700; margin-bottom: 6px }
+.nm-seg { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px }
+.nm-seg button { flex: 1; border: 0; background: none; border-radius: 8px; padding: 8px 6px; font: inherit; color: var(--muted); display: flex; flex-direction: column; gap: 2px; cursor: pointer }
+.nm-seg button b { font-size: 14px }
+.nm-seg button small { font-size: 11.5px }
+.nm-seg button.on { background: var(--accent-soft); color: var(--accent) }
+.nm-note { font-size: 12.5px; color: var(--text); margin: 8px 2px 0; line-height: 1.55 }
+.g-chip { display: inline-block; font-size: 11px; font-weight: 700; color: var(--grp); background: var(--grp-soft); border-radius: 99px; padding: 1px 8px; white-space: nowrap; vertical-align: 2px }
+@media (max-width: 559px) { .nf-item.by-item { flex-wrap: wrap } .nf-item.by-item .nf-idate { width: auto; flex: 1 } }
+.bk-t { margin: 0 20px 6px; font-weight: 700; color: var(--ink) }
+.bk-list { margin: 0 20px 4px; padding: 8px 12px 8px 26px; background: var(--bg); border-radius: 10px; font-size: 13px; line-height: 1.7; max-height: 180px; overflow-y: auto }
+.gt-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700 }
+.gt-h label { font-weight: 600; display: inline-flex; gap: 6px; align-items: center }
+.gt-list { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; margin: 6px 0 4px; border: 1px solid var(--line); border-radius: 10px; padding: 6px }
+.gt-list label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 13.5px; cursor: pointer }
+.gt-list label.on { background: var(--accent-soft) }
+.gt-n { flex: 1; min-width: 0 }
+.gt-d { font-size: 12px; color: var(--muted) }
+.g-crumb { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); padding: 2px 0 8px; flex-wrap: wrap }
+.g-back { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 5px 10px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--grp); cursor: pointer }
+.g-name { border: 0; background: none; padding: 0; font: inherit; color: var(--muted); cursor: pointer; text-align: left; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.g-name:hover { color: var(--grp); text-decoration: underline }
+.g-no { color: var(--ink) }
+.g-nav { margin-left: auto; display: flex; gap: 6px }
+.g-nav .pill:disabled { opacity: .4; cursor: default }
+.g-chip.g-in { margin-right: 6px; font-size: 10.5px }
+.g-open { display: block; width: 100%; text-align: left; border: 1px solid var(--grp-soft); background: var(--grp-row); color: var(--grp); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 13px; margin-bottom: 10px; cursor: pointer }
+.g-open b { color: var(--ink) }
+.sum-t tr.g-row td { background: var(--grp-row) }
+.sum-t tr.g-row td.c0 { box-shadow: inset 4px 0 0 var(--grp) }
+.sum-t tr.k-row td { background: color-mix(in srgb, var(--grp-row) 45%, var(--surface)) }
+.sum-t td.kid .cl2 { padding-left: 22px }
+.k-ln { color: var(--faint); margin-right: 6px }
+.g-tc { display: flex; align-items: flex-start; gap: 4px }
+.g-tog { flex: none; border: 0; background: none; color: var(--grp); font: inherit; font-size: 13px; font-weight: 800; width: 22px; height: 22px; border-radius: 6px; cursor: pointer; padding: 0 }
+.g-tog:hover { background: var(--grp-soft) }
+.g-st { white-space: normal }
+.g-st .sst { margin: 1px 2px }
+.gm { box-shadow: inset 4px 0 0 var(--grp), var(--shadow) }
+.gm-seg { display: flex; gap: 4px; margin: 2px 0 8px }
+.gm-seg button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer }
+.gm-seg button.on { background: var(--ink); color: var(--surface); border-color: var(--ink) }
+.gm-t { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--surface) }
+.gm-t.open { border: 2px solid var(--accent) }
+.gm-t.late { border-color: var(--late) }
+.gm-th { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 10px 12px; font: inherit; text-align: left; color: var(--text); cursor: pointer; flex-wrap: wrap }
+.gm-th b { font-size: 14.5px; color: var(--ink) }
+.gm-th .sp { flex: 1 }
+.gm-c { font-size: 12.5px; font-weight: 700; color: var(--accent) }
+.gm-b { padding: 0 12px 10px }
+.gm-all { font-size: 12.5px; margin-bottom: 6px }
+.gm-all label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer }
+.gm-items { display: flex; flex-wrap: wrap; gap: 6px }
+.gm-i { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 3px 8px 3px 6px; font-size: 13px }
+.gm-i.on { border-color: var(--accent); background: var(--accent-soft) }
+.gm-i.late { border-color: var(--late) }
+.gm-i input { width: 16px; height: 16px; accent-color: var(--accent) }
+.gm-i button { border: 0; background: none; padding: 2px 0; font: inherit; color: var(--text); cursor: pointer; text-align: left }
+.gm-i button:hover { text-decoration: underline }
+.gm-i small { color: var(--muted); font-family: var(--mono); font-size: 11px }
+.gm-go { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap }
+.gm-go b { color: var(--accent); font-size: 13px }
+.gm-go .hint { font-size: 12px; color: var(--muted) }
+.gm-k { border-top: 1px dashed var(--line); padding-top: 6px; margin-top: 6px }
+.gm-kh { font-size: 13px; margin: 2px 2px 4px }
+.gm-kh small { color: var(--muted); margin-left: 6px }
+/* 묶음 화면 */
+.gv-h { position: sticky; top: 0; z-index: 3; background: var(--surface); padding-bottom: 6px }
+.gv-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.gv-t { margin: 0; font-size: 20px; color: var(--ink); flex: 1; min-width: 200px; line-height: 1.35 }
+.gv-kv { margin-top: 10px }
+.gv-d { font-size: 12px; color: var(--muted); margin-left: 4px }
+.gv-d.late { color: var(--late) }
+.gv-sn { color: var(--muted); font-size: 12px; margin-left: 6px }
+.pill.add { color: var(--accent); background: var(--surface); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)) }
+.gv-tw { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: auto }
+.gv-table { width: 100%; border-collapse: collapse; font-size: 13.5px }
+.gv-table th { font-size: 12px; color: var(--muted); font-weight: 700; background: var(--bg); padding: 8px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--line) }
+.gv-table th.l, .gv-table td.l { text-align: left }
+.gv-table td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle }
+.gv-table tr { cursor: pointer }
+.gv-table tbody tr:hover td { background: var(--today) }
+.gv-table tr.fin td { color: var(--muted); background: var(--bg) }
+.gv-table td.n { width: 34px; text-align: center; color: var(--muted) }
+.gv-table td.rem { font-size: 12.5px; color: var(--muted) }
+.gv-table td.act { width: 56px }
+.gv-table .tdd { display: block; font-size: 11px; color: var(--muted) }
+.gv-table .tdd.hot { color: var(--late) }
+.spg.fin em { background: var(--mint) }
+.own-d { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: #a15c00; background: #fdebc8; border-radius: 99px; padding: 1px 6px; white-space: nowrap }
+.gv-x { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 3px 9px; font: inherit; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer }
+.gv-x:hover { color: var(--late); border-color: var(--late) }
+.gv-note { margin: 10px 2px 0 }
+.gv-log { margin-top: 12px }
+.gv-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px }
+.gv-li { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 12px; padding: 4px 8px 4px 4px; background: var(--surface) }
+.gv-li.fin { background: var(--bg); opacity: .8 }
+.gv-lb { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 6px; font: inherit; text-align: left; color: var(--text); cursor: pointer }
+.gv-ln { width: 22px; flex: none; text-align: center; color: var(--muted); font-size: 12px }
+.gv-lt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px }
+.gv-lt b { font-size: 14px; color: var(--ink); word-break: keep-all; overflow-wrap: anywhere }
+.gv-lt small { font-size: 12px; color: var(--muted) }
+.ch-g { display: block; font-size: 11.5px; color: var(--grp); font-weight: 600; margin-top: 2px }
+.sum-t td.kid .cl2 { position: relative; padding-left: 22px }
+.sum-t td.kid .k-ln { position: absolute; left: 6px; top: 0 }
+.gv-table td.act { width: 70px; white-space: nowrap }
+.gv-x { white-space: nowrap }
+.gv-d { white-space: nowrap }

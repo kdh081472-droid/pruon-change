@@ -15,6 +15,7 @@ import NewChange, { emptyForm } from './NewChange.jsx'
 import Chat from './Chat.jsx'
 import Report from './Report.jsx'
 import Settings from './Settings.jsx'
+import GroupView, { GroupDock } from './GroupView.jsx'
 
 export default function Dashboard({ session }) {
   const uid = session.user.id
@@ -33,6 +34,7 @@ export default function Dashboard({ session }) {
   })
   const [nf, setNf] = useState(null)
   const [sel, setSel] = useState(null)          // PC 넓은 화면에서 고른 제품
+  const [selGroup, setSelGroup] = useState(null) // 고른 묶음 (품목별 관리)
   const wide = useWidth() >= WIDE
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminMode, setAdminMode] = useState(false)
@@ -133,7 +135,15 @@ export default function Dashboard({ session }) {
       selectProduct,
       openReport: cid => setReportCid(cid),
       goChange, markReadLocal,
-      goSummary: () => { setSheet(null); setTab('summary'); setTimeout(() => { const el = document.querySelector('.wide-main'); el && el.scrollTo(0, 0) }, 0) },
+      goSummary: () => {
+        setSheet(null)
+        if (wide) setTab('summary'); else { setTab('timeline'); setUi(u => ({ ...u, view: 'summary' })) }
+        setTimeout(() => { const el = document.querySelector('.wide-main'); el ? el.scrollTo(0, 0) : window.scrollTo(0, 0) }, 0)
+      },
+      goGroup: gid => {
+        setSelGroup(gid); setTab('group'); setSheet(null); setChatCid(null)
+        setTimeout(() => { const el = document.querySelector('.wide-main'); el ? el.scrollTo(0, 0) : window.scrollTo(0, 0) }, 0)
+      },
     }
   }, [db, me, uid, viewer, wide, ui, sheet, reload, toast, markReadLocal, isAdmin])
 
@@ -149,7 +159,7 @@ export default function Dashboard({ session }) {
   const tabs = viewer
     ? [['timeline', '전체 일정'], ['chat', '대화']]
     : [['mine', '내 할 일'], ['timeline', '전체 일정'], ['chat', '대화'], ['new', '변경 등록']]
-  const title = { chat: '대화', mine: '내 할 일', timeline: wide ? '달력' : '전체 일정', summary: '요약', new: '변경 등록', settings: '내 정보', product: '' }[tab]
+  const title = { chat: '대화', mine: '내 할 일', timeline: wide ? '달력' : '전체 일정', summary: '요약', new: '변경 등록', settings: '내 정보', product: '', group: wide ? '' : '전체 일정' }[tab]
 
   const content = (
     <>
@@ -157,9 +167,10 @@ export default function Dashboard({ session }) {
       {tab === 'mine' && <MineTab />}
       {tab === 'timeline' && (wide ? <Overview /> : <TimelineTab />)}
       {tab === 'summary' && wide && <Summary />}
+      {tab === 'group' && <GroupView gid={selGroup} />}
       {tab === 'product' && (sel && db.changeMap[sel] ? <ProductCard c={db.changeMap[sel]} forceOpen /> : <div className="card empty">요약에서 제품을 골라주세요.</div>)}
       {tab === 'new' && !viewer && (
-        <NewChange nf={nf || emptyForm(db)} setNf={setNf} onDone={cid => { setNf(null); app.goChange(cid) }} />
+        <NewChange nf={nf || emptyForm(db)} setNf={setNf} onDone={(id, isGroup) => { setNf(null); isGroup ? app.goGroup(id) : app.goChange(id) }} />
       )}
       {tab === 'chat' && !wide && <ChatList />}
       {tab === 'settings' && <Settings />}
@@ -167,7 +178,7 @@ export default function Dashboard({ session }) {
   )
   const overlays = (
     <>
-      {sheet && <Sheet key={sheet.kind + (sheet.tid || sheet.cid || '')} />}
+      {sheet && <Sheet key={sheet.kind + (sheet.tid || sheet.cid || sheet.gid || (sheet.tids || []).join(''))} />}
       {!wide && chatCid && db.changeMap[chatCid] && <Chat cid={chatCid} onClose={() => setChatCid(null)} />}
       {reportCid && db.changeMap[reportCid] && <Report cid={reportCid} onClose={() => setReportCid(null)} />}
       {helpOpen && <HelpBot full={!wide} onClose={() => setHelpOpen(false)} />}
@@ -185,11 +196,11 @@ export default function Dashboard({ session }) {
           <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
           <div className="wide-main">
             <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '')}>
-              {tab !== 'product' && tab !== 'timeline' && <h1 className="page-t wide-t">{title}</h1>}
+              {tab !== 'product' && tab !== 'timeline' && tab !== 'group' && <h1 className="page-t wide-t">{title}</h1>}
               {content}
             </div>
           </div>
-          {noDock ? null : tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : <DockEmpty />}
+          {noDock ? null : tab === 'product' && sel && db.changeMap[sel] ? <Chat key={sel} cid={sel} docked onClose={() => {}} /> : tab === 'group' ? <GroupDock gid={selGroup} /> : <DockEmpty />}
         </div>
         {overlays}
       </Ctx.Provider>
@@ -217,7 +228,7 @@ export default function Dashboard({ session }) {
         <nav className="tabs" aria-label="화면 전환">
           <div className="tabs-in">
             {tabs.map(([k, label]) => (
-              <button key={k} type="button" className={'tab' + (tab === k ? ' on' : '')} onClick={() => { setTab(k); setSheet(null); window.scrollTo(0, 0) }}>
+              <button key={k} type="button" className={'tab' + (tab === k || (k === 'timeline' && tab === 'group') ? ' on' : '')} onClick={() => { setTab(k); setSheet(null); window.scrollTo(0, 0) }}>
                 {ICON[k]}<span>{label}</span>
                 {k === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
                 {k === 'chat' && unreadAll > 0 && <span className="n">{unreadAll}</span>}

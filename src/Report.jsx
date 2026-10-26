@@ -138,6 +138,7 @@ export default function Report({ cid, onClose }) {
 
           <h2>1. 변경 개요</h2>
           <table className="kvt"><tbody>
+            {c.group && <tr><th>묶음</th><td colSpan={3}>{c.group.title} (품목 {c.kidNo} / {c.group.kids.length})</td></tr>}
             <tr><th>변경 내용</th><td colSpan={3}>{c.description || '-'}</td></tr>
             <tr><th>변경 사유</th><td colSpan={3}>{c.reason || '-'}</td></tr>
             <tr><th>대상 품목</th><td colSpan={3}>{c.itemsText}</td></tr>

@@ -346,7 +346,7 @@ function DeleteTab({ act, openReport }) {
             const isOpen = ask === c.id
             return (
               <div key={c.id} className="ci2">
-                <div className="t"><b>{c.title}</b><span>전환 {md(c.target_date)} · 할 일 {dn}/{ts.length} 처리 · 대화 {db.messages.filter(m => m.change_id === c.id).length}개 · 등록 {stampFull(c.created_at).slice(0, 10)}</span></div>
+                <div className="t"><b>{c.group && <span className="g-chip g-in">묶음 · {c.group.title}</span>}{c.title}</b><span>전환 {md(c.target_date)} · 할 일 {dn}/{ts.length} 처리 · 대화 {db.messages.filter(m => m.change_id === c.id).length}개 · 등록 {stampFull(c.created_at).slice(0, 10)}</span></div>
                 <span className={'ps2 ' + (c.status === '진행중' ? 'live' : 'fin')}>{c.status === '진행중' ? '진행 중' : c.close_type === '중단' ? '중단 종결' : '종결'}</span>
                 <button type="button" className="btn sm ghost warn-t" onClick={() => { setAsk(isOpen ? null : c.id); setTyped(''); setErr('') }}>완전 삭제</button>
                 {isOpen && (

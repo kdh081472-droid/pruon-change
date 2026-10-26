@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from './ctx.jsx'
 import { ORDER, SHORT } from './supabase.js'
 import { dd, iso, todayMid, stampFull } from './util.js'
+import { groupStats, rangeTxt, dTxt } from './GroupView.jsx'
 
 // 전체 요약: 모든 변경을 한 표로 (엑셀 내려받기의 "변경" 시트 항목에서 처음전환일 뺌 + 처리 현황)
 // 검색은 단어 순서와 상관없이, 머리글마다 정렬·필터
@@ -32,7 +33,7 @@ function Hl({ text, words }) {
 }
 
 export default function Summary() {
-  const { db, uid, overdue, goChange, ui, setUi, unread, mentionsMe } = useApp()
+  const { db, uid, overdue, goChange, goGroup, ui, setUi, unread, mentionsMe } = useApp()
   // 칸 폭: 내 계정 + 이 PC 브라우저에만 저장 (다른 사람 화면에는 영향 없음)
   const wKey = 'pruon_sumw_' + uid
   const [ws, setWs] = useState(() => {
@@ -57,11 +58,14 @@ export default function Summary() {
     const remList = ORDER.filter(x => rem[x]).concat(Object.keys(rem).filter(x => !ORDER.includes(x))).map(x => [x, rem[x]])
     const u = unread(c.id)
     const status = c.status === '종결' ? (c.close_type === '중단' ? '중단 종결' : '종결') : overdue(c) ? '전환일 지남' : '진행 중'
+    const g = c.group
     return {
       id: c.id, title: c.title, status, done: d, total: n, pct: n ? Math.round((d / n) * 100) : 0,
       target: c.target_date,
-      desc: c.description || '', reason: c.reason || '', items: c.itemsText === '-' ? '' : c.itemsText,
-      by: p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''),
+      // 묶음의 품목: 공통 내용·사유·등록자는 묶음 줄에만 (검색은 됨)
+      gid: g ? g.id : null, kidNo: c.kidNo, extra: g ? g.title + ' ' + (c.description || '') + ' ' + (c.reason || '') : '',
+      desc: g ? '' : c.description || '', reason: g ? '' : c.reason || '', items: g ? '' : c.itemsText === '-' ? '' : c.itemsText,
+      by: g ? '' : p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''),
       bySort: String(di < 0 ? 99 : di).padStart(2, '0') + ' ' + (p ? p.name : ''),
       left: c.status === '종결' ? '' : remList.map(([x, k]) => x + ' ' + k).join(' · '),
       remList: c.status === '종결' ? [] : remList, leftN: c.status === '종결' ? '' : remList.reduce((a, x) => a + x[1], 0),
@@ -70,6 +74,28 @@ export default function Summary() {
     }
   }), [db, overdue, unread, mentionsMe])
 
+  // 묶음 줄 (합계)
+  const gRows = useMemo(() => {
+    const m = {}
+    db.groups.forEach(g => {
+      const s = groupStats(g, overdue)
+      const p = db.people[g.created_by]
+      const dept = (p && p.department) || g.created_by_dept || ''
+      const di = ORDER.indexOf(dept)
+      const us = g.kids.map(k => unread(k.id))
+      m[g.id] = {
+        id: 'g:' + g.id, gid: g.id, isGroup: true, n: g.kids.length, title: g.title, status: s.status, stats: s,
+        done: s.done, total: s.total, pct: s.pct, target: s.next || s.from, range: rangeTxt(s.from, s.to),
+        desc: g.description || '', reason: g.reason || '', items: '품목 ' + g.kids.length + '개',
+        by: p ? `${p.name} (${SHORT[dept] || dept})` : (g.created_by_dept || ''),
+        bySort: String(di < 0 ? 99 : di).padStart(2, '0') + ' ' + (p ? p.name : ''),
+        chat: us.reduce((a, u) => a + u.length, 0), chatAt: us.some(u => u.some(mentionsMe)),
+        reg: ymd(g.created_at), closed: ymd(s.closedAt),
+      }
+    })
+    return m
+  }, [db, overdue, unread, mentionsMe])
+
   const words = st.q.trim().split(/\s+/).filter(Boolean)
   const list = useMemo(() => {
     const ws = words.map(norm)
@@ -77,7 +103,7 @@ export default function Summary() {
       if (st.chip && r.status !== st.chip) return false
       if (st.onlyNew && !r.chat) return false
       if (ws.length) {
-        const hay = norm(COLS.map(c => r[c.k]).join(' ') + ' ' + r.stop)
+        const hay = norm(COLS.map(c => r[c.k]).join(' ') + ' ' + r.stop + ' ' + (r.extra || ''))
         if (!ws.every(w => hay.includes(w))) return false        // 단어 순서 상관없이 모두 포함
       }
       for (const [k, f] of Object.entries(st.f)) {
@@ -122,6 +148,22 @@ export default function Summary() {
     if (pop && pop.k === k) return setPop(null)
     place(k)
   }
+  // 화면에 보이는 줄: 묶음의 품목은 묶음 줄 아래로 모음 (펼치기). 거르기·검색 중이면 맞는 품목이 보이게 자동으로 펼침
+  const filtering = !!(words.length || st.chip || st.onlyNew || Object.keys(st.f).length)
+  const isOpenG = gid => (st.open && st.open[gid] !== undefined ? st.open[gid] : filtering)
+  const display = useMemo(() => {
+    const out = [], seen = new Set()
+    list.forEach(r => {
+      if (!r.gid || !gRows[r.gid]) return out.push(r)
+      if (seen.has(r.gid)) return
+      seen.add(r.gid)
+      const kids = list.filter(x => x.gid === r.gid).sort((a, b) => a.kidNo - b.kidNo)
+      out.push({ ...gRows[r.gid], matchN: kids.length })
+      if (isOpenG(r.gid)) kids.forEach(k => out.push({ ...k, kid: true }))
+    })
+    return out
+  }, [list, gRows, st.open, filtering])
+  const toggleG = gid => setSt({ open: { ...(st.open || {}), [gid]: !isOpenG(gid) } })
   const cnt = s => rows.filter(r => r.status === s).length
   const anyFilter = st.q || st.chip || st.onlyNew || Object.keys(st.f).length
   const newN = rows.filter(r => r.chat).length
@@ -129,6 +171,20 @@ export default function Summary() {
 
   const cell = (r, c) => {
     const v = r[c.k]
+    if (r.isGroup) {
+      const s = r.stats
+      if (c.k === 'title') return (
+        <td key={c.k} className="c0">
+          <div className="g-tc">
+            <button type="button" className="g-tog" aria-expanded={isOpenG(r.gid)} aria-label={isOpenG(r.gid) ? '품목 접기' : '품목 펼치기'} onClick={e => { e.stopPropagation(); toggleG(r.gid) }}>{isOpenG(r.gid) ? '▾' : '▸'}</button>
+            <span className="cl2"><b><Hl text={v} words={words} /></b> <span className="g-chip">묶음 · 품목 {r.n}{filtering && r.matchN < r.n ? ` (${r.matchN}개 맞음)` : ''}</span>{r.chat > 0 && <span className="tdot" title={'안 읽은 대화 ' + r.chat + '개'}>{r.chatAt ? '@' : ''}{r.chat}</span>}</span>
+          </div>
+        </td>
+      )
+      if (c.k === 'status') return <td key={c.k} className="ctr g-st">{s.openN > 0 && <span className={'sst ' + (s.lateN ? 'late' : 'live')}>진행 {s.openN}</span>}{s.doneN > 0 && <span className="sst done">종결 {s.doneN}</span>}{s.stopN > 0 && <span className="sst stop">중단 {s.stopN}</span>}</td>
+      if (c.k === 'target') return <td key={c.k} className="num ctr k">{r.range}{s.next && <span className={'tdd' + (dd(s.next) <= 7 ? ' hot' : '')}>{dTxt(dd(s.next))}</span>}</td>
+    }
+    if (c.k === 'title' && r.kid) return <td key={c.k} className="c0 kid"><div className="cl2"><span className="k-ln" aria-hidden="true">└</span><b><Hl text={v} words={words} /></b>{r.chat > 0 && <span className="tdot" title={'안 읽은 대화 ' + r.chat + '개'}>{r.chatAt ? '@' : ''}{r.chat}</span>}</div></td>
     if (c.k === 'title') return <td key={c.k} className="c0"><div className="cl2"><b><Hl text={v} words={words} /></b>{r.chat > 0 && <span className="tdot" title={'안 읽은 대화 ' + r.chat + '개' + (r.chatAt ? ' (나를 부른 글 있음)' : '')}>{r.chatAt ? '@' : ''}{r.chat}</span>}</div></td>
     if (c.k === 'status') return <td key={c.k} className="ctr"><span className={'sst ' + STATUS_CLS[v]}>{v}</span></td>
     if (c.k === 'pct') return <td key={c.k}><span className={'spg' + (r.status === '전환일 지남' ? ' late' : '')}><i><em style={{ width: v + '%' }} /></i>{r.done}/{r.total}</span></td>
@@ -189,7 +245,7 @@ export default function Summary() {
             </tr>
           </thead>
           <tbody>
-            {list.map(r => <tr key={r.id} className={r.status === '종결' || r.status === '중단 종결' ? 'fin' : ''} onClick={() => goChange(r.id)}>{COLS.map(c => cell(r, c))}</tr>)}
+            {display.map(r => <tr key={r.id} className={(r.isGroup ? 'g-row ' : r.kid ? 'k-row ' : '') + (r.status === '종결' || r.status === '중단 종결' ? 'fin' : '')} onClick={() => (r.isGroup ? goGroup(r.gid) : goChange(r.id))}>{COLS.map(c => cell(r, c))}</tr>)}
             {!list.length && <tr><td colSpan={COLS.length} className="sum-empty">조건에 맞는 변경이 없습니다. 검색어를 줄이거나 필터를 지워보세요.</td></tr>}
           </tbody>
         </table>

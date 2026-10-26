@@ -30,7 +30,7 @@ export default function ChatList() {
       <button type="button" key={c.id} className={'cl-i' + (isClosed ? ' closed' : '')} onClick={() => openChat(c.id)}>
         <span className="cl-ic">{ICON.chat}</span>
         <span className="cl-b">
-          <span className="cl-t">{c.title}</span>
+          <span className="cl-t">{c.group && <span className="g-chip g-in">{c.group.title.length > 12 ? c.group.title.slice(0, 12) + '…' : c.group.title}</span>}{c.title}</span>
           <span className="cl-m">{last ? <>{p ? p.name : '알 수 없음'}: {snip(last.body, 30)}</> : <span className="faint">아직 대화가 없습니다</span>}</span>
         </span>
         <span className="cl-r">
