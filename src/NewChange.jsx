@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase, ORDER, SHORT, ITEM_TYPES } from './supabase.js'
-import { useApp, Person } from './ctx.jsx'
+import { useApp, Person, useWidth, WIDE } from './ctx.jsx'
 import { errText, stampFull } from './util.js'
 
 // 품목 종류별 이름 예시
@@ -17,7 +17,7 @@ export function emptyForm() {
   return {
     title: '', desc: '', reason: '', target: '',
     items: [{ type: '단품', name: '' }],
-    picks: {}, extras: [],
+    list: null,                 // 할 일 목록 (부서별 순서 그대로) — null이면 기본 목록
     presetSel: 'base', presetUsed: 'base', presetMode: null, presetErr: '',
     addDept: null, err: '',
   }
@@ -29,10 +29,58 @@ export default function NewChange({ nf, setNf, onDone }) {
   const [addTitle, setAddTitle] = useState('')
   const [pName, setPName] = useState('')
   const [pRename, setPRename] = useState('')
+  const [edit, setEdit] = useState(null)        // { k, text } 할 일 내용 고치는 중
+  const [drag, setDrag] = useState(null)        // { d, from, over }
+  const wide = useWidth() >= WIDE
   const set = patch => setNf({ ...nf, ...patch })
   const tpls = db.templates.filter(t => t.active)
-  const picked = t => nf.picks[t.id] !== undefined ? nf.picks[t.id] : true
-  const pickedN = tpls.filter(picked).length + nf.extras.length
+
+  // 할 일 한 줄: { k, dept, title, on, tpl(기본 할 일 id 또는 null=직접 추가), orig(기본 할 일 원래 문구) }
+  const fromTpl = (t, on = true, title) => ({ k: 't' + t.id, dept: t.department, title: title ?? t.title, on, tpl: t.id, orig: t.title })
+  let seq = 0
+  const newK = () => 'x' + Date.now().toString(36) + (seq++)
+  const list = nf.list || [
+    ...tpls.map(t => fromTpl(t, nf.picks && nf.picks[t.id] !== undefined ? nf.picks[t.id] : true)),
+    ...(nf.extras || []).map(x => ({ k: newK(), dept: x.dept, title: x.title, on: true, tpl: null })),
+  ]
+  const setList = (l, extra) => set({ list: l, presetUsed: null, err: '', ...(extra || {}) })
+  const pickedN = list.filter(x => x.on).length
+  const onRows = d => list.filter(x => x.dept === d && x.on)
+  // 부서 d 의 체크된 할 일 순서를 ids 순서로 바꿈 (체크 끈 줄은 그 자리에)
+  const reorder = (d, keys) => {
+    const q = keys.slice()
+    const byK = Object.fromEntries(list.map(y => [y.k, y]))
+    return list.map(x => (x.dept === d && x.on ? byK[q.shift()] : x))
+  }
+  const moveRow = (d, from, to) => {
+    const ks = onRows(d).map(x => x.k)
+    if (to < 0 || to >= ks.length || from === to) return
+    const [m] = ks.splice(from, 1); ks.splice(to, 0, m)
+    setList(reorder(d, ks))
+  }
+  // 체크 켜기·끄기: 켜면 그 부서 체크된 줄의 맨 끝으로
+  const toggle = (x, on) => {
+    let l = list.filter(y => y.k !== x.k)
+    const nx = { ...x, on }
+    if (on) {
+      const last = l.map((y, i) => (y.dept === x.dept && y.on ? i : -1)).filter(i => i >= 0).pop()
+      const at = last !== undefined ? last + 1 : l.findIndex(y => y.dept === x.dept)
+      l.splice(at < 0 ? l.length : at, 0, nx)
+    } else l = list.map(y => (y.k === x.k ? nx : y))
+    setList(l)
+  }
+  const addRow = (d, title) => {
+    const l = list.slice()
+    const last = l.map((y, i) => (y.dept === d && y.on ? i : -1)).filter(i => i >= 0).pop()
+    l.splice(last !== undefined ? last + 1 : l.length, 0, { k: newK(), dept: d, title, on: true, tpl: null })
+    setList(l, { addDept: null })
+  }
+  const saveEdit = () => {
+    const tx = edit.text.trim()
+    if (!tx) return toast('할 일 내용을 입력해주세요')
+    setList(list.map(y => (y.k === edit.k ? { ...y, title: tx } : y)))
+    setEdit(null)
+  }
 
   const base = { id: 'base', name: `기본 목록 (${tpls.length}건)`, fixed: true, items: tpls.map(t => ({ department: t.department, title: t.title })) }
   const presets = [base, ...db.presets]
@@ -41,21 +89,20 @@ export default function NewChange({ nf, setNf, onDone }) {
   const gSaved = db.presets.filter(p => !p.source_change_id)
   const gClosed = db.presets.filter(p => p.source_change_id)
 
-  // 지금 화면의 배정 → 목록 항목
-  const currentItems = () => [
-    ...tpls.filter(picked).map(t => ({ department: t.department, title: t.title })),
-    ...nf.extras.map(x => ({ department: x.dept, title: x.title })),
-  ]
+  // 지금 화면의 배정 → 목록 항목 (부서 순서 · 부서 안 순서 · 고친 문구 그대로)
+  const currentItems = () => ORDER.flatMap(d => onRows(d).map(x => (x.tpl ? { department: d, title: x.title, tpl: x.tpl } : { department: d, title: x.title })))
 
   function loadPreset() {
     const P = curP
-    const picks = {}
-    tpls.forEach(t => { picks[t.id] = P.items.some(i => i.department === t.department && i.title === t.title) })
-    const extras = P.items
-      .filter(i => !tpls.some(t => t.department === i.department && t.title === i.title))
-      .filter(i => ORDER.includes(i.department))            // 지금은 없는 부서의 할 일은 빼고
-      .map(i => ({ dept: i.department, title: i.title }))
-    setNf({ ...nf, picks, extras, presetUsed: P.id, presetMode: null, presetErr: '' })
+    const used = new Set(), out = []
+    P.items.filter(i => ORDER.includes(i.department)).forEach(i => {     // 지금은 없는 부서의 할 일은 빼고
+      let t = i.tpl && tpls.find(x => x.id === i.tpl && x.department === i.department && !used.has(x.id))
+      if (!t) t = tpls.find(x => x.department === i.department && x.title === i.title && !used.has(x.id))
+      if (t) { used.add(t.id); out.push(fromTpl(t, true, i.title)) } else out.push({ k: newK(), dept: i.department, title: i.title, on: true, tpl: null })
+    })
+    tpls.filter(t => !used.has(t.id)).forEach(t => out.push(fromTpl(t, false)))
+    setEdit(null)
+    setNf({ ...nf, list: out, picks: undefined, extras: undefined, presetUsed: P.id, presetMode: null, presetErr: '' })
     toast(`"${P.name.length > 24 ? P.name.slice(0, 24) + '…' : P.name}" 목록을 불러왔습니다`)
   }
 
@@ -107,10 +154,8 @@ export default function NewChange({ nf, setNf, onDone }) {
     const err = !nf.title.trim() ? '제목을 입력해주세요.' : !nf.target ? '전환일을 골라주세요.'
       : !items.length ? '대상 품목을 1개 이상 입력해주세요.' : !pickedN ? '할 일을 1건 이상 배정해주세요.' : ''
     if (err) return set({ err })
-    const tasks = [
-      ...tpls.filter(picked).map(t => ({ department: t.department, title: t.title })),
-      ...nf.extras.map(x => ({ department: x.dept, title: x.title })),
-    ]
+    if (edit) return set({ err: '고치고 있는 할 일을 먼저 저장하거나 취소해주세요.' })
+    const tasks = currentItems().map(i => ({ department: i.department, title: i.title }))
     setBusy(true)
     const { data, error } = await supabase.rpc('create_change', {
       p_title: nf.title.trim(), p_description: nf.desc.trim(), p_reason: nf.reason.trim(),
@@ -160,7 +205,7 @@ export default function NewChange({ nf, setNf, onDone }) {
       </div>
       <div className="nf-col">
       <div className="card nf">
-        <h3 className="nf-t">3. 부서별 할 일 배정 <small>체크해서 빼거나, 필요한 할 일을 추가하세요</small></h3>
+        <h3 className="nf-t">3. 부서별 할 일 배정 <small>체크해서 빼거나 추가하고, {wide ? '⋮⋮ 를 끌어' : '▲▼ 로'} 순서를, ✎ 로 내용을 바꿀 수 있습니다 (이번 변경에만 적용)</small></h3>
         <div className="pbox">
           <div className="pb-h"><b>배정 목록</b><span>저장한 목록이나 종결된 변경의 배정을 불러와서 쓸 수 있습니다</span></div>
           <div className="pb-row">
@@ -191,7 +236,7 @@ export default function NewChange({ nf, setNf, onDone }) {
             <div className="pb-form">
               <label htmlFor="p-name">새 배정 목록 이름</label>
               <input id="p-name" autoFocus value={pName} onChange={e => setPName(e.target.value)} placeholder="예: 원료 변경용" />
-              <p className="note">아래에 체크·추가된 할 일 {pickedN}건이 함께 저장됩니다.</p>
+              <p className="note">아래에 체크·추가된 할 일 {pickedN}건이 지금 순서와 고친 내용 그대로 함께 저장됩니다.</p>
               {nf.presetErr && <p className="err">{nf.presetErr}</p>}
               <div className="pb-row"><button type="button" className="btn sm" onClick={() => presetAction('save')}>저장</button><button type="button" className="btn sm ghost" onClick={() => set({ presetMode: null })}>취소</button></div>
             </div>
@@ -233,34 +278,58 @@ export default function NewChange({ nf, setNf, onDone }) {
         </div>
 
         {ORDER.map(d => {
-          const rows = tpls.filter(t => t.department === d)
-          const ex = nf.extras.map((e, i) => ({ e, i })).filter(x => x.e.dept === d)
-          const n = rows.filter(picked).length + ex.length
+          const ons = onRows(d), offs = list.filter(x => x.dept === d && !x.on)
+          const n = ons.length
+          const canMove = n > 1
           return (
             <section key={d} className={'dept nf-d' + (n === 0 ? ' none' : '')}>
               <div className="grp"><span className="dn">{d}</span><span className="st">{n ? n + '건 배정' : '배정 없음'}</span></div>
-              {rows.map(t => {
-                const on = picked(t)
+              {[...ons, ...offs].map((x, idx) => {
+                const on = x.on
+                const editing = edit && edit.k === x.k
+                const dragOk = on && canMove && wide && !edit
                 return (
-                  <div key={t.id} className={'nf-row' + (on ? '' : ' off')}>
-                    <input type="checkbox" id={'pk' + t.id} checked={on} onChange={e => set({ picks: { ...nf.picks, [t.id]: e.target.checked }, presetUsed: null, err: '' })} />
-                    <label htmlFor={'pk' + t.id} className="nf-tt">{t.title}</label>
+                  <div key={x.k}
+                    className={'nf-row nr2' + (on ? '' : ' off') + (x.tpl ? '' : ' add') + (editing ? ' editing' : '') + (drag && drag.d === d && drag.over === idx && drag.from !== idx ? ' over' : '') + (drag && drag.d === d && drag.from === idx ? ' dragging' : '')}
+                    draggable={dragOk}
+                    onDragStart={dragOk ? e => { try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', x.k) } catch (_) {} setDrag({ d, from: idx, over: idx }) } : undefined}
+                    onDragOver={on && drag && drag.d === d ? e => { e.preventDefault(); if (drag.over !== idx) setDrag({ ...drag, over: idx }) } : undefined}
+                    onDrop={on && drag && drag.d === d ? e => { e.preventDefault(); moveRow(d, drag.from, idx); setDrag(null) } : undefined}
+                    onDragEnd={() => setDrag(null)}>
+                    {wide && <span className={'grip' + (dragOk ? '' : ' no')} aria-hidden="true">⋮⋮</span>}
+                    <span className="tno">{on ? idx + 1 : '–'}</span>
+                    {x.tpl
+                      ? <input type="checkbox" id={'pk' + x.k} checked={on} aria-label={x.title + ' 배정'} onChange={e => toggle(x, e.target.checked)} />
+                      : <span className="new">추가</span>}
+                    {editing ? (
+                      <span className="nr-ed">
+                        <input autoFocus value={edit.text} aria-label="할 일 내용" onChange={e => setEdit({ ...edit, text: e.target.value })}
+                          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); saveEdit() } if (e.key === 'Escape') setEdit(null) }} />
+                        <span className="nr-eb"><button type="button" className="btn sm ghost" onClick={() => setEdit(null)}>취소</button><button type="button" className="btn sm" onClick={saveEdit}>저장</button></span>
+                      </span>
+                    ) : (
+                      <label htmlFor={x.tpl ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.tpl && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}</label>
+                    )}
+                    {!editing && (
+                      <span className="nr-act">
+                        {on && !wide && canMove && <>
+                          <button type="button" className="nr-b" aria-label="위로" disabled={idx === 0} onClick={() => moveRow(d, idx, idx - 1)}>▲</button>
+                          <button type="button" className="nr-b" aria-label="아래로" disabled={idx === n - 1} onClick={() => moveRow(d, idx, idx + 1)}>▼</button>
+                        </>}
+                        <button type="button" className="nr-b" aria-label={'내용 고치기: ' + x.title} title="내용 고치기" onClick={() => setEdit({ k: x.k, text: x.title })}>✎</button>
+                        {!x.tpl && <button type="button" className="nr-b" aria-label="추가한 할 일 삭제" onClick={() => setList(list.filter(y => y.k !== x.k))}>✕</button>}
+                      </span>
+                    )}
                   </div>
                 )
               })}
-              {ex.map(({ e, i }) => (
-                <div key={'x' + i} className="nf-row add">
-                  <span className="new">추가</span>
-                  <span className="nf-tt">{e.title}</span>
-                  <button type="button" className="x" aria-label="추가한 할 일 삭제" onClick={() => set({ extras: nf.extras.filter((_, j) => j !== i) })}>✕</button>
-                </div>
-              ))}
               {nf.addDept === d ? (
                 <div className="nf-add">
-                  <input autoFocus value={addTitle} onChange={e => setAddTitle(e.target.value)} placeholder="할 일 내용" aria-label="추가할 할 일" />
+                  <input autoFocus value={addTitle} onChange={e => setAddTitle(e.target.value)} placeholder="할 일 내용" aria-label="추가할 할 일"
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); if (addTitle.trim()) addRow(d, addTitle.trim()) } }} />
                   <button type="button" className="btn sm" onClick={() => {
                     if (!addTitle.trim()) return toast('할 일 내용을 입력해주세요')
-                    set({ extras: [...nf.extras, { dept: d, title: addTitle.trim() }], addDept: null, presetUsed: null, err: '' })
+                    addRow(d, addTitle.trim())
                   }}>추가</button>
                   <button type="button" className="btn sm ghost" onClick={() => set({ addDept: null })}>취소</button>
                 </div>

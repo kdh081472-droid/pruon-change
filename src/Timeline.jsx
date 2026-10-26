@@ -87,7 +87,6 @@ export function ChatMini({ c }) {
 export function ProductCard({ c, forceOpen }) {
   const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport, isAdmin, run, toast, goSummary } = useApp()
   const pcView = !!forceOpen && wide        // PC 제품 화면: 버튼은 제목 줄 오른쪽, 대화 버튼 없음
-  const [openDept, setOpenDept] = useState({})
   const [ord, setOrd] = useState(null)        // 우리 부서 할 일 순서 (저장되기 전 화면에 먼저 반영)
   const [drag, setDrag] = useState(null)
   const [histAll, setHistAll] = useState(false)
@@ -156,13 +155,10 @@ export function ProductCard({ c, forceOpen }) {
   )
   if (!isOpen) return <div className={'card pc2' + (od ? ' od' : '')} id={'p' + c.id}>{head}</div>
 
-  // 부서별로 묶고, 남은 할 일이 있는 부서를 위로
+  // 부서별로 묶음 — 순서는 관리자 모드 › 부서의 '순서' 그대로 (누가 봐도 같은 순서, 다 끝나도 자리 그대로)
   const groups = ORDER.map(d => ({ d, xs: ts.filter(t => t.department === d) }))
     .concat([...new Set(ts.map(t => t.department))].filter(d => !ORDER.includes(d)).map(d => ({ d, xs: ts.filter(t => t.department === d) })))
     .filter(g => g.xs.length)
-  // 남은 할 일 있는 우리 부서 → 남은 할 일 있는 부서 → 모두 처리한 부서
-  const rank = g => (g.xs.some(t => t.status === '대기') ? (g.d === me.department && !viewer ? 0 : 1) : 2)
-  groups.sort((a, b) => rank(a) - rank(b))
   const canOrder = !viewer && !closed
   const mineIds = ts.filter(t => t.department === me.department).map(t => t.id)
   const curOrd = ord || mineIds
@@ -227,18 +223,17 @@ export function ProductCard({ c, forceOpen }) {
         <div className="dg-grid">
         {groups.map(({ d, xs }) => {
           const r = xs.filter(t => t.status === '대기').length
-          const open = r > 0 || !!openDept[d]
-          const isMine = d === me.department
+          const isMine = d === me.department && !viewer
           return (
             <section key={d} className={'dg2' + (r && od ? ' od' : '') + (isMine ? ' mine' : '') + (r ? '' : ' done')}>
-              <button type="button" className="dg2-h" disabled={r > 0} aria-expanded={open} onClick={() => setOpenDept(o => ({ ...o, [d]: !o[d] }))}>
-                <b>{d}</b>{isMine && !viewer && <span className="me">우리 부서</span>}{isMine && canOrder && r > 0 && xs.length > 1 && <span className="ord-h">{wide ? '끌어서 순서 변경' : '▲▼로 순서 변경'}</span>}
+              <div className="dg2-h">
+                <b>{d}</b>{isMine && <span className="me">우리 부서</span>}{isMine && canOrder && r > 0 && xs.length > 1 && <span className="ord-h">{wide ? '끌어서 순서 변경' : '▲▼로 순서 변경'}</span>}
                 <span className="sp" />
                 {r > 0
                   ? <span className="dg2-n">{stopped ? '중단 ' + r + '건' : '남은 ' + r + '건'}</span>
-                  : <><span className="dg2-ok">✓ {xs.length}건 모두 처리</span><span className="caret">{open ? '▾' : '▸'}</span></>}
-              </button>
-              {open && (isMine && canOrder ? xs.slice().sort((p, q) => curOrd.indexOf(p.id) - curOrd.indexOf(q.id)) : xs).map((t, i) => {
+                  : <span className="dg2-ok">✓ {xs.length}건 모두 처리</span>}
+              </div>
+              {(isMine && canOrder ? xs.slice().sort((p, q) => curOrd.indexOf(p.id) - curOrd.indexOf(q.id)) : xs).map((t, i) => {
                 const late = isLate(t)
                 const on = sheet && sheet.kind === 'task' && sheet.tid === t.id
                 const movable = isMine && canOrder && xs.length > 1

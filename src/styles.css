@@ -1138,3 +1138,37 @@ html, body { max-width: 100%; overflow-x: hidden }
 .hl-a { white-space: normal }
 .dg-gap { height: 4px }
 .dg-note { font-size: 12px; color: var(--muted); margin: 10px 0 0 }
+
+/* ===== 제품 화면 부서 카드: 고정 순서 · 다 끝난 부서 민트 테두리 ===== */
+:root { --mint: #2fbfa8; --mint-soft: #effbf8; --mint-line: #d3f1ea; --mint-ink: #0f7a69 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --mint: #3fd1b9; --mint-soft: #12302b; --mint-line: #1f4a43; --mint-ink: #6fe3cf } }
+:root[data-theme="dark"] { --mint: #3fd1b9; --mint-soft: #12302b; --mint-line: #1f4a43; --mint-ink: #6fe3cf }
+.dg2-h { cursor: default }
+.dg-grid .dg2.mine { border-color: var(--line); box-shadow: inset 4px 0 0 var(--accent) }
+.dg-grid .dg2.done { background: var(--mint-soft); border: 2px solid var(--mint); padding: 3px 11px 7px }
+.dg-grid .dg2.done.mine { box-shadow: inset 4px 0 0 var(--accent) }
+.dg-grid .dg2.done .t2row + .t2row, .dg-grid .dg2.done .t2 { border-color: var(--mint-line) }
+.dg2.done .dg2-ok { color: var(--mint-ink); font-weight: 700 }
+
+/* ===== 변경 등록: 할 일 순서 끌기 · 내용 고치기 ===== */
+.nf .nf-row.nr2 { display: flex; align-items: center; gap: 8px; cursor: default; padding: 7px 4px; border-radius: 8px }
+.nf-row.nr2 .nf-tt { flex: 1; min-width: 0; cursor: pointer; word-break: keep-all; overflow-wrap: anywhere }
+.nf-row.nr2.add .nf-tt { cursor: default }
+.nf-row.nr2[draggable="true"] { cursor: grab }
+.nf-row.nr2 .grip.no { visibility: hidden }
+.nf-row.nr2.off .tno { background: none; color: var(--faint) }
+.nf-row.nr2.off .nf-tt { color: var(--faint); text-decoration: line-through }
+.nf-row.nr2.dragging { opacity: .5; background: var(--accent-soft) }
+.nf-row.nr2.over { box-shadow: inset 0 2.5px 0 var(--accent); background: var(--today) }
+.nf-row.nr2.editing { background: var(--accent-soft); flex-wrap: wrap }
+.nf-row.nr2 .new { flex: none; background: var(--ok-soft); color: var(--ok) }
+.nr-act { display: inline-flex; gap: 2px; flex: none }
+.nr-b { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; width: 28px; height: 28px; border-radius: 7px; cursor: pointer }
+.nr-b:hover:not(:disabled) { background: var(--bg); color: var(--text) }
+.nr-b:disabled { opacity: .3; cursor: default }
+.nr-mod { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: #a15c00; background: #fdebc8; border-radius: 99px; padding: 1px 6px; white-space: nowrap; vertical-align: 1px }
+:root[data-theme="dark"] .nr-mod { color: #f3c46b; background: #3a2f17 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .nr-mod { color: #f3c46b; background: #3a2f17 } }
+.nr-ed { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px }
+.nr-ed input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 8px 10px; border: 1.5px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--text) }
+.nr-eb { display: flex; gap: 6px; justify-content: flex-end }
