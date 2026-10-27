@@ -371,30 +371,46 @@ export function Calendar({ list, searching, title }) {
             <span className="t">{selDate.getMonth() + 1}월 {selDate.getDate()}일 ({['일', '월', '화', '수', '목', '금', '토'][selDate.getDay()]}) 전환</span>
           </div>
           {entriesOf(byDate[sel]).map(e => {
+            // 묶음·변경 같은 틀: 왼쪽 색 줄(상태) · 표시 · 제목 · 상태 · 내용/사유/진행 · 품목 목록 · 열기
             if (e.g) {
-              const openN = e.kids.filter(k => k.status === '진행중').length
-              const rest = e.g.kids.length - e.kids.length
+              const g = e.g, ks = e.kids.slice().sort((a, b) => (a.kidNo || 0) - (b.kidNo || 0))
+              const openN = ks.filter(k => k.status === '진행중').length, lateN = ks.filter(k => overdue(k)).length
+              let tot = 0, dn = 0
+              ks.forEach(k => { tot += k.tasks.length; dn += k.tasks.filter(t => t.status !== '대기').length })
+              const rest = g.kids.length - ks.length
               return (
-                <div className="tg-box g-box" key={'g' + e.g.id}>
-                  <div className="tg-h"><span className="g-chip">묶음</span> <b>{e.g.title}</b></div>
-                  <p className="g-day">이날 전환 <b>{e.kids.length}개 품목</b> · 진행 {openN} · 종결 {e.kids.length - openN}</p>
-                  <ul className="g-kids">{e.kids.map(k => <li key={k.id}><button type="button" className="link" onClick={() => goChange(k.id)}>{k.title}</button></li>)}</ul>
-                  <div className="g-dayf">{rest > 0 && <span>나머지 {rest}개 품목은 다른 날 전환</span>}<button type="button" className="link tg-go" onClick={() => goGroup(e.g.id)}>묶음 열기 ›</button></div>
+                <div className="dc2 gk" key={'g' + g.id}>
+                  <div className="dc2-h"><span className="dc2-tag gk">묶음</span><b>{g.title}</b><span className={'dc2-st ' + (lateN ? 'late' : openN ? 'live' : 'fin')}>{lateN ? '전환일 지남 ' + lateN + ' · ' : ''}진행 {openN} · 종결 {ks.length - openN}</span></div>
+                  <dl className="dc2-kv">
+                    <dt>변경 내용</dt><dd>{g.description || '-'}</dd>
+                    <dt>변경 사유</dt><dd>{g.reason || '-'}</dd>
+                    <dt>진행</dt><dd><span className="dc2-bar"><i style={{ width: (tot ? (dn / tot) * 100 : 0) + '%' }} /></span>{tot}건 중 {dn}건 처리</dd>
+                  </dl>
+                  <div className="dc2-sub">이날 전환 품목 {ks.length}개{rest > 0 ? ` (나머지 ${rest}개는 다른 날)` : ''}</div>
+                  <ul className="dc2-l link-l">{ks.map(k => <li key={k.id}><button type="button" className="link" onClick={() => goChange(k.id)}>{k.title}</button></li>)}</ul>
+                  <div className="dc2-f"><span>품목 이름을 누르면 그 품목 화면</span><button type="button" className="link tg-go" onClick={() => goGroup(g.id)}>묶음 열기 ›</button></div>
                 </div>
               )
             }
             const c = e.c
             const cts = tOf(c.id), dn = cts.filter(t => t.status !== '대기').length
+            const late = overdue(c), stopped = c.status === '종결' && c.close_type === '중단'
+            const n = dd(c.target_date)
+            const st = c.status === '종결' ? (stopped ? '중단 종결' : '종결') : late ? '전환일 지남 · D+' + -n : '진행 중 · ' + (n === 0 ? 'D-day' : 'D-' + n)
+            const cls = c.status === '종결' ? 'fin' : late ? 'late' : 'live'
             return (
-              <div className="tg-box" key={c.id}>
-                <div className="tg-h"><b>{c.title}</b><DBadge c={c} /></div>
-                <dl className="tg-dl">
+              <div className={'dc2 ' + cls} key={c.id}>
+                <div className="dc2-h"><span className="dc2-tag">변경</span><b>{c.title}</b><span className={'dc2-st ' + cls}>{st}</span></div>
+                <dl className="dc2-kv">
                   <dt>변경 내용</dt><dd>{c.description || '-'}</dd>
                   <dt>변경 사유</dt><dd>{c.reason || '-'}</dd>
-                  <dt>대상 품목</dt><dd>{c.itemsText}</dd>
-                  <dt>진행</dt><dd>{cts.length}건 중 {dn}건 처리</dd>
+                  <dt>진행</dt><dd><span className={'dc2-bar ' + cls}><i style={{ width: (cts.length ? (dn / cts.length) * 100 : 0) + '%' }} /></span>{cts.length}건 중 {dn}건 처리</dd>
                 </dl>
-                <button type="button" className="link tg-go" onClick={() => goChange(c.id)}>제품 열기 ›</button>
+                {c.items.length > 0 && <>
+                  <div className="dc2-sub">대상 품목 {c.items.length}개</div>
+                  <ul className="dc2-l">{c.items.map(it => <li key={it.id}>{it.item_type} · {it.item_name}</li>)}</ul>
+                </>}
+                <div className="dc2-f"><span>{stopped && c.close_reason ? '중단 사유: ' + c.close_reason : ''}</span><button type="button" className="link tg-go" onClick={() => goChange(c.id)}>제품 열기 ›</button></div>
               </div>
             )
           })}

@@ -1315,3 +1315,30 @@ html, body { max-width: 100%; overflow-x: hidden }
 .nf-hid-list { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 4px; background: var(--surface) }
 .nf-hid-list button { border: 0; background: none; text-align: left; padding: 6px 8px; border-radius: 7px; font: inherit; font-size: 13px; color: var(--text); cursor: pointer }
 .nf-hid-list button:hover { background: var(--accent-soft); color: var(--accent) }
+/* 달력 날짜 상세: 묶음·변경 같은 틀 */
+.dc2 { margin: 10px 12px 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 12px 14px 10px 16px; box-shadow: inset 4px 0 0 var(--accent) }
+.dc2.gk { box-shadow: inset 4px 0 0 var(--grp) }
+.dc2.late { box-shadow: inset 4px 0 0 var(--late) }
+.dc2.fin { box-shadow: inset 4px 0 0 var(--faint) }
+.dc2-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.dc2-h b { font-size: 15px; color: var(--ink); line-height: 1.35 }
+.dc2-tag { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: var(--bg); color: var(--muted); flex: none }
+.dc2-tag.gk { background: var(--grp-soft); color: var(--grp) }
+.dc2-l li { color: var(--text) }
+.dc2-l.link-l li::marker { color: var(--faint) }
+.dc2-st { margin-left: auto; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 99px; white-space: nowrap; background: var(--accent-soft); color: var(--accent) }
+.dc2-st.late { background: var(--late-soft); color: var(--late) }
+.dc2-st.fin { background: var(--bg); color: var(--muted) }
+.dc2-kv { display: grid; grid-template-columns: 72px 1fr; gap: 4px 10px; font-size: 13px; margin: 8px 0 6px }
+.dc2-kv dt { color: var(--muted) }
+.dc2-kv dd { margin: 0; color: var(--text); overflow-wrap: anywhere }
+.dc2-bar { display: inline-block; width: 90px; height: 6px; border-radius: 9px; background: var(--rail); vertical-align: middle; margin-right: 6px; overflow: hidden }
+.dc2-bar i { display: block; height: 100%; background: var(--accent); border-radius: 9px }
+.dc2-bar.late i { background: var(--late) }
+.dc2-bar.fin i { background: var(--faint) }
+.dc2-sub { font-size: 12px; color: var(--muted); margin: 4px 0 4px }
+.dc2-l { margin: 0; padding: 7px 12px; background: var(--bg); border-radius: 8px; font-size: 13px; line-height: 1.8; list-style: none }
+.dc2-l.link-l { padding-left: 26px; list-style: disc }
+.dc2-l .link { text-align: left }
+.dc2-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted) }
+.dc2-f .tg-go { margin-left: auto; white-space: nowrap }
