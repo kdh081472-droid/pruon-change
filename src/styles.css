@@ -1342,3 +1342,15 @@ html, body { max-width: 100%; overflow-x: hidden }
 .dc2-l .link { text-align: left }
 .dc2-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted) }
 .dc2-f .tg-go { margin-left: auto; white-space: nowrap }
+/* 왼쪽 메뉴 조직도: 들여쓰기 줄이고 한 줄로 (스크롤바가 생겨도 안 어긋나게) */
+.sd-orgbox { scrollbar-gutter: stable; scrollbar-width: thin }
+.sd-orgbox::-webkit-scrollbar { width: 6px }
+.sd-orgbox::-webkit-scrollbar-thumb { background: var(--line); border-radius: 9px }
+.sd-orgbox .org-tree { margin: 2px 0 8px; padding: 8px 4px 4px 6px }
+.sd-orgbox .org-d { margin-left: 0; padding-left: 4px }
+.sd-orgbox .org-dh { gap: 4px; padding: 6px 2px; white-space: nowrap; min-width: 0 }
+.sd-orgbox .org-dh b { overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.sd-orgbox .org-dh .cnt { flex: none }
+.sd-orgbox .org-dh .ro-tag { flex: none; white-space: nowrap; margin-left: auto; font-size: 10px; padding: 1px 5px }
+.sd-orgbox .org-d ul { padding-left: 6px }
+.sd-orgbox .org-u { column-gap: 6px; padding: 4px 2px }
