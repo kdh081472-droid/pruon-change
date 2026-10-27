@@ -123,7 +123,7 @@ export default function GroupView({ gid }) {
         <div className={'hist-mini gv-log' + (logOpen ? ' all' : '')}>
           <b>묶음 이력 {g.logs.length}</b>
           {logOpen
-            ? <ol>{g.logs.slice().reverse().map(l => <li key={l.id}><b>{l.action}</b> · {String(l.detail || '').split('\n').join(' / ')}{l.memo ? ' · ' + l.memo : ''} — <Person id={l.user_id} />, {stamp(l.created_at)}</li>)}</ol>
+            ? <ol>{g.logs.slice().reverse().map(l => <li key={l.id}><b>{l.action}</b> · {String(l.detail || '').split('\n').join(' / ')}{l.memo ? <span className="gl-memo"> · 사유: {l.memo}</span> : ''} — <Person id={l.user_id} />, {stamp(l.created_at)}</li>)}</ol>
             : <span className="hm-last">최근: <b>{g.logs[g.logs.length - 1].action}</b> · {snip(String(g.logs[g.logs.length - 1].detail || '').split('\n').join(' / '), 60)} — <Person id={g.logs[g.logs.length - 1].user_id} />, {stamp(g.logs[g.logs.length - 1].created_at)}</span>}
           <button type="button" onClick={() => setLogOpen(v => !v)}>{logOpen ? '접기 ▴' : '전체 보기 ▾'}</button>
         </div>

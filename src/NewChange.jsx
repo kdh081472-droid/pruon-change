@@ -36,7 +36,7 @@ export default function NewChange({ nf, setNf, onDone }) {
   const set = patch => setNf({ ...nf, ...patch })
   const tpls = db.templates.filter(t => t.active)
 
-  // 할 일 한 줄: { k, dept, title, on, tpl(기본 할 일 id 또는 null=직접 추가), orig(기본 할 일 원래 문구) }
+  // 할 일 한 줄: { k, dept, title, on, tpl(기본 할 일 id 또는 null), orig(고치기 전 문구), plain(불러온 목록의 할 일 = 표시 없음), hidden(목록에 없어 숨긴 기본 할 일) }
   const fromTpl = (t, on = true, title) => ({ k: 't' + t.id, dept: t.department, title: title ?? t.title, on, tpl: t.id, orig: t.title })
   let seq = 0
   const newK = () => 'x' + Date.now().toString(36) + (seq++)
@@ -62,7 +62,7 @@ export default function NewChange({ nf, setNf, onDone }) {
   // 체크 켜기·끄기: 켜면 그 부서 체크된 줄의 맨 끝으로
   const toggle = (x, on) => {
     let l = list.filter(y => y.k !== x.k)
-    const nx = { ...x, on }
+    const nx = { ...x, on, hidden: false }
     if (on) {
       const last = l.map((y, i) => (y.dept === x.dept && y.on ? i : -1)).filter(i => i >= 0).pop()
       const at = last !== undefined ? last + 1 : l.findIndex(y => y.dept === x.dept)
@@ -96,12 +96,14 @@ export default function NewChange({ nf, setNf, onDone }) {
   function loadPreset() {
     const P = curP
     const used = new Set(), out = []
+    // 목록의 할 일은 모두 '보통 할 일'로 (추가·수정·해제 흔적 없이), 목록에 없는 기본 할 일은 숨김 → '기본 할 일 다시 넣기'로 꺼냄
     P.items.filter(i => ORDER.includes(i.department)).forEach(i => {     // 지금은 없는 부서의 할 일은 빼고
       let t = i.tpl && tpls.find(x => x.id === i.tpl && x.department === i.department && !used.has(x.id))
       if (!t) t = tpls.find(x => x.department === i.department && x.title === i.title && !used.has(x.id))
-      if (t) { used.add(t.id); out.push(fromTpl(t, true, i.title)) } else out.push({ k: newK(), dept: i.department, title: i.title, on: true, tpl: null })
+      if (t) used.add(t.id)
+      out.push({ k: t ? 't' + t.id : newK(), dept: i.department, title: i.title, on: true, tpl: t ? t.id : null, orig: i.title, plain: true })
     })
-    tpls.filter(t => !used.has(t.id)).forEach(t => out.push(fromTpl(t, false)))
+    tpls.filter(t => !used.has(t.id)).forEach(t => out.push({ ...fromTpl(t, false), hidden: !P.fixed }))
     setEdit(null)
     setNf({ ...nf, list: out, picks: undefined, extras: undefined, presetUsed: P.id, presetMode: null, presetErr: '' })
     toast(`"${P.name.length > 24 ? P.name.slice(0, 24) + '…' : P.name}" 목록을 불러왔습니다`)
@@ -311,7 +313,8 @@ export default function NewChange({ nf, setNf, onDone }) {
         </div>
 
         {ORDER.map(d => {
-          const ons = onRows(d), offs = list.filter(x => x.dept === d && !x.on)
+          const ons = onRows(d), offs = list.filter(x => x.dept === d && !x.on && !x.hidden)
+          const hid = list.filter(x => x.dept === d && x.hidden)
           const n = ons.length
           const canMove = n > 1
           return (
@@ -331,7 +334,7 @@ export default function NewChange({ nf, setNf, onDone }) {
                     onDragEnd={() => setDrag(null)}>
                     {wide && <span className={'grip' + (dragOk ? '' : ' no')} aria-hidden="true">⋮⋮</span>}
                     <span className="tno">{on ? idx + 1 : '–'}</span>
-                    {x.tpl
+                    {x.tpl || x.plain
                       ? <input type="checkbox" id={'pk' + x.k} checked={on} aria-label={x.title + ' 배정'} onChange={e => toggle(x, e.target.checked)} />
                       : <span className="new">추가</span>}
                     {editing ? (
@@ -341,7 +344,7 @@ export default function NewChange({ nf, setNf, onDone }) {
                         <span className="nr-eb"><button type="button" className="btn sm ghost" onClick={() => setEdit(null)}>취소</button><button type="button" className="btn sm" onClick={saveEdit}>저장</button></span>
                       </span>
                     ) : (
-                      <label htmlFor={x.tpl ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.tpl && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}</label>
+                      <label htmlFor={x.tpl || x.plain ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.orig && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}</label>
                     )}
                     {!editing && (
                       <span className="nr-act">
@@ -350,7 +353,7 @@ export default function NewChange({ nf, setNf, onDone }) {
                           <button type="button" className="nr-b" aria-label="아래로" disabled={idx === n - 1} onClick={() => moveRow(d, idx, idx + 1)}>▼</button>
                         </>}
                         <button type="button" className="nr-b" aria-label={'내용 고치기: ' + x.title} title="내용 고치기" onClick={() => setEdit({ k: x.k, text: x.title })}>✎</button>
-                        {!x.tpl && <button type="button" className="nr-b" aria-label="추가한 할 일 삭제" onClick={() => setList(list.filter(y => y.k !== x.k))}>✕</button>}
+                        {!x.tpl && !x.plain && <button type="button" className="nr-b" aria-label="추가한 할 일 삭제" onClick={() => setList(list.filter(y => y.k !== x.k))}>✕</button>}
                       </span>
                     )}
                   </div>
@@ -367,7 +370,15 @@ export default function NewChange({ nf, setNf, onDone }) {
                   <button type="button" className="btn sm ghost" onClick={() => set({ addDept: null })}>취소</button>
                 </div>
               ) : (
-                <button type="button" className="link nf-plus" onClick={() => { setAddTitle(''); set({ addDept: d }) }}>+ {d} 할 일 추가</button>
+                <div className="nf-plusrow">
+                  <button type="button" className="link nf-plus" onClick={() => { setAddTitle(''); set({ addDept: d }) }}>+ {d} 할 일 추가</button>
+                  {hid.length > 0 && (
+                    <details className="nf-hid">
+                      <summary>기본 할 일 다시 넣기 ({hid.length})</summary>
+                      <div className="nf-hid-list">{hid.map(x => <button type="button" key={x.k} onClick={() => toggle(x, true)}>+ {x.title}</button>)}</div>
+                    </details>
+                  )}
+                </div>
               )}
             </section>
           )

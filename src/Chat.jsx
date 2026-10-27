@@ -33,7 +33,8 @@ export default function Chat({ cid, onClose, docked }) {
     if (!lastId) return
     if ((db.reads[uid + '|' + cid] || 0) >= lastId) return
     markReadLocal(cid, lastId)
-    supabase.rpc('mark_read', { p_change: cid, p_last: lastId })
+    // .then()을 붙여야 실제로 서버에 보내짐 (안 붙이면 화면에서만 읽음 처리되고 다시 켜면 안 읽음으로 돌아감)
+    supabase.rpc('mark_read', { p_change: cid, p_last: lastId }).then(() => {}, () => {})
   }, [lastId, cid, uid, db.reads, markReadLocal])
 
   // 새 글이 오면 맨 아래로

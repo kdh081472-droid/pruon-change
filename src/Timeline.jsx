@@ -294,7 +294,7 @@ export function ProductCard({ c, forceOpen }) {
 
 /* ---------- 달력: 이번 달 + 다음 달, 전환일만 ---------- */
 export function Calendar({ list, searching, title }) {
-  const { ui, setUi, overdue, tOf, goChange } = useApp()
+  const { ui, setUi, overdue, tOf, goChange, goGroup } = useApp()
   const m0 = parse(ui.calMonth)
   const months = [m0, new Date(m0.getFullYear(), m0.getMonth() + 1, 1)]
   const byDate = {}
@@ -306,6 +306,18 @@ export function Calendar({ list, searching, title }) {
   const selDate = sel ? parse(sel) : null
   const evCls = c => (overdue(c) ? 'late' : c.status === '종결' ? 'fin' : 'live')
   const label = c => { const p = c.title.split('_'); return p.length >= 3 ? p[1] : c.short }
+  // 그날 칸에 보일 것: 단건 변경은 그대로, 묶음은 묶음 제목 한 줄 + 그날 전환되는 품목 수
+  const entriesOf = cs => {
+    const out = [], gs = {}
+    cs.forEach(c => {
+      if (!c.group) return out.push({ c })
+      if (!gs[c.group.id]) { gs[c.group.id] = { g: c.group, kids: [] }; out.push(gs[c.group.id]) }
+      gs[c.group.id].kids.push(c)
+    })
+    return out
+  }
+  const gCls = kids => (kids.some(k => overdue(k)) ? 'late' : kids.every(k => k.status === '종결') ? 'fin' : 'live')
+  const gLabel = g => (g.title.length > 16 ? g.title.slice(0, 16) + '…' : g.title)
 
   const grid = m => {
     const y = m.getFullYear(), mo = m.getMonth()
@@ -319,7 +331,9 @@ export function Calendar({ list, searching, title }) {
       cells.push(cs.length ? (
         <button type="button" key={key} className={cls} onClick={() => setUi(u => ({ ...u, calSel: u.calSel === key ? null : key }))}>
           <span className={'dn' + (sun ? ' sun' : '')}>{d}</span>
-          {cs.map(c => <span key={c.id} className={'ev2 ' + evCls(c)}>{label(c)}</span>)}
+          {entriesOf(cs).map(e => (e.g
+            ? <span key={'g' + e.g.id} className={'ev2 g-ev ' + gCls(e.kids)} title={e.g.title + ' · ' + e.kids.length + '개 품목'}><b className="g-n">{e.kids.length}품목</b> {gLabel(e.g)}</span>
+            : <span key={e.c.id} className={'ev2 ' + evCls(e.c)}>{label(e.c)}</span>))}
         </button>
       ) : (
         <span key={key} className={cls}><span className={'dn' + (sun ? ' sun' : '')}>{d}</span></span>
@@ -356,7 +370,20 @@ export function Calendar({ list, searching, title }) {
           <div className="m-h">
             <span className="t">{selDate.getMonth() + 1}월 {selDate.getDate()}일 ({['일', '월', '화', '수', '목', '금', '토'][selDate.getDay()]}) 전환</span>
           </div>
-          {byDate[sel].map(c => {
+          {entriesOf(byDate[sel]).map(e => {
+            if (e.g) {
+              const openN = e.kids.filter(k => k.status === '진행중').length
+              const rest = e.g.kids.length - e.kids.length
+              return (
+                <div className="tg-box g-box" key={'g' + e.g.id}>
+                  <div className="tg-h"><span className="g-chip">묶음</span> <b>{e.g.title}</b></div>
+                  <p className="g-day">이날 전환 <b>{e.kids.length}개 품목</b> · 진행 {openN} · 종결 {e.kids.length - openN}</p>
+                  <ul className="g-kids">{e.kids.map(k => <li key={k.id}><button type="button" className="link" onClick={() => goChange(k.id)}>{k.title}</button></li>)}</ul>
+                  <div className="g-dayf">{rest > 0 && <span>나머지 {rest}개 품목은 다른 날 전환</span>}<button type="button" className="link tg-go" onClick={() => goGroup(e.g.id)}>묶음 열기 ›</button></div>
+                </div>
+              )
+            }
+            const c = e.c
             const cts = tOf(c.id), dn = cts.filter(t => t.status !== '대기').length
             return (
               <div className="tg-box" key={c.id}>

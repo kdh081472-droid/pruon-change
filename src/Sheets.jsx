@@ -569,12 +569,14 @@ function GroupAddSheet({ gid, close }) {
   const [name, setName] = useState('')
   const open = g.kids.filter(k => k.status === '진행중').map(k => k.target_date).sort()
   const [date, setDate] = useState(open[0] || (last ? last.target_date : ''))
+  const [reason, setReason] = useState('')
   const { busy, err, setErr, go } = useBusy()
   const ref = useFocus()
   const save = () => go(async () => {
     if (!name.trim()) return { error: '품목 이름을 입력해주세요.' }
     if (!date) return { error: '전환일을 골라주세요.' }
-    const r = await run('group_add_item', { p_group: gid, p_type: type, p_name: name.trim(), p_target: date }, `"${name.trim()}" 품목을 추가했습니다`)
+    if (!reason.trim()) return { error: '추가 사유를 입력해주세요.' }
+    const r = await run('group_add_item', { p_group: gid, p_type: type, p_name: name.trim(), p_target: date, p_reason: reason.trim() }, `"${name.trim()}" 품목을 추가했습니다`)
     if (!r.error) close()
     return r
   })
@@ -589,7 +591,9 @@ function GroupAddSheet({ gid, close }) {
         <input id="ga-n" ref={ref} value={name} onChange={e => { setName(e.target.value); setErr('') }} placeholder="예: 풀무원 김치손만두속" />
         <label htmlFor="ga-d">전환일</label>
         <input type="date" id="ga-d" value={date} onChange={e => { setDate(e.target.value); setErr('') }} />
-        <p className="note">묶음에 등록된 할 일 세트({(g.tasks || []).length}건)가 새 품목에도 똑같이 배정되고, 관련 부서의 '내 할 일'에 바로 나타납니다.</p>
+        <label htmlFor="ga-r">추가 사유 (필수)</label>
+        <input id="ga-r" value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 고객사 CR 대상 품목 추가 통보 (10/27 메일)" />
+        <p className="note">사유는 묶음 이력과 새 품목의 변경 이력에 남습니다. 묶음에 등록된 할 일 세트({(g.tasks || []).length}건)가 새 품목에도 똑같이 배정되고, 관련 부서의 '내 할 일'에 바로 나타납니다.</p>
         {err && <p className="err">{err}</p>}
       </div>
       <div className="s-acts">
@@ -604,10 +608,13 @@ function GroupAddSheet({ gid, close }) {
 function GroupRemoveSheet({ cid, close }) {
   const { C, run } = useApp()
   const c = C(cid)
-  const { busy, err, go } = useBusy()
+  const [reason, setReason] = useState('')
+  const { busy, err, setErr, go } = useBusy()
+  const ref = useFocus()
   if (!c) return null
   const save = () => go(async () => {
-    const r = await run('group_remove_item', { p_change: cid }, `"${c.title}" 품목을 묶음에서 뺐습니다`)
+    if (!reason.trim()) return { error: '빼는 사유를 입력해주세요.' }
+    const r = await run('group_remove_item', { p_change: cid, p_reason: reason.trim() }, `"${c.title}" 품목을 묶음에서 뺐습니다`)
     if (!r.error) close()
     return r
   })
@@ -616,7 +623,11 @@ function GroupRemoveSheet({ cid, close }) {
       <Top tag={c.group ? '묶음 · ' + c.group.title : '품목'} close={close} />
       <div className="s-title">품목 빼기</div>
       <div className="warnbox">"<b>{c.title}</b>" 품목을 묶음에서 뺍니다. 이 품목의 할 일 {c.tasks.length}건과 대화가 함께 지워지고, 묶음 이력에 '품목 빼기'로 남습니다.</div>
-      {err && <p className="err" style={{ padding: '0 20px' }}>{err}</p>}
+      <div className="form">
+        <label htmlFor="gr-r">빼는 사유 (필수)</label>
+        <textarea id="gr-r" ref={ref} rows={2} value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 고객사가 이번 CR 대상에서 제외" />
+        {err && <p className="err">{err}</p>}
+      </div>
       <div className="s-acts">
         <button type="button" className="btn warn" disabled={busy} onClick={save}>{busy ? '처리 중…' : '빼기'}</button>
         <button type="button" className="btn ghost" onClick={close}>취소</button>
