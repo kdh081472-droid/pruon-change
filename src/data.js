@@ -52,8 +52,11 @@ export function buildDb(raw) {
   changes.forEach(c => { if (c.group_id && groupMap[c.group_id]) { c.group = groupMap[c.group_id]; groupMap[c.group_id].kids.push(c) } })
   ;(raw.groupLogs || []).forEach(l => { if (groupMap[l.group_id]) groupMap[l.group_id].logs.push(l) })
   groups.forEach(g => { g.kids.sort((a, b) => (a.group_no ?? 1e9) - (b.group_no ?? 1e9)); g.kids.forEach((k, i) => { k.kidNo = i + 1 }) })
+  // 대화방: 변경(품목) 방 = change_id, 묶음 방 = 'g:' + group_id
+  raw.messages.forEach(m => { m.room = m.change_id || 'g:' + m.group_id })
   const reads = {}
   raw.reads.forEach(r => { reads[r.user_id + '|' + r.change_id] = r.last_read_id })
+  ;(raw.greads || []).forEach(r => { reads[r.user_id + '|g:' + r.group_id] = r.last_read_id })
   return {
     people,
     profiles: active,                  // 재직자만 (조직도·@부르기·안 읽은 사람 수)
@@ -75,7 +78,7 @@ export function buildDb(raw) {
 export async function loadRaw() {
   // 묶음 표는 upgrade9 이후에 생김 → 없으면 빈 목록
   const soft = p => p.catch(() => [])
-  const [profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs] = await Promise.all([
+  const [profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs, greads] = await Promise.all([
     fetchAll('profiles', ['id'], null, 'id,name,email,department,created_at,left_at'),
     fetchAll('change_requests', ['created_at', 'id']),
     fetchAll('change_items', ['id']),
@@ -89,8 +92,9 @@ export async function loadRaw() {
     fetchAll('departments', ['sort_order', 'name']),
     soft(fetchAll('change_groups', ['created_at', 'id'])),
     soft(fetchAll('group_logs', ['id'])),
+    soft(fetchAll('group_reads', ['user_id', 'group_id'])),
   ])
-  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs }
+  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs, greads }
 }
 
 // 앱 전체 데이터: 처음에 한 번 모두 불러오고, 누가 무엇을 바꾸면 실시간으로 다시 불러옴
@@ -127,7 +131,7 @@ export function useAppData(userId) {
     alive.current = true
     reload()
     const ch = supabase.channel('pruon-live')
-    ;['messages', 'message_reads', 'tasks', 'change_requests', 'assign_presets', 'departments', 'templates', 'change_groups', 'group_logs'].forEach(table => {
+    ;['messages', 'message_reads', 'tasks', 'change_requests', 'assign_presets', 'departments', 'templates', 'change_groups', 'group_logs', 'group_reads'].forEach(table => {
       ch.on('postgres_changes', { event: '*', schema: 'public', table }, soon)
     })
     ch.subscribe()

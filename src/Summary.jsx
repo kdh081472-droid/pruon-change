@@ -82,7 +82,7 @@ export default function Summary() {
       const p = db.people[g.created_by]
       const dept = (p && p.department) || g.created_by_dept || ''
       const di = ORDER.indexOf(dept)
-      const us = g.kids.map(k => unread(k.id))
+      const us = [unread('g:' + g.id), ...g.kids.map(k => unread(k.id))]
       m[g.id] = {
         id: 'g:' + g.id, gid: g.id, isGroup: true, n: g.kids.length, title: g.title, status: s.status, stats: s,
         done: s.done, total: s.total, pct: s.pct, target: s.next || s.from, range: rangeTxt(s.from, s.to),

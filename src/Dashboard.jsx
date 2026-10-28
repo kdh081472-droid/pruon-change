@@ -9,20 +9,21 @@ import Admin from './Admin.jsx'
 import Summary from './Summary.jsx'
 import HelpBot from './HelpBot.jsx'
 import Sidebar, { DockEmpty } from './Sidebar.jsx'
-import ChatList from './ChatList.jsx'
 import Sheet from './Sheets.jsx'
 import NewChange, { emptyForm } from './NewChange.jsx'
 import Chat from './Chat.jsx'
 import Report from './Report.jsx'
 import Settings from './Settings.jsx'
 import GroupView, { GroupDock } from './GroupView.jsx'
+import ChatTab, { RoomList } from './Rooms.jsx'
 
 export default function Dashboard({ session }) {
   const uid = session.user.id
   const { db, err, reload, markReadLocal } = useAppData(uid)
   const [tab, setTab] = useState(null)
   const [sheet, setSheet] = useState(null)       // {kind:'task', tid} | {kind:'target'|'stop'|'resume'|'assign', cid}
-  const [chatCid, setChatCid] = useState(null)
+  const [chatCid, setChatCid] = useState(null)   // 휴대폰 대화 창: 방(room)
+  const [chatJump, setChatJump] = useState(null) // 휴대폰 대화 검색에서 고른 글 { q, mid, t }
   const [reportCid, setReportCid] = useState(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
@@ -64,7 +65,6 @@ export default function Dashboard({ session }) {
   useEffect(() => {
     if (!me || tab === null) return
     if (viewer && (tab === 'mine' || tab === 'new' || tab === 'late')) setTab(wide ? 'summary' : 'timeline')
-    if (wide && tab === 'chat') setTab(viewer ? 'summary' : 'mine')
     if (!viewer && tab === 'late') setTab('mine')
     if (viewer) setUi(u => (u.calMine ? { ...u, calMine: false } : u))
   }, [viewer, me, tab, wide, sel])
@@ -91,6 +91,15 @@ export default function Dashboard({ session }) {
     }
   }, [wide])
 
+  // 브라우저 탭 제목에 안 읽은 대화 수: (3) 푸르온 변경점 관리
+  const baseTitle = useRef(document.title || '푸르온 변경점 관리')
+  useEffect(() => {
+    if (!db || !uid) return
+    const rd = room => db.reads[uid + '|' + room] || 0
+    const n = db.messages.filter(m => m.user_id !== uid && !m.deleted && m.id > rd(m.room)).length
+    document.title = (n > 0 ? '(' + (n > 999 ? '999+' : n) + ') ' : '') + baseTitle.current
+  }, [db, uid])
+
   const toast = useCallback(m => {
     setToastMsg(m)
     clearTimeout(toastT.current)
@@ -104,10 +113,11 @@ export default function Dashboard({ session }) {
     // 전환일이 지났는데 아직 처리 안 된 할 일 (마감일 기능은 없음)
     const isLate = t => t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중' && dd(C(t.change_id).target_date) < 0
     const overdue = c => !!c && c.status === '진행중' && dd(c.target_date) < 0 && c.tasks.some(t => t.status === '대기')
-    const myRead = cid => db.reads[uid + '|' + cid] || 0
-    const unread = cid => db.messages.filter(m => m.change_id === cid && m.id > myRead(cid) && m.user_id !== uid && !m.deleted)
+    // 방(room): 변경 id 또는 'g:'+묶음 id
+    const myRead = room => db.reads[uid + '|' + room] || 0
+    const unread = room => db.messages.filter(m => m.room === room && m.id > myRead(room) && m.user_id !== uid && !m.deleted)
     const mentionsMe = m => (m.mention_users || []).includes(uid) || (m.mention_depts || []).includes(me.department)
-    const unreadCnt = m => db.profiles.filter(p => p.id !== m.user_id && (db.reads[p.id + '|' + m.change_id] || 0) < m.id).length
+    const unreadCnt = m => db.profiles.filter(p => p.id !== m.user_id && (db.reads[p.id + '|' + m.room] || 0) < m.id).length
     // 서버 함수 실행 → 성공하면 다시 불러오기
     const run = async (fn, args, okMsg) => {
       const { data, error } = await supabase.rpc(fn, args)
@@ -131,7 +141,14 @@ export default function Dashboard({ session }) {
       sheet, setSheet,
       openTask: tid => setSheet({ kind: 'task', tid }),
       openSheet: (kind, cid) => setSheet({ kind, cid }),
-      openChat: cid => { if (wide) return selectProduct(cid); setSheet(null); setChatCid(cid) },
+      // 대화 열기: PC는 제품 화면(묶음 방은 묶음 화면), 휴대폰은 대화 창
+      openChat: (room, jump) => {
+        const isG = String(room).startsWith('g:')
+        if (wide) { if (isG) { setSelGroup(room.slice(2)); setTab('group'); setSheet(null); return } return selectProduct(room) }
+        setSheet(null); setChatJump(jump || null); setChatCid(room)
+      },
+      // PC 대화 탭에서 그 방 열기
+      goChat: room => { setUi(u => ({ ...u, chatRoom: room })); setTab('chat'); setSheet(null) },
       selectProduct,
       openReport: cid => setReportCid(cid),
       goChange, markReadLocal,
@@ -155,11 +172,11 @@ export default function Dashboard({ session }) {
   if (adminMode && isAdmin) return <Ctx.Provider value={app}><Admin onExit={() => setAdminMode(false)} />{toastMsg && <div className="toast" role="status">{toastMsg}</div>}</Ctx.Provider>
 
   const myOpenN = db.tasks.filter(t => t.department === me.department && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length
-  const unreadAll = db.changes.reduce((n, c) => n + app.unread(c.id).length, 0)
+  const unreadAll = db.changes.reduce((n, c) => n + app.unread(c.id).length, 0) + db.groups.reduce((n, g) => n + app.unread('g:' + g.id).length, 0)
   const tabs = viewer
     ? [['timeline', '전체 일정'], ['chat', '대화']]
     : [['mine', '내 할 일'], ['timeline', '전체 일정'], ['chat', '대화'], ['new', '변경 등록']]
-  const title = { chat: '대화', mine: '내 할 일', timeline: wide ? '달력' : '전체 일정', summary: '요약', new: '변경 등록', settings: '내 정보', product: '', group: wide ? '' : '전체 일정' }[tab]
+  const title = { chat: wide ? '' : '대화', mine: '내 할 일', timeline: wide ? '달력' : '전체 일정', summary: '요약', new: '변경 등록', settings: '내 정보', product: '', group: wide ? '' : '전체 일정' }[tab]
 
   const content = (
     <>
@@ -172,14 +189,16 @@ export default function Dashboard({ session }) {
       {tab === 'new' && !viewer && (
         <NewChange nf={nf || emptyForm(db)} setNf={setNf} onDone={(id, isGroup) => { setNf(null); isGroup ? app.goGroup(id) : app.goChange(id) }} />
       )}
-      {tab === 'chat' && !wide && <ChatList />}
+      {tab === 'chat' && (wide ? <ChatTab /> : <RoomList sel={null} onPick={room => app.openChat(room)} onSearchPick={(room, mid, q) => app.openChat(room, { q, mid, t: Date.now() })} />)}
       {tab === 'settings' && <Settings />}
     </>
   )
   const overlays = (
     <>
       {sheet && <Sheet key={sheet.kind + (sheet.tid || sheet.cid || sheet.gid || (sheet.tids || []).join(''))} />}
-      {!wide && chatCid && db.changeMap[chatCid] && <Chat cid={chatCid} onClose={() => setChatCid(null)} />}
+      {!wide && chatCid && (String(chatCid).startsWith('g:') ? db.groupMap[chatCid.slice(2)] : db.changeMap[chatCid]) && (
+        <Chat cid={chatCid} onClose={() => { setChatCid(null); setChatJump(null) }} searchQ={chatJump && chatJump.q} jumpTo={chatJump && chatJump.mid ? chatJump : null} onSearchClose={() => setChatJump(null)} />
+      )}
       {reportCid && db.changeMap[reportCid] && <Report cid={reportCid} onClose={() => setReportCid(null)} />}
       {helpOpen && <HelpBot full={!wide} onClose={() => setHelpOpen(false)} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
@@ -188,15 +207,15 @@ export default function Dashboard({ session }) {
   )
 
   // PC 넓은 화면: 왼쪽 메뉴 · 가운데 작업 · 오른쪽 대화 (달력·요약·등록·내 정보는 대화 칸 없이 넓게)
-  const noDock = ['timeline', 'summary', 'new', 'settings'].includes(tab)
+  const noDock = ['timeline', 'summary', 'new', 'settings', 'chat'].includes(tab)
   if (wide) {
     return (
       <Ctx.Provider value={app}>
         <div className={'wide-wrap' + (noDock ? ' no-dock' : '')}>
-          <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
+          <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} chatN={unreadAll} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
           <div className="wide-main">
-            <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '')}>
-              {tab !== 'product' && tab !== 'timeline' && tab !== 'group' && <h1 className="page-t wide-t">{title}</h1>}
+            <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '') + (tab === 'chat' ? ' full chat-in' : '')}>
+              {tab !== 'product' && tab !== 'timeline' && tab !== 'group' && tab !== 'chat' && <h1 className="page-t wide-t">{title}</h1>}
               {content}
             </div>
           </div>

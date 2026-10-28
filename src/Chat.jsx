@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { supabase, ORDER, SHORT, SIGNUP_DEPTS } from './supabase.js'
-import { useApp, Person, MsgText, personName } from './ctx.jsx'
+import { useApp, Person, MsgText, personName, Mark } from './ctx.jsx'
 import { md, norm, parse, snip, stamp, errText } from './util.js'
 
 function tokenAt(el) {
@@ -9,13 +9,24 @@ function tokenAt(el) {
   return m ? { ch: m[2], q: m[3], start: b.length - m[3].length - 1, end: el.selectionStart } : null
 }
 
-export default function Chat({ cid, onClose, docked }) {
-  const { db, me, uid, C, isLate, unreadCnt, mentionsMe, reload, toast, markReadLocal, openTask } = useApp()
-  const c = C(cid)
-  const closed = c.status === '종결'
-  const list = db.messages.filter(m => m.change_id === cid).sort((a, b) => a.id - b.id)
+const DOW = ['일', '월', '화', '수', '목', '금', '토']
+const dayKey = ts => { const d = new Date(ts); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() }
+const dayTxt = ts => { const d = new Date(ts); return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${DOW[d.getDay()]}요일` }
+
+// 대화방: cid = 변경(품목) id 또는 'g:' + 묶음 id
+// docked = PC 오른쪽 칸 · tab = PC 대화 탭(넓게) · 그 외 = 휴대폰 전체 화면
+export default function Chat({ cid, onClose, docked, tab, searchQ, jumpTo, onSearchClose }) {
+  const { db, me, uid, C, isLate, unreadCnt, mentionsMe, reload, toast, markReadLocal, openTask, goChange, goGroup } = useApp()
+  const isG = String(cid).startsWith('g:')
+  const g = isG ? db.groupMap[cid.slice(2)] : null
+  const c = isG ? null : C(cid)
+  const gOf = c ? c.group : g
+  const closed = isG ? !g.kids.some(k => k.status === '진행중') : c.status === '종결'
+  const title = isG ? g.title : c.title
+  const list = db.messages.filter(m => m.room === cid).sort((a, b) => a.id - b.id)
   const [draft, setDraft] = useState('')
   const [tid, setTid] = useState(null)
+  const [link, setLink] = useState(null)        // 묶음 대화에서 / 로 연결한 품목
   const [replyTo, setReplyTo] = useState(null)
   const [editId, setEditId] = useState(null)
   const [delId, setDelId] = useState(null)
@@ -34,21 +45,39 @@ export default function Chat({ cid, onClose, docked }) {
     if ((db.reads[uid + '|' + cid] || 0) >= lastId) return
     markReadLocal(cid, lastId)
     // .then()을 붙여야 실제로 서버에 보내짐 (안 붙이면 화면에서만 읽음 처리되고 다시 켜면 안 읽음으로 돌아감)
-    supabase.rpc('mark_read', { p_change: cid, p_last: lastId }).then(() => {}, () => {})
+    if (isG) supabase.rpc('mark_group_read', { p_group: g.id, p_last: lastId }).then(() => {}, () => {})
+    else supabase.rpc('mark_read', { p_change: cid, p_last: lastId }).then(() => {}, () => {})
   }, [lastId, cid, uid, db.reads, markReadLocal])
 
   // 새 글이 오면 맨 아래로
   useLayoutEffect(() => {
     const L = listRef.current
     if (L) L.scrollTop = L.scrollHeight
-  }, [lastId])
+  }, [lastId, cid])
+
+  // 검색: 이 방 안에서 검색어가 들어간 글 (▲▼로 넘겨보기)
+  const q = String(searchQ || '').trim()
+  const hits = q ? list.filter(m => !m.deleted && norm(m.body).includes(norm(q))) : []
+  const [hitI, setHitI] = useState(0)
+  useEffect(() => {
+    if (!jumpTo) return
+    const i = hits.findIndex(m => m.id === jumpTo.mid)
+    if (i >= 0) setHitI(i)
+    const t = setTimeout(() => jump(jumpTo.mid), 60)
+    return () => clearTimeout(t)
+  }, [jumpTo && jumpTo.t, cid])
+  const goHit = d => {
+    if (!hits.length) return
+    const i = (hitI + d + hits.length) % hits.length
+    setHitI(i); jump(hits[i].id)
+  }
 
   useEffect(() => {
     const on = e => {
       if (e.key !== 'Escape') return
       if (ctx) return setCtx(null)
       if (pop) return
-      if (!docked) onClose()
+      if (!docked && !tab && onClose) onClose()
     }
     document.addEventListener('keydown', on)
     return () => document.removeEventListener('keydown', on)
@@ -64,7 +93,14 @@ export default function Chat({ cid, onClose, docked }) {
     if (!tk) return setPop(null)
     const q2 = norm(tk.q)
     let items
-    if (tk.ch === '/') {
+    if (tk.ch === '/' && isG) {
+      items = g.kids
+        .filter(k => !q2 || norm(k.title).includes(q2))
+        .map(k => ({
+          kind: 'item', v: k.id,
+          node: <><span className="pd-d">품목</span><span className="pd-t">{k.title}</span><span className={'pd-s' + (k.status === '종결' ? '' : '')}>{k.status === '종결' ? (k.close_type === '중단' ? '중단' : '종결') : md(k.target_date)}</span></>,
+        }))
+    } else if (tk.ch === '/') {
       items = [...c.tasks]
         .filter(t => !q2 || norm(t.department + t.title).includes(q2))
         .sort((a, b) => ORDER.indexOf(a.department) - ORDER.indexOf(b.department) || String(a.created_at).localeCompare(String(b.created_at)))
@@ -90,7 +126,10 @@ export default function Chat({ cid, onClose, docked }) {
 
   function pickPop(i) {
     const x = pop.items[i], tk = pop.tk, v = draft
-    if (x.kind === 'task') {
+    if (x.kind === 'item') {
+      setLink(x.v)
+      setDraft((v.slice(0, tk.start) + v.slice(tk.end)).replace(/\s{2,}/g, ' '))
+    } else if (x.kind === 'task') {
       setTid(x.v)
       setDraft((v.slice(0, tk.start) + v.slice(tk.end)).replace(/\s{2,}/g, ' '))
     } else if (x.kind === 'dept') {
@@ -117,17 +156,18 @@ export default function Chat({ cid, onClose, docked }) {
 
   async function send() {
     const body = draft.trim()
-    if (!body) return toast(tid ? '할 일에 남길 멘트를 입력해주세요' : '메시지를 입력해주세요')
+    if (!body) return toast(tid ? '할 일에 남길 멘트를 입력해주세요' : link ? '품목에 남길 멘트를 입력해주세요' : '메시지를 입력해주세요')
     if (busy) return
     setBusy(true)
     const mn = mentions(body)
+    const room = isG ? { group_id: g.id, link_change: link } : { change_id: cid, task_id: tid }
     const res = editId
-      ? await supabase.from('messages').update({ body, task_id: tid, ...mn }).eq('id', editId).select('id')
-      : await supabase.from('messages').insert({ change_id: cid, user_id: uid, body, task_id: tid, reply_to: replyTo, ...mn }).select('id')
+      ? await supabase.from('messages').update(isG ? { body, link_change: link, ...mn } : { body, task_id: tid, ...mn }).eq('id', editId).select('id')
+      : await supabase.from('messages').insert({ ...room, user_id: uid, body, reply_to: replyTo, ...mn }).select('id')
     setBusy(false)
     if (res.error) return toast(errText(res.error))
     if (editId) toast('메시지를 수정했습니다')
-    setDraft(''); setTid(null); setReplyTo(null); setEditId(null); setPicked([])
+    setDraft(''); setTid(null); setLink(null); setReplyTo(null); setEditId(null); setPicked([])
     await reload()
     focusEnd()
   }
@@ -176,38 +216,60 @@ export default function Chat({ cid, onClose, docked }) {
     setCtx({ mid: m.id, x: e.clientX, y: e.clientY })
   }
 
-  const attached = tid ? c.tasks.find(t => t.id === tid) : null
+  const attached = tid && c ? c.tasks.find(t => t.id === tid) : null
+  const linked = link ? C(link) : null
   const ro = replyTo ? list.find(m => m.id === replyTo) : null
   const [tip, setTip] = useState(false)
   const ctxMsg = ctx ? list.find(m => m.id === ctx.mid) : null
 
   return (
     <>
-      {!docked && <div className="scrim" onClick={onClose} />}
-      <div className={'chat' + (docked ? ' docked' : '')} role={docked ? 'complementary' : 'dialog'} aria-modal={docked ? undefined : true} aria-label="제품 대화">
+      {!docked && !tab && <div className="scrim" onClick={onClose} />}
+      <div className={'chat' + (docked || tab ? ' docked' : '') + (tab ? ' ch-tab' : '') + (isG ? ' ch-grp' : '')} role={docked || tab ? 'complementary' : 'dialog'} aria-modal={docked || tab ? undefined : true} aria-label={isG ? '묶음 대화' : '제품 대화'}>
         <div className="ch-h">
-          <div>
-            <span className="s-tag">제품 대화 · {list.filter(m => !m.deleted).length}개</span>
-            <b>{c.title}</b>{c.group && <small className="ch-g">묶음 · {c.group.title}</small>}
-            {!closed && tip && <span className="ch-tip">메시지를 누르면 답글·복사 (내 글은 수정·삭제도) · 내 글 옆 '안 읽음' 숫자는 아직 안 읽은 사람 수</span>}
+          <div className="ch-hl">
+            <span className="s-tag">{isG ? '묶음 전체 대화' : gOf ? '품목 대화' : '제품 대화'} · {list.filter(m => !m.deleted).length}개</span>
+            <b>{isG && <span className="g-chip g-in">묶음</span>}{title}{closed && <span className="ch-fin">종결</span>}</b>{!isG && gOf && <small className="ch-g">묶음 · {gOf.title}</small>}
+            {isG && <small className="ch-g">품목 {g.kids.length}개 · 모든 품목 공통 공지·일정</small>}
+            {!closed && tip && <span className="ch-tip">메시지를 누르면 답글·복사 (내 글은 수정·삭제도) · 말풍선 옆 숫자는 그 글을 아직 안 읽은 사람 수{isG ? ' · / 를 누르면 품목 연결' : ''}</span>}
           </div>
+          {tab && (
+            <span className="ch-open">
+              {!isG && <button type="button" className="pill" onClick={() => goChange(cid)}>제품 열기</button>}
+              {gOf && <button type="button" className="pill g-open-b" onClick={() => goGroup(gOf.id)}>묶음 열기</button>}
+            </span>
+          )}
           {!closed && <button type="button" className={'ch-q' + (tip ? ' on' : '')} aria-label="대화 사용법" aria-expanded={tip} onClick={() => setTip(v => !v)}>?</button>}
-          {!docked && <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>}
+          {!docked && !tab && <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>}
         </div>
+        {q && (
+          <div className="ch-sbar">
+            <span>이 방에서 "<b>{q}</b>" {hits.length ? <>{hits.length}개 중 <b>{hitI + 1}</b>번째</> : '없음'}</span>
+            <button type="button" className="pill" disabled={!hits.length} onClick={() => goHit(-1)} aria-label="이전 결과">▲</button>
+            <button type="button" className="pill" disabled={!hits.length} onClick={() => goHit(1)} aria-label="다음 결과">▼</button>
+            {onSearchClose && <button type="button" className="link ch-sx" onClick={onSearchClose}>✕ 검색 닫기</button>}
+          </div>
+        )}
         <div className="ch-list" ref={listRef}>
           {!list.length && <div className="empty">아직 대화가 없습니다. 첫 글을 남겨보세요.</div>}
-          {list.map(m => {
-            if (m.deleted) return <div key={m.id} className="msg-del" data-mid={m.id}>삭제된 메시지입니다 · <Person id={m.user_id} /> · {stamp(m.created_at)}</div>
+          {list.map((m, i) => {
+            const prev = list[i - 1]
+            const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at)
+            const divider = newDay && <div className="ch-day" key={'d' + m.id}><span>{dayTxt(m.created_at)}</span></div>
+            if (m.deleted) return [divider, <div key={m.id} className="msg-del" data-mid={m.id}>삭제된 메시지입니다 · <Person id={m.user_id} /> · {stamp(m.created_at)}</div>]
             const mine = m.user_id === uid
             const p = db.people[m.user_id]
             const hl = !mine && mentionsMe(m)
             const o = m.reply_to ? list.find(x => x.id === m.reply_to) : null
-            const t = m.task_id ? c.tasks.find(x => x.id === m.task_id) : null
-            const uc = mine ? unreadCnt(m) : 0
-            return (
+            const t = m.task_id && c ? c.tasks.find(x => x.id === m.task_id) : null
+            const lk = m.link_change ? C(m.link_change) : null
+            const uc = unreadCnt(m)                 // 이 글을 아직 안 읽은 사람 수 (모든 글)
+            // 같은 사람이 5분 안에 이어 쓴 글은 이름 한 번만
+            const cont = !newDay && prev && !prev.deleted && prev.user_id === m.user_id && new Date(m.created_at) - new Date(prev.created_at) < 5 * 60000
+            return [divider, (
               <div key={m.id} data-mid={m.id}
-                className={'msg' + (mine ? ' mine' : '') + (hl ? ' hl' : '') + (p && p.department === '임원' ? ' ex' : '') + (flash === m.id ? ' flash' : '')}>
-                {!mine && <div className="m-who"><Person id={m.user_id} /></div>}
+                className={'msg' + (mine ? ' mine' : '') + (hl ? ' hl' : '') + (cont ? ' cont' : '') + (p && p.department === '임원' ? ' ex' : '') + (flash === m.id ? ' flash' : '') + (q && hits[hitI] && hits[hitI].id === m.id ? ' hit' : '')}>
+                {!mine && !cont && <div className="m-who"><Person id={m.user_id} /></div>}
                 <div className="b-row">
                   <div className="bub" onClick={e => openMenu(m, e)} onContextMenu={e => openMenu(m, e)}>
                     {o && (
@@ -216,11 +278,12 @@ export default function Chat({ cid, onClose, docked }) {
                         <span className="rq-t">{o.deleted ? '삭제된 메시지입니다' : snip(o.body, 40)}</span>
                       </button>
                     )}
-                    {t && <button type="button" className="ch-task" onClick={() => { if (!docked) onClose(); openTask(t.id) }}><b>/</b> [{t.department}] {t.title}</button>}
-                    <MsgText m={m} />
+                    {t && <button type="button" className="ch-task" onClick={() => { if (!docked && !tab) onClose(); openTask(t.id) }}><b>/</b> [{t.department}] {t.title}</button>}
+                    {lk && <button type="button" className="ch-task ch-item" onClick={() => { if (!docked && !tab) onClose(); goChange(lk.id) }}><b>/</b> {lk.title}</button>}
+                    <MsgText m={m} q={q} />
                   </div>
                   <span className="side">
-                    {uc > 0 && <span className="rc">안 읽음 {uc}</span>}
+                    {uc > 0 && <span className="rc" title={'아직 안 읽은 사람 ' + uc + '명'}>{uc}</span>}
                     {m.edited && <span className="ed">수정됨</span>}
                     <span className="tm">{stamp(m.created_at)}</span>
                   </span>
@@ -229,11 +292,11 @@ export default function Chat({ cid, onClose, docked }) {
                   <div className="m-meta">삭제할까요? <button type="button" className="link warn-t" onClick={() => del(m.id)}>삭제</button> <button type="button" className="link" onClick={() => setDelId(null)}>취소</button></div>
                 )}
               </div>
-            )
+            )]
           })}
         </div>
         {closed ? (
-          <div className="ch-ro">종결된 변경이라 대화는 읽기 전용입니다. 다시 진행되면 대화도 다시 열립니다.</div>
+          <div className="ch-ro">{isG ? '모든 품목이 종결된 묶음이라 대화는 읽기 전용입니다.' : '종결된 변경이라 대화는 읽기 전용입니다. 다시 진행되면 대화도 다시 열립니다.'}</div>
         ) : (
           <div className="ch-c">
             {ro && (
@@ -242,7 +305,13 @@ export default function Chat({ cid, onClose, docked }) {
                 <button type="button" className="x" aria-label="답글 취소" onClick={() => setReplyTo(null)}>✕</button>
               </div>
             )}
-            {editId && <div className="ch-bar">메시지 수정 중 <button type="button" className="link" onClick={() => { setEditId(null); setDraft(''); setTid(null); setPicked([]) }}>취소</button></div>}
+            {editId && <div className="ch-bar">메시지 수정 중 <button type="button" className="link" onClick={() => { setEditId(null); setDraft(''); setTid(null); setLink(null); setPicked([]) }}>취소</button></div>}
+            {linked && (
+              <div className="ch-att">
+                <span><b>/</b> {linked.title}</span>
+                <button type="button" className="x" aria-label="품목 연결 빼기" onClick={() => setLink(null)}>✕</button>
+              </div>
+            )}
             {attached && (
               <div className="ch-att">
                 <span><b>/</b> [{attached.department}] {attached.title}</span>
@@ -251,7 +320,7 @@ export default function Chat({ cid, onClose, docked }) {
             )}
             {pop && (
               <div className="ch-pop">
-                <div className="pop-h">{pop.tk.ch === '/' ? `할 일 연결 · 이 제품의 할 일 ${pop.items.length}건` : '부서 또는 사람 부르기'}</div>
+                <div className="pop-h">{pop.tk.ch === '/' ? (isG ? `품목 연결 · 이 묶음의 품목 ${pop.items.length}개` : `할 일 연결 · 이 제품의 할 일 ${pop.items.length}건`) : '부서 또는 사람 부르기'}</div>
                 {pop.items.map((x, i) => (
                   <button type="button" key={x.kind + x.v} className={'pop-i' + (i === pop.i ? ' on' : '')}
                     onMouseDown={e => e.preventDefault()} onClick={() => pickPop(i)}>{x.node}</button>
@@ -259,7 +328,7 @@ export default function Chat({ cid, onClose, docked }) {
               </div>
             )}
             <div className="ch-in">
-              <textarea ref={inRef} rows={2} value={draft} aria-label="메시지" placeholder="메시지 입력 (/ 할 일 연결, @ 부서·사람 부르기)"
+              <textarea ref={inRef} rows={2} value={draft} aria-label="메시지" placeholder={isG ? '메시지 입력 (/ 품목 연결, @ 부서·사람 부르기)' : '메시지 입력 (/ 할 일 연결, @ 부서·사람 부르기)'}
                 onChange={e => { setDraft(e.target.value); updatePop(e.target) }}
                 onKeyDown={onKey}
                 onClick={e => updatePop(e.target)} />
@@ -273,7 +342,7 @@ export default function Chat({ cid, onClose, docked }) {
           ['↩ 답글', () => { setReplyTo(ctxMsg.id); setEditId(null); focusEnd() }],
           ['복사', () => copy(ctxMsg.body)],
           ...(ctxMsg.user_id === uid ? [
-            ['수정', () => { setEditId(ctxMsg.id); setDraft(ctxMsg.body); setTid(ctxMsg.task_id); setReplyTo(null); setPicked(ctxMsg.mention_users || []); setDelId(null); focusEnd() }],
+            ['수정', () => { setEditId(ctxMsg.id); setDraft(ctxMsg.body); setTid(ctxMsg.task_id); setLink(ctxMsg.link_change || null); setReplyTo(null); setPicked(ctxMsg.mention_users || []); setDelId(null); focusEnd() }],
             ['삭제', () => setDelId(ctxMsg.id), true],
           ] : []),
         ]} />

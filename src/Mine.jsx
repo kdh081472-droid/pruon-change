@@ -96,7 +96,11 @@ export function MineTab() {
 /* ---------- 새 대화 (안 읽은 글이 있는 제품) ---------- */
 export function NewChatBlock({ emptyText }) {
   const { db, me, unread, mentionsMe, openChat } = useApp()
-  const rows = db.changes.map(c => ({ c, u: unread(c.id) })).filter(x => x.u.length)
+  // 묶음 방도 함께 (c.isG)
+  const rows = [
+    ...db.groups.map(g => ({ c: { id: 'g:' + g.id, title: g.title + ' · 묶음 전체 대화', isG: true }, u: unread('g:' + g.id) })),
+    ...db.changes.map(c => ({ c, u: unread(c.id) })),
+  ].filter(x => x.u.length).sort((a, b) => b.u[b.u.length - 1].id - a.u[a.u.length - 1].id)
   if (!rows.length) return emptyText ? <div className="empty">{emptyText}</div> : null
   return (
     <div className="card nc">

@@ -1354,3 +1354,72 @@ html, body { max-width: 100%; overflow-x: hidden }
 .sd-orgbox .org-dh .ro-tag { flex: none; white-space: nowrap; margin-left: auto; font-size: 10px; padding: 1px 5px }
 .sd-orgbox .org-d ul { padding-left: 6px }
 .sd-orgbox .org-u { column-gap: 6px; padding: 4px 2px }
+
+/* ===== 대화 개편: 대화 탭 · 방 목록 · 묶음 대화 ===== */
+/* 말풍선 옆 숫자 = 안 읽은 사람 수 (카톡처럼 숫자만) */
+.rc { color: #c99500; font-family: var(--mono); font-weight: 800; font-size: 11px }
+:root[data-theme="dark"] .rc { color: #ffcf5c }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rc { color: #ffcf5c } }
+.ch-day { align-self: center; font-size: 12px; color: var(--muted); margin: 6px 0 2px }
+.ch-day span { background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 3px 12px }
+.msg.cont { margin-top: -8px }
+.msg.hit .bub { box-shadow: 0 0 0 2px #f5c400 }
+.q-hl { background: #ffcf5c; color: #1b1206; border-radius: 3px; padding: 0 1px }
+.ch-item { border-left: 3px solid var(--grp) }
+.ch-fin { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--muted); background: var(--bg); border-radius: 99px; padding: 1px 7px; vertical-align: 2px }
+.ch-hl { min-width: 0; flex: 1 }
+.ch-open { display: flex; gap: 6px; flex: none }
+.g-open-b { color: var(--grp) }
+.ch-sbar { display: flex; align-items: center; gap: 8px; padding: 7px 16px; background: var(--today); border-bottom: 1px solid var(--line); font-size: 13px; flex-wrap: wrap }
+.ch-sbar .pill { padding: 2px 9px }
+.ch-sx { margin-left: auto; font-size: 12.5px }
+/* PC 대화 탭 */
+.wide-in.chat-in { padding: 0; height: 100vh; height: 100dvh; max-width: none; overflow: hidden }
+.ct { display: grid; grid-template-columns: 340px minmax(0, 1fr); height: 100%; min-height: 0 }
+.ct-l { border-right: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0 }
+.ct-lh { font-size: 19px; font-weight: 800; color: var(--ink); padding: 16px 16px 4px }
+.ct-r { position: relative; min-width: 0; min-height: 0; display: flex }
+.chat.docked.ch-tab { position: relative; inset: auto; width: 100%; height: 100%; border-left: 0; flex: 1 }
+.chat.ch-tab .ch-list { padding: 16px 28px }
+.chat.ch-tab .msg { max-width: 70% }
+.chat.ch-tab .ch-h b { font-size: 16.5px }
+.ct-empty { margin: auto; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; padding: 20px }
+.ct-empty b { color: var(--ink); font-size: 16px }
+/* 방 목록 */
+.rl2 { display: flex; flex-direction: column; min-height: 0; flex: 1 }
+.rl2-h { padding: 8px 14px 10px }
+.rl2-s { margin: 0 }
+.rl2-f { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px }
+.rl2-sum { font-size: 12px; color: var(--muted); margin: 8px 2px 0 }
+.rl2-list { flex: 1; overflow-y: auto; border-top: 1px solid var(--line) }
+.rl2-sec { font-size: 12px; font-weight: 700; color: var(--muted); padding: 10px 14px 4px }
+.rl2-none { font-size: 12.5px; color: var(--faint); padding: 6px 14px 10px }
+.rm-i { display: flex; align-items: flex-start; gap: 9px; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); padding: 10px 14px; text-align: left; font: inherit; color: var(--text); cursor: pointer }
+.rm-i:hover { background: var(--today) }
+.rm-i.sel { background: var(--accent-soft) }
+.rm-i.sub { padding-left: 30px; background: color-mix(in srgb, var(--grp-row) 50%, var(--surface)) }
+.rm-i.sub.sel { background: var(--accent-soft) }
+.rm-i.fin { opacity: .62 }
+.rm-tog { flex: none; width: 16px; color: var(--grp); font-size: 12px; font-weight: 800; padding-top: 9px; cursor: pointer }
+.rm-ic { flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: var(--accent-soft); color: var(--accent) }
+.rm-ic.g { background: var(--grp-soft); color: var(--grp) }
+.rm-ic.x { background: var(--bg); color: var(--faint) }
+.rm-i.sub .rm-ic { width: 26px; height: 26px; border-radius: 8px; font-size: 10.5px }
+.rm-b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px }
+.rm-t { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rm-m { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rm-m.wrap { white-space: normal; line-height: 1.45; color: var(--text) }
+.rm-m i { font-style: normal; color: var(--muted) }
+.rm-fin { font-size: 10px; font-weight: 700; color: var(--muted); background: var(--bg); border-radius: 99px; padding: 0 6px; margin-right: 5px; vertical-align: 1px }
+.rm-r { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px }
+.rm-r small { font-size: 11px; color: var(--muted); white-space: nowrap }
+.rm-n { display: flex; gap: 4px }
+.rm-un { background: var(--late); color: #fff; border-radius: 99px; font-size: 11px; font-weight: 700; padding: 1px 7px; font-family: var(--mono) }
+.rm-at { background: #ff9a3d; color: #1b1206; border-radius: 99px; font-size: 11px; font-weight: 800; padding: 1px 6px }
+/* 묶음 화면 오른쪽 칸: [묶음 대화] [품목 새 대화] */
+.gdock { position: absolute; top: 0; right: 0; bottom: 0; width: 400px; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--surface); z-index: 1 }
+.gd-tabs { display: flex; border-bottom: 1px solid var(--line); flex: none }
+.gd-tabs button { flex: 1; border: 0; background: none; padding: 12px 6px; font: inherit; font-size: 14px; font-weight: 700; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; display: inline-flex; justify-content: center; align-items: center; gap: 6px }
+.gd-tabs button.on { color: var(--grp); border-bottom-color: var(--grp) }
+.gdock .chat.docked { position: relative; inset: auto; width: 100%; flex: 1; min-height: 0; border-left: 0; height: auto }
+.gv-chat { display: inline-flex; gap: 5px; align-items: center; color: var(--grp) }

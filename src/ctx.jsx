@@ -51,17 +51,26 @@ export function personName(db, id) {
 }
 
 // 대화 글: @사람 / @부서 강조
-export function MsgText({ m }) {
+// 검색어 표시 (대화 검색)
+export function Mark({ text, q }) {
+  const s = String(text || '')
+  const k = String(q || '').trim()
+  if (!k) return s
+  const re = new RegExp('(' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi')
+  return s.split(re).map((p, i) => (i % 2 ? <mark key={i} className="q-hl">{p}</mark> : p))
+}
+
+export function MsgText({ m, q }) {
   const { db, me } = useApp()
   const names = (m.mention_users || []).map(u => db.people[u]).filter(Boolean)
   const tokens = [...names.map(p => p.name), ...(m.mention_depts || [])]
-  if (!tokens.length) return <span className="tx">{m.body}</span>
+  if (!tokens.length) return <span className="tx"><Mark text={m.body} q={q} /></span>
   const re = new RegExp('(@(?:' + tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).sort((a, b) => b.length - a.length).join('|') + '))', 'g')
   const parts = m.body.split(re)
   return (
     <span className="tx">
       {parts.map((s, i) => {
-        if (i % 2 === 0) return s
+        if (i % 2 === 0) return <Mark key={i} text={s} q={q} />
         const t = s.slice(1)
         const isMe = t === me.department || (t === me.name && (m.mention_users || []).includes(me.id))
         return <span key={i} className={'at' + (isMe ? ' me' : '')}>{s}</span>

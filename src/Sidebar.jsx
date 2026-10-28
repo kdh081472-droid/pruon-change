@@ -4,13 +4,13 @@ import OrgTree from './Org.jsx'
 import { NewChatBlock } from './Mine.jsx'
 
 // PC 넓은 화면의 왼쪽: 계정 · 조직도 · 메뉴 (제품은 요약·달력·내 할 일에서 고름)
-export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, onAdmin, helpOpen, onHelp }) {
+export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, chatN, isAdmin, onAdmin, helpOpen, onHelp }) {
   const { db, me, viewer } = useApp()
   const [orgOpen, setOrgOpen] = useState(false)
   // 메뉴: 내 할 일 / 전체 일정(달력·요약) / 변경 등록  — 휴대폰 '전체 일정' 탭과 같은 이름
   const navTop = viewer ? [] : [['mine', '내 할 일', 'mine']]
   const navAll = [['timeline', '달력', 'timeline'], ['summary', '요약', 'table']]
-  const navEnd = viewer ? [] : [['new', '변경 등록', 'new']]
+  const navEnd = [['chat', '대화', 'chat'], ...(viewer ? [] : [['new', '변경 등록', 'new']])]
   return (
     <aside className="sidebar" aria-label="메뉴">
       <div className="sd-top">
@@ -30,6 +30,7 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, isAdmin, 
           <button key={x[0]} type="button" className={'sn' + (navAll.some(n => n[0] === x[0]) ? ' sub' : '') + (tab === x[0] || ((tab === 'product' || tab === 'group') && x[0] === 'summary') ? ' on' : '')} onClick={() => setTab(x[0])}>
             {ICON[x[2]]}<span>{x[1]}</span>
             {x[0] === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
+            {x[0] === 'chat' && chatN > 0 && <span className="n">{chatN > 999 ? '999+' : chatN}</span>}
           </button>
         ))}
       </nav>

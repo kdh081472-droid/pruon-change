@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ORDER } from './supabase.js'
 import { useApp, Person } from './ctx.jsx'
 import { dd, md, stamp, snip } from './util.js'
+import Chat from './Chat.jsx'
 
 // 묶음(품목별 관리) 계산: 상태·처리·전환일 범위·남은 부서
 export function groupStats(g, overdue) {
@@ -31,7 +32,7 @@ const SCLS = { '진행 중': 'live', '전환일 지남': 'late', 종결: 'done',
 
 /* ---------- 묶음 화면 ---------- */
 export default function GroupView({ gid }) {
-  const { db, me, viewer, wide, isAdmin, overdue, unread, goChange, goSummary, setSheet } = useApp()
+  const { db, me, viewer, wide, isAdmin, overdue, unread, goChange, goSummary, setSheet, openChat } = useApp()
   const [logOpen, setLogOpen] = useState(false)
   const g = db.groupMap[gid]
   if (!g || !g.kids.length) return <div className="card empty">묶음을 찾을 수 없습니다. 요약에서 다시 골라주세요.</div>
@@ -47,6 +48,7 @@ export default function GroupView({ gid }) {
           <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>
           <span className="g-chip">묶음 · 품목 {g.kids.length}</span>
           <h2 className="gv-t">{g.title}</h2>
+          {!wide && <button type="button" className="pill gv-chat" onClick={() => openChat('g:' + gid)}>묶음 대화{unread('g:' + gid).length > 0 && <span className="ub">{unread('g:' + gid).length}</span>}</button>}
           {canWork && (
             <span className="p-acts">
               {canEdit && <button type="button" className="pill" onClick={() => setSheet({ kind: 'gedit', gid })}>내용 수정</button>}
@@ -132,28 +134,40 @@ export default function GroupView({ gid }) {
   )
 }
 
-/* ---------- PC 오른쪽 칸: 묶음 화면에서는 새 대화가 있는 품목 ---------- */
+/* ---------- PC 오른쪽 칸: [묶음 대화] [품목 새 대화] ---------- */
 export function GroupDock({ gid }) {
-  const { db, unread, mentionsMe, goChange } = useApp()
+  const { db, unread, mentionsMe, goChange, ui, setUi } = useApp()
   const g = db.groupMap[gid]
-  const rows = g ? g.kids.map(k => ({ k, u: unread(k.id) })).filter(x => x.u.length) : []
+  if (!g) return null
+  const rows = g.kids.map(k => ({ k, u: unread(k.id) })).filter(x => x.u.length)
+  const gu = unread('g:' + gid).length
+  const view = ui.gDock || 'g'
+  const setView = v => setUi(u => ({ ...u, gDock: v }))
+  const itemN = rows.reduce((a, x) => a + x.u.length, 0)
   return (
-    <div className="chat docked dock-empty">
-      <div className="ch-h"><div><span className="s-tag">품목 대화</span><b>대화는 품목마다 따로 있어요.<br />품목을 누르면 그 품목 대화가 열립니다.</b></div></div>
-      <div className="ch-list">
-        {rows.length ? (
-          <div className="card nc">
-            <div className="m-h"><span className="t">새 대화가 있는 품목</span></div>
-            {rows.map(({ k, u }) => (
-              <button type="button" key={k.id} className="m-i" onClick={() => goChange(k.id)}>
-                <span className="ub big">{u.length}</span>
-                <span><span className="tt">{k.title}{u.some(mentionsMe) && <> <span className="at me">@</span></>}</span><span className="when"><Person id={u[u.length - 1].user_id} /> {snip(u[u.length - 1].body, 30)}</span></span>
-                <span className="arr">›</span>
-              </button>
-            ))}
-          </div>
-        ) : <div className="empty">이 묶음에 안 읽은 대화가 없습니다.</div>}
+    <div className="gdock">
+      <div className="gd-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={view === 'g'} className={view === 'g' ? 'on' : ''} onClick={() => setView('g')}>묶음 대화{gu > 0 && <span className="ub">{gu}</span>}</button>
+        <button type="button" role="tab" aria-selected={view === 'i'} className={view === 'i' ? 'on' : ''} onClick={() => setView('i')}>품목 새 대화{itemN > 0 && <span className="ub">{itemN}</span>}</button>
       </div>
+      {view === 'g' ? <Chat key={'g:' + gid} cid={'g:' + gid} docked onClose={() => {}} /> : (
+        <div className="chat docked dock-empty">
+          <div className="ch-list">
+            {rows.length ? (
+              <div className="card nc">
+                <div className="m-h"><span className="t">새 대화가 있는 품목</span><span className="d">품목을 누르면 그 품목 대화</span></div>
+                {rows.map(({ k, u }) => (
+                  <button type="button" key={k.id} className="m-i" onClick={() => goChange(k.id)}>
+                    <span className="ub big">{u.length}</span>
+                    <span><span className="tt">{k.title}{u.some(mentionsMe) && <> <span className="at me">@</span></>}</span><span className="when"><Person id={u[u.length - 1].user_id} /> {snip(u[u.length - 1].body, 30)}</span></span>
+                    <span className="arr">›</span>
+                  </button>
+                ))}
+              </div>
+            ) : <div className="empty">이 묶음의 품목 방에 안 읽은 대화가 없습니다.</div>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
