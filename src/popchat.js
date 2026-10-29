@@ -126,12 +126,14 @@ export function channel() {
 
 // 작은 창 → 원래 앱 창에 "이 제품/묶음/할 일 열어줘"
 // 앱 창은 이름(pruon_main)으로 찾음 (창을 띄운 순서·opener에 기대지 않음).
-// 앱 창이 없으면 새 탭으로 앱을 열면서 바로 그 화면으로 (?go=종류:id)
+// 앱 창이 없으면 앱처럼 보이는 새 창으로 열면서 바로 그 화면으로 (?go=종류:id)
 export const MAIN_NAME = 'pruon_main'
 export function toMain(msg) {
   const url = base() + '?go=' + msg.kind + ':' + encodeURIComponent(msg.id)
   let w = null
-  try { w = window.open('', MAIN_NAME) } catch (_) { w = null }
+  // 앱 창이 꺼져 있으면 새로 띄움: 브라우저 탭이 아니라 앱처럼 보이는 창(주소창·탭 없이)으로, 화면 크기만큼
+  const W = Math.max(1200, (screen.availWidth || 1440) - 40), H = Math.max(700, (screen.availHeight || 900) - 40)
+  try { w = window.open('', MAIN_NAME, `popup=yes,width=${W},height=${H},left=20,top=20`) } catch (_) { w = null }
   if (w) {
     let blank = true
     try { blank = !w.location.href || w.location.href === 'about:blank' } catch (_) { blank = false }
