@@ -55,6 +55,16 @@ export function stampFull(ts) {
 export function norm(x) {
   return String(x || '').toLowerCase().replace(/\s+/g, '')
 }
+// 검색: 띄어쓰기로 나눈 낱말이 모두 들어 있으면 (순서 상관없음)
+export function words(q) {
+  return String(q || '').trim().split(/\s+/).filter(Boolean)
+}
+export function hasAll(text, q) {
+  const ws = words(q)
+  if (!ws.length) return true
+  const t = norm(text)
+  return ws.every(w => t.includes(norm(w)))
+}
 export function snip(t, n) {
   t = String(t || '').replace(/\s+/g, ' ')
   return t.length > n ? t.slice(0, n) + '…' : t

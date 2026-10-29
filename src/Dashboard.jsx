@@ -16,10 +16,24 @@ import Report from './Report.jsx'
 import Settings from './Settings.jsx'
 import GroupView, { GroupDock } from './GroupView.jsx'
 import ChatTab, { RoomList } from './Rooms.jsx'
+import { popupRoom, popupJump, channel, toMain } from './popchat.js'
 
 export default function Dashboard({ session }) {
   const uid = session.user.id
-  const { db, err, reload, markReadLocal } = useAppData(uid)
+  const { db, err, reload, markReadLocal: markLocal } = useAppData(uid)
+  const popRoom = useMemo(() => popupRoom(), [])          // 대화 작은 창으로 열린 경우 그 방
+  const [popJump, setPopJump] = useState(() => (popRoom ? popupJump() : null))
+  // 읽음 표시: 내 화면에 먼저 반영 + 다른 창(대화 작은 창 ↔ 앱 창)에도 바로 알림
+  const markReadLocal = useCallback((room, lastId) => {
+    markLocal(room, lastId)
+    const c = channel(); if (c) c.postMessage({ type: 'read', uid, room, id: lastId })
+  }, [markLocal, uid])
+  useEffect(() => {
+    const c = channel(); if (!c) return
+    const on = e => { const d = e.data || {}; if (d.type === 'read' && d.uid === uid) markLocal(d.room, d.id) }
+    c.addEventListener('message', on)
+    return () => c.removeEventListener('message', on)
+  }, [markLocal, uid])
   const [tab, setTab] = useState(null)
   const [sheet, setSheet] = useState(null)       // {kind:'task', tid} | {kind:'target'|'stop'|'resume'|'assign', cid}
   const [chatCid, setChatCid] = useState(null)   // 휴대폰 대화 창: 방(room)
@@ -95,6 +109,12 @@ export default function Dashboard({ session }) {
   const baseTitle = useRef(document.title || '푸르온 변경점 관리')
   useEffect(() => {
     if (!db || !uid) return
+    if (popRoom) {
+      const isG = popRoom.startsWith('g:'), x = isG ? db.groupMap[popRoom.slice(2)] : db.changeMap[popRoom]
+      const n = db.messages.filter(m => m.room === popRoom && m.user_id !== uid && !m.deleted && m.id > (db.reads[uid + '|' + popRoom] || 0)).length
+      document.title = (n > 0 ? '(' + n + ') ' : '') + (x ? x.title + (isG ? ' · 묶음 전체 대화' : '') : '대화')
+      return
+    }
     const rd = room => db.reads[uid + '|' + room] || 0
     const n = db.messages.filter(m => m.user_id !== uid && !m.deleted && m.id > rd(m.room)).length
     document.title = (n > 0 ? '(' + (n > 999 ? '999+' : n) + ') ' : '') + baseTitle.current
@@ -164,11 +184,50 @@ export default function Dashboard({ session }) {
     }
   }, [db, me, uid, viewer, wide, ui, sheet, reload, toast, markReadLocal, isAdmin])
 
+  // 대화 작은 창: 제품·묶음·할 일 열기는 원래 앱 창에서
+  const popApp = useMemo(() => app && popRoom ? {
+    ...app,
+    goChange: id => toMain({ kind: 'change', id }),
+    selectProduct: id => toMain({ kind: 'change', id }),
+    goGroup: id => toMain({ kind: 'group', id }),
+    openTask: id => toMain({ kind: 'task', id }),
+    openChat: () => {}, goChat: () => {},
+  } : null, [app, popRoom])
+  const appRef = useRef(app); appRef.current = app
+  useEffect(() => {
+    const on = e => {
+      if (e.origin !== location.origin) return
+      const d = e.data || {}
+      if (d.type === 'pruon-jump' && popRoom) setPopJump({ q: d.q, mid: d.mid, t: Date.now() })
+      if (d.type === 'pruon-go' && !popRoom && appRef.current) {
+        const a = appRef.current
+        if (d.kind === 'change' && a.db.changeMap[d.id]) a.goChange(d.id)
+        if (d.kind === 'group' && a.db.groupMap[d.id]) a.goGroup(d.id)
+        if (d.kind === 'task') a.openTask(d.id)
+      }
+    }
+    window.addEventListener('message', on)
+    return () => window.removeEventListener('message', on)
+  }, [popRoom])
+
   if (err && !db) return <Fail msg={'불러오지 못했습니다: ' + err} />
   if (!db) return <div className="auth"><div className="auth-card"><p className="muted">불러오는 중…</p></div></div>
   if (!me) return <Fail msg="프로필이 없습니다. 가입이 제대로 끝나지 않았을 수 있습니다. 로그아웃 후 다시 가입하거나 관리자에게 문의해주세요." />
   if (me.left_at) return <Fail msg="퇴사 처리된 계정입니다. 잠시 후 로그아웃됩니다." />
   if (!app || !tab) return null
+  if (popRoom) {
+    const ok = popRoom.startsWith('g:') ? db.groupMap[popRoom.slice(2)] : db.changeMap[popRoom]
+    return (
+      <Ctx.Provider value={popApp}>
+        <div className="pop-wrap">
+          {ok ? <Chat cid={popRoom} tab popup onClose={() => window.close()} searchQ={popJump && popJump.q} jumpTo={popJump && popJump.mid ? popJump : null} onSearchClose={() => setPopJump(null)} />
+            : <div className="ct-empty"><b>대화방을 찾을 수 없습니다</b><span>지워졌거나 볼 수 없는 대화입니다.</span></div>}
+        </div>
+        {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
+        {err && <div className="netbar">연결이 불안정합니다. 잠시 후 자동으로 다시 시도합니다.</div>}
+      </Ctx.Provider>
+    )
+  }
   if (adminMode && isAdmin) return <Ctx.Provider value={app}><Admin onExit={() => setAdminMode(false)} />{toastMsg && <div className="toast" role="status">{toastMsg}</div>}</Ctx.Provider>
 
   const myOpenN = db.tasks.filter(t => t.department === me.department && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length

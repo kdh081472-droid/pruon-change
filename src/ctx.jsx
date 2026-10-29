@@ -54,9 +54,9 @@ export function personName(db, id) {
 // 검색어 표시 (대화 검색)
 export function Mark({ text, q }) {
   const s = String(text || '')
-  const k = String(q || '').trim()
-  if (!k) return s
-  const re = new RegExp('(' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi')
+  const ws = String(q || '').trim().split(/\s+/).filter(Boolean).sort((a, b) => b.length - a.length)
+  if (!ws.length) return s
+  const re = new RegExp('(' + ws.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi')
   return s.split(re).map((p, i) => (i % 2 ? <mark key={i} className="q-hl">{p}</mark> : p))
 }
 

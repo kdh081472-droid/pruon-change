@@ -1423,3 +1423,22 @@ html, body { max-width: 100%; overflow-x: hidden }
 .gd-tabs button.on { color: var(--grp); border-bottom-color: var(--grp) }
 .gdock .chat.docked { position: relative; inset: auto; width: 100%; flex: 1; min-height: 0; border-left: 0; height: auto }
 .gv-chat { display: inline-flex; gap: 5px; align-items: center; color: var(--grp) }
+
+/* ---------- 대화 작은 창 (카톡 PC처럼) ---------- */
+.ct.ct1 { grid-template-columns: minmax(0, 900px) }
+.ct.ct1 .ct-l { border-right: 1px solid var(--line) }
+.ct-lh small { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-left: 8px }
+.rm-win { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; color: #138a6c; background: #dff5ee; border-radius: 99px; padding: 0 7px; vertical-align: 1px }
+.ct1 .rm-i { user-select: none }
+.pop-wrap { position: fixed; inset: 0; display: flex; background: var(--bg) }
+.chat.ch-win { position: relative; inset: auto; width: 100%; height: 100%; border: 0; box-shadow: none; flex: 1 }
+.chat.ch-win.ch-tab .ch-list { padding: 10px 12px }
+.chat.ch-win.ch-tab .msg { max-width: 88% }
+.chat.ch-win.ch-tab .ch-h b { font-size: 15px }
+.chat.ch-win .ch-h { padding: 10px 12px }
+.chat.ch-win .ch-open .pill { font-size: 11.5px; padding: 3px 8px }
+.ch-nw { font-size: 12px; padding: 3px 9px; white-space: nowrap; flex: none }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .rm-win { color: #7ee0c3; background: #123329 }
+}
+:root[data-theme="dark"] .rm-win { color: #7ee0c3; background: #123329 }

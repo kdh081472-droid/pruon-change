@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { supabase, ORDER, SHORT, SIGNUP_DEPTS } from './supabase.js'
 import { useApp, Person, MsgText, personName, Mark } from './ctx.jsx'
-import { md, norm, parse, snip, stamp, errText } from './util.js'
+import { md, norm, parse, snip, stamp, errText, hasAll, words } from './util.js'
+import { openPopup } from './popchat.js'
 
 function tokenAt(el) {
   const b = el.value.slice(0, el.selectionStart)
@@ -15,7 +16,8 @@ const dayTxt = ts => { const d = new Date(ts); return `${d.getFullYear()}년 ${d
 
 // 대화방: cid = 변경(품목) id 또는 'g:' + 묶음 id
 // docked = PC 오른쪽 칸 · tab = PC 대화 탭(넓게) · 그 외 = 휴대폰 전체 화면
-export default function Chat({ cid, onClose, docked, tab, searchQ, jumpTo, onSearchClose }) {
+// popup = 대화 작은 창(따로 띄운 브라우저 창)
+export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo, onSearchClose }) {
   const { db, me, uid, C, isLate, unreadCnt, mentionsMe, reload, toast, markReadLocal, openTask, goChange, goGroup } = useApp()
   const isG = String(cid).startsWith('g:')
   const g = isG ? db.groupMap[cid.slice(2)] : null
@@ -56,8 +58,10 @@ export default function Chat({ cid, onClose, docked, tab, searchQ, jumpTo, onSea
   }, [lastId, cid])
 
   // 검색: 이 방 안에서 검색어가 들어간 글 (▲▼로 넘겨보기)
-  const q = String(searchQ || '').trim()
-  const hits = q ? list.filter(m => !m.deleted && norm(m.body).includes(norm(q))) : []
+  // 방 이름에 들어 있는 낱말은 빼고 글 내용에서만 찾음 (예: "원산지 A만두속" → A만두속 방에서 "원산지")
+  const roomNm = norm(title + ' ' + (gOf ? gOf.title : '') + (isG ? ' 묶음 전체 대화' : ''))
+  const q = words(searchQ).filter(w => !roomNm.includes(norm(w))).join(' ')
+  const hits = q ? list.filter(m => !m.deleted && hasAll(m.body, q)) : []
   const [hitI, setHitI] = useState(0)
   useEffect(() => {
     if (!jumpTo) return
@@ -77,6 +81,7 @@ export default function Chat({ cid, onClose, docked, tab, searchQ, jumpTo, onSea
       if (e.key !== 'Escape') return
       if (ctx) return setCtx(null)
       if (pop) return
+      if (popup) return window.close()
       if (!docked && !tab && onClose) onClose()
     }
     document.addEventListener('keydown', on)
@@ -225,7 +230,7 @@ export default function Chat({ cid, onClose, docked, tab, searchQ, jumpTo, onSea
   return (
     <>
       {!docked && !tab && <div className="scrim" onClick={onClose} />}
-      <div className={'chat' + (docked || tab ? ' docked' : '') + (tab ? ' ch-tab' : '') + (isG ? ' ch-grp' : '')} role={docked || tab ? 'complementary' : 'dialog'} aria-modal={docked || tab ? undefined : true} aria-label={isG ? '묶음 대화' : '제품 대화'}>
+      <div className={'chat' + (docked || tab ? ' docked' : '') + (tab ? ' ch-tab' : '') + (isG ? ' ch-grp' : '') + (popup ? ' ch-win' : '')} role={docked || tab ? 'complementary' : 'dialog'} aria-modal={docked || tab ? undefined : true} aria-label={isG ? '묶음 대화' : '제품 대화'}>
         <div className="ch-h">
           <div className="ch-hl">
             <span className="s-tag">{isG ? '묶음 전체 대화' : gOf ? '품목 대화' : '제품 대화'} · {list.filter(m => !m.deleted).length}개</span>
@@ -239,6 +244,7 @@ export default function Chat({ cid, onClose, docked, tab, searchQ, jumpTo, onSea
               {gOf && <button type="button" className="pill g-open-b" onClick={() => goGroup(gOf.id)}>묶음 열기</button>}
             </span>
           )}
+          {docked && !tab && <button type="button" className="pill ch-nw" title="이 대화를 작은 창으로 따로 띄웁니다" onClick={() => { if (!openPopup(cid)) toast('팝업이 막혀 있습니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용해주세요.') }}>↗ 새 창</button>}
           {!closed && <button type="button" className={'ch-q' + (tip ? ' on' : '')} aria-label="대화 사용법" aria-expanded={tip} onClick={() => setTip(v => !v)}>?</button>}
           {!docked && !tab && <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>}
         </div>

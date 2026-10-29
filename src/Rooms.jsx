@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useApp, Mark } from './ctx.jsx'
-import { norm, snip } from './util.js'
-import Chat from './Chat.jsx'
+import { snip, hasAll } from './util.js'
+import { openPopup, useOpenPopups } from './popchat.js'
 
 // 대화방 목록 (카톡식): 최근 대화순 · 묶음은 한 줄로 접고 펼치면 묶음 전체 대화 + 품목 방 · 종결된 방도 포함
 // room = 변경(품목) id 또는 'g:' + 묶음 id
@@ -55,15 +55,23 @@ export function useRooms() {
   }, [db, unread, mentionsMe])
 }
 
-function Row({ x, sel, onPick, sub, lead }) {
+// dbl: PC 대화 탭 — 한 번 클릭은 고르기만(onSel), 더블클릭·Enter로 열기(onPick)
+export const pickProps = (dbl, onSel, onPick) => dbl ? {
+  onClick: onSel,
+  onDoubleClick: onPick,
+  onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); onPick() } },
+} : { onClick: onPick }
+
+function Row({ x, sel, onPick, onSel, dbl, sub, lead, isOpen }) {
   const { db } = useApp()
   const p = x.last && db.people[x.last.user_id]
   return (
-    <button type="button" className={'rm-i' + (sel === x.room ? ' sel' : '') + (sub ? ' sub' : '') + (x.open ? '' : ' fin')} onClick={() => onPick(x.room)}>
+    <button type="button" className={'rm-i' + (sel === x.room ? ' sel' : '') + (sub ? ' sub' : '') + (x.open ? '' : ' fin')}
+      {...pickProps(dbl, () => (onSel || onPick)(x.room), () => onPick(x.room))}>
       {lead}
       <span className={'rm-ic' + (x.isG ? ' g' : '') + (x.open ? '' : ' x')} aria-hidden="true">{x.isG ? '▣' : '●'}</span>
       <span className="rm-b">
-        <span className="rm-t">{!x.open && <span className="rm-fin">종결</span>}{sub && x.isG ? '묶음 전체 대화' : x.title}</span>
+        <span className="rm-t">{!x.open && <span className="rm-fin">종결</span>}{sub && x.isG ? '묶음 전체 대화' : x.title}{isOpen && <span className="rm-win">↗ 창 열림</span>}</span>
         <span className="rm-m">{x.last ? <>{p ? p.name : '알 수 없음'}: {snip(x.last.body, 40)}</> : <span className="faint">아직 대화가 없습니다</span>}</span>
       </span>
       <span className="rm-r">
@@ -74,13 +82,15 @@ function Row({ x, sel, onPick, sub, lead }) {
   )
 }
 
-export function RoomList({ sel, onPick, onSearchPick }) {
+export function RoomList({ sel, onPick, onSearchPick, dbl, onSel, opened = {} }) {
   const { db, ui, setUi } = useApp()
   const { entries } = useRooms()
   const st = ui.rooms || { f: 'all', q: '', open: {} }
   const setSt = patch => setUi(u => ({ ...u, rooms: { ...(u.rooms || st), ...patch } }))
   const [q, setQ] = useState(st.q || '')
   const k = q.trim()
+  const [selMid, setSelMid] = useState(null)
+  const pickSel = room => { setSelMid(null); onSel && onSel(room) }
   const selG = sel && (String(sel).startsWith('g:') ? sel.slice(2) : db.changeMap[sel] && db.changeMap[sel].group_id)
 
   const shown = entries.filter(e => (
@@ -88,25 +98,29 @@ export function RoomList({ sel, onPick, onSearchPick }) {
   ))
   const cnt = { unread: entries.filter(e => e.un > 0).length, at: entries.filter(e => e.at).length }
 
-  // 검색: 방 이름 + 대화 내용 (종결된 방 포함)
-  const search = useMemo(() => {
-    if (!k) return null
-    const nk = norm(k)
-    const rooms = []
-    entries.forEach(e => {
-      if (e.isGroup) {
-        if (norm(e.title).includes(nk)) rooms.push(e.groupRoom)
-        e.kids.forEach(x => { if (norm(x.title).includes(nk)) rooms.push(x) })
-      } else if (norm(e.title).includes(nk)) rooms.push(e)
-    })
-    const msgs = db.messages.filter(m => !m.deleted && norm(m.body).includes(nk)).sort((a, b) => b.id - a.id).slice(0, 200)
-    return { rooms, msgs }
-  }, [k, entries, db.messages])
   const roomName = room => {
     if (String(room).startsWith('g:')) { const g = db.groupMap[room.slice(2)]; return g ? { t: g.title + ' · 묶음 전체 대화', tag: '묶음' } : { t: '' } }
     const c = db.changeMap[room]
-    return c ? { t: c.title, tag: c.group ? '묶음 품목' : '' } : { t: '' }
+    return c ? { t: c.title, tag: c.group ? '묶음 품목' : '', g: c.group ? c.group.title : '' } : { t: '' }
   }
+  // 검색: 방 이름 + 대화 내용 (종결된 방 포함) · 띄어쓴 낱말이 모두 들어 있으면 순서 상관없이
+  const search = useMemo(() => {
+    if (!k) return null
+    const rooms = []
+    entries.forEach(e => {
+      if (e.isGroup) {
+        if (hasAll(e.title + ' 묶음 전체 대화', k)) rooms.push(e.groupRoom)
+        e.kids.forEach(x => { if (hasAll(x.title + ' ' + e.title, k)) rooms.push(x) })
+      } else if (hasAll(e.title, k)) rooms.push(e)
+    })
+    // 대화 내용: 글 + 그 방 이름을 합쳐서 찾음 (예: "풀무원 원산지")
+    const msgs = db.messages.filter(m => {
+      if (m.deleted) return false
+      const rn = roomName(m.room)
+      return hasAll(m.body + ' ' + rn.t + ' ' + (rn.g || ''), k)
+    }).sort((a, b) => b.id - a.id).slice(0, 200)
+    return { rooms, msgs }
+  }, [k, entries, db])
 
   return (
     <div className="rl2">
@@ -130,15 +144,16 @@ export function RoomList({ sel, onPick, onSearchPick }) {
         {k ? (
           <>
             <div className="rl2-sec">방 이름 {search.rooms.length}</div>
-            {search.rooms.map(x => <Row key={'r' + x.room} x={{ ...x, title: x.isG ? x.title + ' · 묶음 전체 대화' : x.title }} sel={sel} onPick={r => onSearchPick(r, null, k)} />)}
+            {search.rooms.map(x => <Row key={'r' + x.room} x={{ ...x, title: x.isG ? x.title + ' · 묶음 전체 대화' : x.title }} sel={selMid ? null : sel} dbl={dbl} onSel={pickSel} onPick={r => onSearchPick(r, null, k)} isOpen={opened[x.room]} />)}
             {!search.rooms.length && <div className="rl2-none">없음</div>}
             <div className="rl2-sec">대화 내용 {search.msgs.length}</div>
             {search.msgs.map(m => {
               const rn = roomName(m.room), p = db.people[m.user_id]
               return (
-                <button type="button" key={m.id} className={'rm-i rm-hit' + (sel === m.room ? ' sel' : '')} onClick={() => onSearchPick(m.room, m.id, k)}>
+                <button type="button" key={m.id} className={'rm-i rm-hit' + ((dbl ? selMid === m.id : sel === m.room) ? ' sel' : '')}
+                  {...pickProps(dbl, () => { onSel && onSel(m.room); setSelMid(m.id) }, () => onSearchPick(m.room, m.id, k))}>
                   <span className="rm-b">
-                    <span className="rm-t">{rn.tag && <span className="g-chip g-in">{rn.tag}</span>}{rn.t}</span>
+                    <span className="rm-t">{rn.tag && <span className="g-chip g-in">{rn.tag}</span>}<Mark text={rn.t} q={k} />{opened[m.room] && <span className="rm-win">↗ 창 열림</span>}</span>
                     <span className="rm-m wrap"><i>{p ? p.name : ''}:</i> <Mark text={snip(m.body, 90)} q={k} /></span>
                   </span>
                   <span className="rm-r"><small>{when(m.created_at)}</small></span>
@@ -148,17 +163,18 @@ export function RoomList({ sel, onPick, onSearchPick }) {
             {!search.msgs.length && <div className="rl2-none">없음</div>}
           </>
         ) : shown.length ? shown.map(e => {
-          if (!e.isGroup) return <Row key={e.key} x={e} sel={sel} onPick={onPick} />
+          if (!e.isGroup) return <Row key={e.key} x={e} sel={sel} onPick={onPick} dbl={dbl} onSel={pickSel} isOpen={opened[e.room]} />
           const open = st.open && st.open[e.g.id] !== undefined ? st.open[e.g.id] : e.g.id === selG
           const tog = ev => { ev.stopPropagation(); setSt({ open: { ...(st.open || {}), [e.g.id]: !open } }) }
           return (
             <div key={e.key} className={'rm-grp' + (open ? ' open' : '')}>
               <Row x={{ ...e, room: 'g:' + e.g.id, isG: true }} sel={open ? null : sel && selG === e.g.id ? 'g:' + e.g.id : null}
+                dbl={dbl} onSel={() => { if (!open) setSt({ open: { ...(st.open || {}), [e.g.id]: true } }); pickSel('g:' + e.g.id) }}
                 onPick={() => { if (!open) setSt({ open: { ...(st.open || {}), [e.g.id]: true } }); onPick('g:' + e.g.id) }}
                 lead={<span className="rm-tog" role="button" tabIndex={0} aria-label={open ? '품목 접기' : '품목 펼치기'} aria-expanded={open} onClick={tog} onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') tog(ev) }}>{open ? '▾' : '▸'}</span>} />
               {open && <>
-                <Row x={e.groupRoom} sel={sel} onPick={onPick} sub />
-                {e.kids.map(x => <Row key={x.room} x={x} sel={sel} onPick={onPick} sub />)}
+                <Row x={e.groupRoom} sel={sel} onPick={onPick} dbl={dbl} onSel={pickSel} sub isOpen={opened[e.groupRoom.room]} />
+                {e.kids.map(x => <Row key={x.room} x={x} sel={sel} onPick={onPick} dbl={dbl} onSel={pickSel} sub isOpen={opened[x.room]} />)}
               </>}
             </div>
           )
@@ -168,20 +184,21 @@ export function RoomList({ sel, onPick, onSearchPick }) {
   )
 }
 
-/* ---------- PC 대화 탭: 왼쪽 방 목록 · 오른쪽 대화 (카톡 PC처럼) ---------- */
+/* ---------- PC 대화 탭: 방 목록 (카톡 PC처럼) · 방을 더블클릭하면 작은 창으로 ---------- */
 export default function ChatTab() {
-  const { db, ui, setUi } = useApp()
+  const { db, ui, setUi, toast } = useApp()
+  const opened = useOpenPopups()
   const sel = ui.chatRoom && (String(ui.chatRoom).startsWith('g:') ? db.groupMap[ui.chatRoom.slice(2)] : db.changeMap[ui.chatRoom]) ? ui.chatRoom : null
-  const [srch, setSrch] = useState(null)       // { q, mid, t }
-  const pick = room => { setUi(u => ({ ...u, chatRoom: room })); setSrch(null) }
-  const searchPick = (room, mid, q) => { setUi(u => ({ ...u, chatRoom: room })); setSrch({ q, mid, t: Date.now() }) }
+  const open = (room, jump) => {
+    setUi(u => ({ ...u, chatRoom: room }))
+    if (!openPopup(room, jump)) toast('팝업이 막혀 있습니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용해주세요.')
+  }
   return (
-    <div className="ct">
-      <section className="ct-l"><div className="ct-lh">대화</div><RoomList sel={sel} onPick={pick} onSearchPick={searchPick} /></section>
-      <section className="ct-r">
-        {sel
-          ? <Chat key={sel} cid={sel} tab searchQ={srch && srch.q} jumpTo={srch && srch.mid ? srch : null} onSearchClose={() => setSrch(null)} />
-          : <div className="ct-empty"><b>대화방을 골라주세요</b><span>왼쪽 목록에서 묶음·품목·변경의 대화방을 누르면 여기에 대화가 열립니다.</span></div>}
+    <div className="ct ct1">
+      <section className="ct-l">
+        <div className="ct-lh">대화 <small>방을 더블클릭하면 작은 창으로 열립니다</small></div>
+        <RoomList dbl sel={sel} opened={opened} onSel={room => setUi(u => ({ ...u, chatRoom: room }))}
+          onPick={room => open(room)} onSearchPick={(room, mid, q) => open(room, { q, mid })} />
       </section>
     </div>
   )
