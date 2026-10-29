@@ -125,10 +125,30 @@ export function channel() {
 }
 
 // 작은 창 → 원래 앱 창에 "이 제품/묶음/할 일 열어줘"
+// 앱 창은 이름(pruon_main)으로 찾음 (창을 띄운 순서·opener에 기대지 않음).
+// 앱 창이 없으면 새 탭으로 앱을 열면서 바로 그 화면으로 (?go=종류:id)
+export const MAIN_NAME = 'pruon_main'
 export function toMain(msg) {
-  const o = window.opener
-  if (o && !o.closed) {
-    try { o.postMessage({ type: 'pruon-go', ...msg }, location.origin); o.focus(); return } catch (_) {}
+  const url = base() + '?go=' + msg.kind + ':' + encodeURIComponent(msg.id)
+  let w = null
+  try { w = window.open('', MAIN_NAME) } catch (_) { w = null }
+  if (w) {
+    let blank = true
+    try { blank = !w.location.href || w.location.href === 'about:blank' } catch (_) { blank = false }
+    if (blank) { w.location.href = url; return }
+    try { w.postMessage({ type: 'pruon-go', ...msg }, location.origin) } catch (_) {}
+    try { w.focus() } catch (_) {}
+    return
   }
-  window.open(base(), '_blank')
+  // 새 창도 못 열면(팝업 차단) 열려 있는 앱 창에 알림만
+  const c = channel(); if (c) c.postMessage({ type: 'pruon-go', ...msg })
+}
+// ?go=change:<id> 로 열린 경우
+export function goParam() {
+  try {
+    const g = new URLSearchParams(location.search).get('go')
+    if (!g) return null
+    const i = g.indexOf(':')
+    return i > 0 ? { kind: g.slice(0, i), id: g.slice(i + 1) } : null
+  } catch (_) { return null }
 }

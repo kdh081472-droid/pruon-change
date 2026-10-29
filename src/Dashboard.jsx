@@ -16,7 +16,7 @@ import Report from './Report.jsx'
 import Settings from './Settings.jsx'
 import GroupView, { GroupDock } from './GroupView.jsx'
 import ChatTab, { RoomList } from './Rooms.jsx'
-import { popupRoom, popupList, popupJump, channel, toMain, openPopup, openListPopup, announceWindow } from './popchat.js'
+import { popupRoom, popupList, popupJump, channel, toMain, openPopup, openListPopup, announceWindow, MAIN_NAME, goParam } from './popchat.js'
 
 export default function Dashboard({ session }) {
   const uid = session.user.id
@@ -202,17 +202,34 @@ export default function Dashboard({ session }) {
       if (e.origin !== location.origin) return
       const d = e.data || {}
       if (d.type === 'pruon-jump' && popRoom) setPopJump({ q: d.q, mid: d.mid, t: Date.now() })
-      if (d.type === 'pruon-go' && popList) { const { type, ...rest } = d; return toMain(rest) }   // 목록 창 → 원래 앱 창으로 넘김
-      if (d.type === 'pruon-go' && !isPop && appRef.current) {
-        const a = appRef.current
-        if (d.kind === 'change' && a.db.changeMap[d.id]) a.goChange(d.id)
-        if (d.kind === 'group' && a.db.groupMap[d.id]) a.goGroup(d.id)
-        if (d.kind === 'task') a.openTask(d.id)
-      }
+      if (d.type === 'pruon-go' && popList) { const { type, ...rest } = d; return toMain(rest) }   // (예전 방식) 목록 창 → 앱 창으로 넘김
+      if (d.type === 'pruon-go' && !isPop) goTo(d)
     }
     window.addEventListener('message', on)
-    return () => window.removeEventListener('message', on)
+    // 팝업이 막혀 새 창을 못 연 경우의 알림
+    const c = channel()
+    const onBc = e => { const d = e.data || {}; if (d.type === 'pruon-go' && !isPop) goTo(d) }
+    if (c) c.addEventListener('message', onBc)
+    return () => { window.removeEventListener('message', on); if (c) c.removeEventListener('message', onBc) }
   }, [popRoom, isPop, popList])
+  // 앱 창 이름: 대화 창이 '제품 열기' 할 때 이 창을 찾음
+  useEffect(() => { if (!isPop) { try { window.name = MAIN_NAME } catch (_) {} } }, [isPop])
+  // 대화 창에서 열어달라는 화면으로 이동
+  const goTo = d => {
+    const a = appRef.current; if (!a) return
+    if (d.kind === 'change' && a.db.changeMap[d.id]) a.goChange(d.id)
+    if (d.kind === 'group' && a.db.groupMap[d.id]) a.goGroup(d.id)
+    if (d.kind === 'task') { const t = a.db.tasks.find(x => String(x.id) === String(d.id)); if (t) a.openTask(t.id) }
+  }
+  // ?go=종류:id 로 열린 경우 (앱 창이 없을 때 대화 창이 새로 연 것) — 한 번만 이동하고 주소 정리
+  const goDone = useRef(false)
+  useEffect(() => {
+    if (isPop || goDone.current || !app || tab === null) return
+    const g = goParam(); goDone.current = true
+    if (!g) return
+    goTo(g)
+    try { history.replaceState(null, '', location.pathname) } catch (_) {}
+  }, [app, tab, isPop])
 
   if (err && !db) return <Fail msg={'불러오지 못했습니다: ' + err} />
   if (!db) return <div className="auth"><div className="auth-card"><p className="muted">불러오는 중…</p></div></div>
