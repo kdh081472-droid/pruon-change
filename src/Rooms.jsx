@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useApp, Mark } from './ctx.jsx'
+import { useApp, Mark, Person } from './ctx.jsx'
 import { snip, hasAll } from './util.js'
 import { openPopup, useOpenPopups } from './popchat.js'
 
 // 대화방 목록 (카톡식): 최근 대화순 · 묶음은 한 줄로 접고 펼치면 묶음 전체 대화 + 품목 방 · 종결된 방도 포함
 // room = 변경(품목) id 또는 'g:' + 묶음 id
 
-const FILTERS = [['all', '전체'], ['unread', '안 읽음'], ['at', '@나'], ['live', '진행 중'], ['fin', '종결']]
+const FILTERS = [['all', '전체'], ['unread', '안 읽음'], ['live', '진행 중'], ['fin', '종결']]
 
 function when(ts) {
   if (!ts) return ''
@@ -94,9 +94,9 @@ export function RoomList({ sel, onPick, onSearchPick, dbl, onSel, opened = {} })
   const selG = sel && (String(sel).startsWith('g:') ? sel.slice(2) : db.changeMap[sel] && db.changeMap[sel].group_id)
 
   const shown = entries.filter(e => (
-    st.f === 'unread' ? e.un > 0 : st.f === 'at' ? e.at : st.f === 'live' ? e.open : st.f === 'fin' ? !e.open : true
+    st.f === 'unread' ? e.un > 0 : st.f === 'live' ? e.open : st.f === 'fin' ? !e.open : true
   ))
-  const cnt = { unread: entries.filter(e => e.un > 0).length, at: entries.filter(e => e.at).length }
+  const cnt = { unread: entries.filter(e => e.un > 0).length }
 
   const roomName = room => {
     if (String(room).startsWith('g:')) { const g = db.groupMap[room.slice(2)]; return g ? { t: g.title + ' · 묶음 전체 대화', tag: '묶음' } : { t: '' } }
@@ -133,7 +133,7 @@ export function RoomList({ sel, onPick, onSearchPick, dbl, onSel, opened = {} })
           <div className="rl2-f" role="group" aria-label="대화방 거르기">
             {FILTERS.map(([v, t]) => (
               <button key={v} type="button" className={'sum-chip' + (st.f === v ? ' on' : '')} aria-pressed={st.f === v} onClick={() => setSt({ f: v })}>
-                {t}{v === 'unread' && cnt.unread > 0 && <b>{cnt.unread}</b>}{v === 'at' && cnt.at > 0 && <b>{cnt.at}</b>}
+                {t}{v === 'unread' && cnt.unread > 0 && <b>{cnt.unread}</b>}
               </button>
             ))}
           </div>
@@ -185,8 +185,8 @@ export function RoomList({ sel, onPick, onSearchPick, dbl, onSel, opened = {} })
 }
 
 /* ---------- PC 대화 탭: 방 목록 (카톡 PC처럼) · 방을 더블클릭하면 작은 창으로 ---------- */
-export default function ChatTab() {
-  const { db, ui, setUi, toast } = useApp()
+export default function ChatTab({ inWindow }) {
+  const { db, me, ui, setUi, toast } = useApp()
   const opened = useOpenPopups()
   const sel = ui.chatRoom && (String(ui.chatRoom).startsWith('g:') ? db.groupMap[ui.chatRoom.slice(2)] : db.changeMap[ui.chatRoom]) ? ui.chatRoom : null
   const open = (room, jump) => {
@@ -196,7 +196,7 @@ export default function ChatTab() {
   return (
     <div className="ct ct1">
       <section className="ct-l">
-        <div className="ct-lh">대화 <small>방을 더블클릭하면 작은 창으로 열립니다</small></div>
+        <div className="ct-lh">대화 <small>{inWindow ? '더블클릭하면 대화 창' : '방을 더블클릭하면 작은 창으로 열립니다'}</small>{inWindow && <span className="ct-me"><Person id={me.id} /></span>}</div>
         <RoomList dbl sel={sel} opened={opened} onSel={room => setUi(u => ({ ...u, chatRoom: room }))}
           onPick={room => open(room)} onSearchPick={(room, mid, q) => open(room, { q, mid })} />
       </section>

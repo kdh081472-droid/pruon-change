@@ -16,12 +16,15 @@ import Report from './Report.jsx'
 import Settings from './Settings.jsx'
 import GroupView, { GroupDock } from './GroupView.jsx'
 import ChatTab, { RoomList } from './Rooms.jsx'
-import { popupRoom, popupJump, channel, toMain } from './popchat.js'
+import { popupRoom, popupList, popupJump, channel, toMain, openPopup, openListPopup, announceWindow } from './popchat.js'
 
 export default function Dashboard({ session }) {
   const uid = session.user.id
   const { db, err, reload, markReadLocal: markLocal } = useAppData(uid)
   const popRoom = useMemo(() => popupRoom(), [])          // 대화 작은 창으로 열린 경우 그 방
+  const popList = useMemo(() => !popRoom && popupList(), [popRoom])   // 대화 목록 창
+  const isPop = !!(popRoom || popList)
+  useEffect(() => (popRoom ? announceWindow(popRoom) : undefined), [popRoom])
   const [popJump, setPopJump] = useState(() => (popRoom ? popupJump() : null))
   // 읽음 표시: 내 화면에 먼저 반영 + 다른 창(대화 작은 창 ↔ 앱 창)에도 바로 알림
   const markReadLocal = useCallback((room, lastId) => {
@@ -117,7 +120,7 @@ export default function Dashboard({ session }) {
     }
     const rd = room => db.reads[uid + '|' + room] || 0
     const n = db.messages.filter(m => m.user_id !== uid && !m.deleted && m.id > rd(m.room)).length
-    document.title = (n > 0 ? '(' + (n > 999 ? '999+' : n) + ') ' : '') + baseTitle.current
+    document.title = (n > 0 ? '(' + (n > 999 ? '999+' : n) + ') ' : '') + (popList ? '대화 · ' : '') + baseTitle.current
   }, [db, uid])
 
   const toast = useCallback(m => {
@@ -185,21 +188,22 @@ export default function Dashboard({ session }) {
   }, [db, me, uid, viewer, wide, ui, sheet, reload, toast, markReadLocal, isAdmin])
 
   // 대화 작은 창: 제품·묶음·할 일 열기는 원래 앱 창에서
-  const popApp = useMemo(() => app && popRoom ? {
+  const popApp = useMemo(() => app && isPop ? {
     ...app,
     goChange: id => toMain({ kind: 'change', id }),
     selectProduct: id => toMain({ kind: 'change', id }),
     goGroup: id => toMain({ kind: 'group', id }),
     openTask: id => toMain({ kind: 'task', id }),
-    openChat: () => {}, goChat: () => {},
-  } : null, [app, popRoom])
+    openChat: room => openPopup(room), goChat: room => openPopup(room),
+  } : null, [app, isPop])
   const appRef = useRef(app); appRef.current = app
   useEffect(() => {
     const on = e => {
       if (e.origin !== location.origin) return
       const d = e.data || {}
       if (d.type === 'pruon-jump' && popRoom) setPopJump({ q: d.q, mid: d.mid, t: Date.now() })
-      if (d.type === 'pruon-go' && !popRoom && appRef.current) {
+      if (d.type === 'pruon-go' && popList) { const { type, ...rest } = d; return toMain(rest) }   // 목록 창 → 원래 앱 창으로 넘김
+      if (d.type === 'pruon-go' && !isPop && appRef.current) {
         const a = appRef.current
         if (d.kind === 'change' && a.db.changeMap[d.id]) a.goChange(d.id)
         if (d.kind === 'group' && a.db.groupMap[d.id]) a.goGroup(d.id)
@@ -208,7 +212,7 @@ export default function Dashboard({ session }) {
     }
     window.addEventListener('message', on)
     return () => window.removeEventListener('message', on)
-  }, [popRoom])
+  }, [popRoom, isPop, popList])
 
   if (err && !db) return <Fail msg={'불러오지 못했습니다: ' + err} />
   if (!db) return <div className="auth"><div className="auth-card"><p className="muted">불러오는 중…</p></div></div>
@@ -223,6 +227,15 @@ export default function Dashboard({ session }) {
           {ok ? <Chat cid={popRoom} tab popup onClose={() => window.close()} searchQ={popJump && popJump.q} jumpTo={popJump && popJump.mid ? popJump : null} onSearchClose={() => setPopJump(null)} />
             : <div className="ct-empty"><b>대화방을 찾을 수 없습니다</b><span>지워졌거나 볼 수 없는 대화입니다.</span></div>}
         </div>
+        {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
+        {err && <div className="netbar">연결이 불안정합니다. 잠시 후 자동으로 다시 시도합니다.</div>}
+      </Ctx.Provider>
+    )
+  }
+  if (popList) {
+    return (
+      <Ctx.Provider value={popApp}>
+        <div className="pop-wrap pop-list"><ChatTab inWindow /></div>
         {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
         {err && <div className="netbar">연결이 불안정합니다. 잠시 후 자동으로 다시 시도합니다.</div>}
       </Ctx.Provider>
@@ -271,7 +284,14 @@ export default function Dashboard({ session }) {
     return (
       <Ctx.Provider value={app}>
         <div className={'wide-wrap' + (noDock ? ' no-dock' : '')}>
-          <Sidebar tab={tab} setTab={k => { setTab(k); setSheet(null) }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} chatN={unreadAll} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
+          <Sidebar tab={tab} setTab={k => {
+            if (k === 'chat') {
+              // 대화: 목록을 따로 창으로 (카톡 PC처럼). 팝업이 막히면 앱 안 대화 탭으로
+              if (openListPopup()) return
+              toast('팝업이 막혀 있어 앱 안에서 보여드립니다. 주소창 오른쪽 팝업 차단 표시에서 허용하면 따로 창으로 뜹니다.')
+            }
+            setTab(k); setSheet(null)
+          }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} chatN={unreadAll} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
           <div className="wide-main">
             <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '') + (tab === 'chat' ? ' full chat-in' : '')}>
               {tab !== 'product' && tab !== 'timeline' && tab !== 'group' && tab !== 'chat' && <h1 className="page-t wide-t">{title}</h1>}

@@ -6,6 +6,26 @@ import { useEffect, useState } from 'react'
 export function popupRoom() {
   try { return new URLSearchParams(location.search).get('chat') } catch (_) { return null }
 }
+// 대화 목록 창 (앱주소?chats=1)
+export function popupList() {
+  try { return new URLSearchParams(location.search).get('chats') === '1' } catch (_) { return false }
+}
+let listWin = null
+export function openListPopup() {
+  if (!listWin || listWin.closed) {
+    const W = 380, H = 760
+    const left = Math.max(0, (window.screenX || 0) + (window.outerWidth || 1200) - W - 440)
+    const top = Math.max(0, (window.screenY || 0) + 40)
+    listWin = window.open('', 'pruon_chat_list', `popup=yes,width=${W},height=${H},left=${left},top=${top}`)
+    if (!listWin) return false
+    let blank = true
+    try { blank = !listWin.location.href || listWin.location.href === 'about:blank' } catch (_) { blank = true }
+    if (blank) listWin.location.href = base() + '?chats=1'
+  }
+  try { listWin.focus() } catch (_) {}
+  return true
+}
+
 export function popupJump() {
   try {
     const p = new URLSearchParams(location.search)
@@ -47,12 +67,49 @@ export function openPopup(room, jump) {
   return true
 }
 
-// 이 창에서 띄운 대화 창 중 아직 열려 있는 방 { room: true }
+// 다른 창에서 띄운 대화 창도 알 수 있게: 대화 창이 열리고 닫힐 때 알림
+const remote = {}                 // 방 → 마지막 알림 시각
+let listening = false
+function listen() {
+  if (listening) return
+  const c = channel(); if (!c) return
+  listening = true
+  c.addEventListener('message', e => {
+    const d = e.data || {}
+    if (d.type === 'win-open') { remote[d.room] = Date.now(); emit() }
+    if (d.type === 'win-close') { delete remote[d.room]; emit() }
+  })
+  c.postMessage({ type: 'win-ping' })
+  // 혹시 닫힘 알림을 못 받았을 때: 10초마다 물어보고 25초 넘게 대답 없는 방은 지움
+  setInterval(() => {
+    c.postMessage({ type: 'win-ping' })
+    const now = Date.now(); let ch = false
+    Object.keys(remote).forEach(r => { if (now - remote[r] > 25000) { delete remote[r]; ch = true } })
+    if (ch) emit()
+  }, 10000)
+}
+// 대화 창 쪽: 열렸다고 알리고, 물어보면 대답, 닫힐 때 알림
+export function announceWindow(room) {
+  const c = channel(); if (!c) return () => {}
+  const hi = () => c.postMessage({ type: 'win-open', room })
+  const on = e => { if ((e.data || {}).type === 'win-ping') hi() }
+  const bye = () => c.postMessage({ type: 'win-close', room })
+  c.addEventListener('message', on)
+  window.addEventListener('pagehide', bye)
+  hi()
+  return () => { c.removeEventListener('message', on); window.removeEventListener('pagehide', bye) }
+}
+
+// 열려 있는 대화 창의 방 { room: true }
 export function useOpenPopups() {
-  const calc = () => Object.fromEntries(Object.entries(opened).filter(([, w]) => w && !w.closed).map(([r]) => [r, true]))
+  listen()
+  const calc = () => ({
+    ...Object.fromEntries(Object.keys(remote).map(r => [r, true])),
+    ...Object.fromEntries(Object.entries(opened).filter(([, w]) => w && !w.closed).map(([r]) => [r, true])),
+  })
   const [st, setSt] = useState(calc)
   useEffect(() => {
-    const f = () => setSt(prev => { const n = calc(); return JSON.stringify(n) === JSON.stringify(prev) ? prev : n })
+    const f = () => setSt(prev => { const n = calc(); return JSON.stringify(Object.keys(n).sort()) === JSON.stringify(Object.keys(prev).sort()) ? prev : n })
     subs.add(f)
     const t = setInterval(f, 1500)
     return () => { subs.delete(f); clearInterval(t) }

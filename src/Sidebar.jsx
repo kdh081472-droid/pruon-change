@@ -28,7 +28,7 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, chatN, is
       <nav className="sd-nav">
         {[...navTop, null, ...navAll, ...navEnd].map(x => x === null ? <div key="g" className="sn-g">전체 일정</div> : (
           <button key={x[0]} type="button" className={'sn' + (navAll.some(n => n[0] === x[0]) ? ' sub' : '') + (tab === x[0] || ((tab === 'product' || tab === 'group') && x[0] === 'summary') ? ' on' : '')} onClick={() => setTab(x[0])}>
-            {ICON[x[2]]}<span>{x[1]}</span>
+            {ICON[x[2]]}<span>{x[1]}{x[0] === 'chat' && <small className="sn-ext" aria-label="따로 창으로 열림"> ↗</small>}</span>
             {x[0] === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
             {x[0] === 'chat' && chatN > 0 && <span className="n">{chatN > 999 ? '999+' : chatN}</span>}
           </button>

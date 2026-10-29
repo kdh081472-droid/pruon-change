@@ -1442,3 +1442,11 @@ html, body { max-width: 100%; overflow-x: hidden }
   :root:not([data-theme="light"]) .rm-win { color: #7ee0c3; background: #123329 }
 }
 :root[data-theme="dark"] .rm-win { color: #7ee0c3; background: #123329 }
+/* 대화 목록 창 */
+.pop-list .ct.ct1 { grid-template-columns: minmax(0, 1fr); width: 100% }
+.pop-list .ct-l { border-right: 0 !important }
+.pop-list .ct-lh { display: flex; align-items: baseline; gap: 0; padding: 12px 12px 2px; font-size: 17px }
+.pop-list .ct-me { margin-left: auto; font-size: 12.5px; font-weight: 600 }
+.pop-list .rl2-h { padding-left: 12px; padding-right: 12px }
+.pop-list .rm-i { padding-left: 10px; padding-right: 10px }
+.sn-ext { font-size: 12px; color: var(--muted); font-weight: 600 }
