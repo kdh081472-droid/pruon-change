@@ -23,7 +23,7 @@ export function emptyAi() {
 }
 
 const FIELDS = ['title', 'description', 'reason', 'target_date', 'mode', 'items']
-const EXAMPLE = '풀무원 내수용 만두 3종(메밀김치지짐속, 탱글물만두속, 육즙듬뿍만두속) 원료를 조미1에서 조미2로 바꿔요. 12월 15일부터 생산분이에요.'
+const EXAMPLE = '풀무원 내수용 만두 3종(메밀김치지짐속, 탱글물만두속, 육즙듬뿍만두속) 원료를 조미1에서 조미2로 바꿔요. 풀무원이 원료 공급처를 바꾸면서 요청한 거고, 12월 15일부터 생산분이에요.'
 
 // 새 초안 + 지금 미리보기 → 직접 고친 칸·사람이 켜고 끈 할 일은 그대로 두고 합침. 바뀐 칸 목록도 같이
 export function mergeDraft(prev, next, locked, edits) {
@@ -156,16 +156,21 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
     <div className="card ai-chat">
       <div className="ai-ch-h">
         <b>AI와 대화</b><span>말로 설명하면 오른쪽 초안을 채우고, 모르는 건 여쭤봐요</span>
-        {ai.msgs.length > 0 && !test && (reset
-          ? <span className="ai-rs">대화와 미리보기를 지울까요? <button type="button" className="link warn-t" onClick={restart}>지우기</button> <button type="button" className="link" onClick={() => setReset(false)}>취소</button></span>
-          : <button type="button" className="link ai-rs" onClick={() => setReset(true)}>새로 시작</button>)}
+        {ai.msgs.length > 0 && !test && <button type="button" className="ai-rsb" onClick={() => setReset(true)}>↺ 새로 시작</button>}
+        {reset && (
+          <div className="ai-rspop" role="dialog" aria-label="새로 시작">
+            <b>대화와 미리보기를 모두 지울까요?</b>
+            <p>양식([직접 작성])에 이미 채운 내용은 그대로 남습니다.</p>
+            <div><button type="button" className="btn sm ghost" onClick={() => setReset(false)}>취소</button><button type="button" className="btn sm ai-rsgo" onClick={restart}>지우고 새로 시작</button></div>
+          </div>
+        )}
       </div>
       <div className="ai-msgs" ref={boxRef} aria-live="polite">
         {ai.msgs.length === 0 && (
           <div className="ai-hello">
-            <p><b>어떤 변경인지 편하게 말로 적어주세요.</b> 업체·제품·무엇이 어떻게 바뀌는지·언제부터인지 정도면 충분합니다. 모르는 건 비워 두셔도 돼요.</p>
+            <p><b>어떤 변경인지 편하게 말로 적어주세요.</b> 업체·제품·무엇이 어떻게 바뀌는지·<b>왜 바뀌는지(사유)</b>·언제부터인지 정도면 충분합니다. 모르는 건 비워 두셔도 돼요.</p>
             <button type="button" className="ai-ex" onClick={() => { setText(EXAMPLE); setTimeout(() => inRef.current && inRef.current.focus(), 20) }}>예: {EXAMPLE}</button>
-            <p className="ai-hello-s">할 일은 기본 할 일과 과거 변경에 실제로 배정됐던 할 일에서만 골라요. 등록은 양식에 채운 뒤 직접 눌러야 저장됩니다.</p>
+            <p className="ai-hello-s">할 일은 기본 할 일·과거 변경·저장한 배정 목록에서만 골라요. 등록은 양식에 채운 뒤 직접 눌러야 저장됩니다.</p>
           </div>
         )}
         {ai.msgs.map((m, i) => (
@@ -189,7 +194,7 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
       )}
       <p className="ai-note">배합비 같은 대외비는 적지 마세요. 입력 내용은 AI 서비스로 전송됩니다.</p>
       <div className="ai-in">
-        <textarea ref={inRef} rows={2} value={text} disabled={busy} aria-label="AI에게 보낼 내용"
+        <textarea ref={inRef} rows={3} value={text} disabled={busy} aria-label="AI에게 보낼 내용"
           placeholder={ai.msgs.length ? '고칠 내용을 말로 적어주세요 (예: 생산 할 일에 재고 확인도 넣어줘)' : '어떤 변경인지 적어주세요'}
           onChange={e => { setText(e.target.value); if (warn) setWarn(null) }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(false) } }} />
@@ -245,9 +250,9 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
           ))}
         </ul>
       )}
-      <div className="ai-l">참고한 과거 변경</div>
+      <div className="ai-l">참고한 목록</div>
       {d.refs.length === 0 ? <p className="ai-empty-s">없음 · 기본 할 일에서만 골랐어요</p> : (
-        <div className="ai-refs">{d.refs.map(r => <span key={r.id} className="ai-ref" title={(r.kind === 'group' ? '묶음 · ' : '') + r.title}>{r.title} ({md2(r.date)})</span>)}</div>
+        <div className="ai-refs">{d.refs.map(r => <span key={r.id} className={'ai-ref' + (r.kind === 'saved' ? ' sv' : '')} title={(r.kind === 'saved' ? '저장한 목록 · ' : '과거 변경 · ') + r.title}>{r.kind === 'saved' ? '저장 · ' : ''}{r.title}{r.kind === 'saved' ? '' : ` (${md2(r.date)})`}</span>)}</div>
       )}
     </div>
   )
@@ -255,17 +260,19 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
   const shownDepts = d ? ORDER.filter(dp => d.tasks.some(t => t.department === dp)) : []
   const tasksCol = d && (
     <div className="ai-col">
-      <div className="ai-l">부서별 할 일 · <span className="ai-sub">기본 할 일과 과거 변경에 배정됐던 할 일에서만 고릅니다</span></div>
-      <p className="ai-tnote">둘 다에 없는 할 일은 AI가 새로 만들지 않습니다. 필요하면 양식에 채운 뒤 직접 추가하세요.{ai.dropped > 0 && <> (목록에 없는 할 일 {ai.dropped}건은 자동으로 뺐어요)</>}</p>
+      <div className="ai-l">부서별 할 일 · <span className="ai-sub">기본 할 일·과거 변경·저장한 목록에서만 고릅니다</span></div>
+      <p className="ai-tnote">기본 할 일·과거 변경·저장한 목록 어디에도 없는 할 일은 AI가 새로 만들지 않습니다. 필요하면 양식에 채운 뒤 직접 추가하세요.{ai.dropped > 0 && <> (목록에 없는 할 일 {ai.dropped}건은 자동으로 뺐어요)</>}</p>
       {shownDepts.map(dp => (
         <section key={dp} className="ai-dept">
           <b className="ai-dn">{dp}</b>
           {d.tasks.filter(t => t.department === dp).map(t => (
-            <label key={tkey(t)} className={'ai-t' + (t.on ? '' : ' off') + (t.source === 'past' ? ' past' : '') + (ch.has('task:' + tkey(t)) ? ' chg' : '')}>
+            <label key={tkey(t)} className={'ai-t' + (t.on ? '' : ' off') + (t.source === 'past' ? ' past' : '') + (t.source === 'saved' ? ' saved' : '') + (ch.has('task:' + tkey(t)) ? ' chg' : '')}>
               <input type="checkbox" checked={t.on} onChange={e => toggleTask(t, e.target.checked)} />
               <span className="ai-tt">
                 {t.title}
-                {t.source === 'past' && t.ref && <><span className="ai-src">과거 변경에서</span><small className="ai-srcl">출처: 「{t.ref.title}」 {dp} 할 일 ({md2(t.ref.date)})</small></>}
+                {t.source === 'past' && t.ref && <><span className="ai-src">과거 변경에서</span><small className="ai-srcl">출처: 「{t.ref.title}」 {dp} 할 일 ({md2(t.ref.date)}){t.freq > 1 ? ` · 비슷한 변경 ${t.freq}건에서 자주 쓰임` : ''}</small></>}
+                {t.source === 'saved' && t.ref && <><span className="ai-src sv">저장한 목록에서</span><small className="ai-srcl sv">출처: 저장한 목록 「{t.ref.title}」{t.freq > 1 ? ` · ${t.freq}건에서 자주 쓰임` : ''}</small></>}
+                {t.source === 'template' && t.freq > 1 && <small className="ai-srcl">비슷한 변경 {t.freq}건에서 자주 쓰임</small>}
               </span>
             </label>
           ))}

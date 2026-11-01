@@ -189,7 +189,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
       d.tasks.filter(t => t.department === dp && t.on).forEach(t => {
         const tp = t.source === 'template' && tpls.find(x => x.department === dp && x.title === t.title && !used.has(x.id))
         if (tp) { used.add(tp.id); list.push(fromTpl(tp, true)) }
-        else list.push({ k: newK(), dept: dp, title: t.title, on: true, tpl: null, src: t.ref ? { title: t.ref.title, date: t.ref.date } : null })
+        else list.push({ k: newK(), dept: dp, title: t.title, on: true, tpl: null, src: t.ref ? { title: t.ref.title, date: t.ref.date, saved: t.source === 'saved' } : null })
       })
       tpls.filter(x => x.department === dp && !used.has(x.id)).forEach(x => list.push(fromTpl(x, false)))
     })
@@ -529,7 +529,9 @@ export default function NewChange({ nf, setNf, onDone, test }) {
                       </span>
                     ) : (
                       <label htmlFor={x.tpl || x.plain ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.orig && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}
-                        {x.src && <><span className="ai-src">과거 변경에서</span><small className="ai-srcl">출처: 「{x.src.title}」 ({md2(x.src.date)})</small></>}</label>
+                        {x.src && (x.src.saved
+                          ? <><span className="ai-src sv">저장한 목록에서</span><small className="ai-srcl sv">출처: 저장한 목록 「{x.src.title}」</small></>
+                          : <><span className="ai-src">과거 변경에서</span><small className="ai-srcl">출처: 「{x.src.title}」 ({md2(x.src.date)})</small></>)}</label>
                     )}
                     {!editing && (
                       <span className="nr-act">

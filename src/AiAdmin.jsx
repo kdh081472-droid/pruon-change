@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { supabase, ORDER } from './supabase.js'
+import { supabase, ORDER, SHORT } from './supabase.js'
 import { useApp } from './ctx.jsx'
 import { errText, stampFull, iso, add, todayMid, hasAll } from './util.js'
 import NewChange, { emptyForm } from './NewChange.jsx'
-import { resetAiPublic, md2 } from './ai.js'
+import { resetAiPublic, md2, MODELS, estCost } from './ai.js'
 
 // 관리자 모드 › AI 초안 설정: 켜기·기준 / 참고·경고 / 시험해 보기 / 사용 현황
 const SUBS = [['on', '켜기·기준'], ['ref', '참고·경고'], ['test', '시험해 보기'], ['use', '사용 현황']]
@@ -13,8 +13,8 @@ const SUBT = {
   test: '실제 변경 등록과 똑같이 동작, 저장 안 됨',
   use: '이름 없이 숫자만',
 }
-const KEYS = ['enabled', 'monthly_limit', 'max_questions', 'rules', 'past_months', 'closed_only', 'skip_stopped', 'excluded', 'type_links', 'conf_words', 'conf_mode', 'model', 'price_in', 'price_out', 'price_cache_read', 'price_cache_write', 'usd_krw']
-const pick = c => Object.fromEntries(KEYS.map(k => [k, c[k]]))
+const KEYS = ['enabled', 'monthly_limit', 'max_questions', 'rules', 'past_months', 'closed_only', 'skip_stopped', 'excluded', 'pinned', 'send_n', 'type_links', 'conf_words', 'conf_mode', 'model', 'price_in', 'price_out', 'price_cache_read', 'price_cache_write', 'usd_krw']
+const pick = c => Object.fromEntries(KEYS.map(k => [k, k === 'pinned' ? (c[k] || []) : k === 'send_n' ? (c[k] || 15) : c[k]]))
 const won = n => Math.round(Number(n) || 0).toLocaleString()
 
 function Sw({ on, onChange, label }) {
@@ -96,6 +96,8 @@ function OnTab({ cfg, f, set }) {
         <div className="stat"><div className="k">확인 필요 최대 개수</div><div className="v"><input className="hb-num" type="number" min="0" max="10" value={f.max_questions} onChange={e => set({ max_questions: e.target.value })} aria-label="확인 필요 질문 최대 개수" /><small> 개 / 초안 1건</small></div><div className="s">많으면 아무도 안 읽음 · 3~5개 권장 · 0이면 묻지 않음</div></div>
       </div>
 
+      <ModelCard f={f} set={set} />
+
       <div className="card adm-card">
         <h2>확인 필요 기준 <small className="us-sm">AI는 아래 경우에만 질문을 남깁니다 · 위에 있을수록 먼저 묻습니다(끌어서 순서 변경)</small></h2>
         <p className="ai-p"><b>모든 질문은 등록하는 사람에게만</b> AI 대화에서 묻습니다(다른 부서를 부르지 않음). AI가 <b>대화 내용으로 어떤 변경인지 판단해서 해당되는 기준만</b> 묻습니다(예: 박스 얘기가 없으면 박스 질문은 안 함). '경우'는 구체적으로 적어주세요.</p>
@@ -128,10 +130,10 @@ function OnTab({ cfg, f, set }) {
       </div>
 
       <details className="card adm-card ai-adv">
-        <summary>비용 계산 기준 (고급) · 모델 {f.model} · 환율 {won(f.usd_krw)}원</summary>
-        <p className="ai-p">추정 금액 = 쓴 토큰 수 × 단가(미국 달러, 100만 토큰당) × 환율. AI 회사 가격이나 환율이 바뀌면 여기 숫자만 고치면 됩니다. 실제 청구 금액은 AI 회사 사이트에서 확인하세요.</p>
+        <summary>단가·환율 (고급) · 모델을 고르면 자동으로 채워짐 · 환율 {won(f.usd_krw)}원</summary>
+        <p className="ai-p">추정 금액 = 쓴 토큰 수 × 단가(미국 달러, 100만 토큰당) × 환율. 위에서 모델을 고르면 단가가 자동으로 바뀝니다. AI 회사 가격이나 환율이 바뀌면 여기 숫자만 고치면 됩니다. 실제 청구 금액은 AI 회사 사이트에서 확인하세요.</p>
         <div className="ai-adv-g">
-          <label>모델<input value={f.model} onChange={e => set({ model: e.target.value })} /></label>
+          <label>모델 이름 (직접 입력)<input value={f.model} onChange={e => set({ model: e.target.value })} /></label>
           <label>입력 단가 ($)<input type="number" step="0.01" min="0" value={f.price_in} onChange={e => set({ price_in: e.target.value })} /></label>
           <label>출력 단가 ($)<input type="number" step="0.01" min="0" value={f.price_out} onChange={e => set({ price_out: e.target.value })} /></label>
           <label>캐시 읽기 ($)<input type="number" step="0.001" min="0" value={f.price_cache_read} onChange={e => set({ price_cache_read: e.target.value })} /></label>
@@ -143,34 +145,93 @@ function OnTab({ cfg, f, set }) {
   )
 }
 
-/* ---------- 참고·경고 ---------- */
-function usePast(f) {
-  const [past, setPast] = useState(null)
-  const k = JSON.stringify([f.past_months, f.closed_only, f.skip_stopped, f.excluded])
-  useEffect(() => {
-    let alive = true
-    const t = setTimeout(async () => {
-      const { data, error } = await supabase.rpc('admin_ai_past', { p_months: parseInt(f.past_months, 10) || 12, p_closed_only: !!f.closed_only, p_skip_stopped: !!f.skip_stopped, p_excluded: f.excluded || [] })
-      if (alive) setPast(error ? { err: errText(error) } : data)
-    }, 250)
-    return () => { alive = false; clearTimeout(t) }
-  }, [k])
-  return past
+function ModelCard({ f, set }) {
+  const cur = MODELS.find(m => m.id === f.model)
+  const pick = id => {
+    const m = MODELS.find(x => x.id === id)
+    if (m) set({ model: m.id, price_in: m.p.in, price_out: m.p.out, price_cache_read: m.p.cr, price_cache_write: m.p.cw })
+  }
+  const e = estCost(f)
+  const lim = parseInt(f.monthly_limit, 10) || 0
+  const priceOk = cur && Number(f.price_in) === cur.p.in && Number(f.price_out) === cur.p.out && Number(f.price_cache_read) === cur.p.cr && Number(f.price_cache_write) === cur.p.cw
+  return (
+    <div className="card adm-card ai-model">
+      <h2>사용 모델 <small className="us-sm">고르면 단가가 자동으로 채워지고 예상 금액이 바뀝니다</small></h2>
+      <div className="ai-mrow">
+        <select value={cur ? cur.id : ''} aria-label="사용 모델" onChange={ev => pick(ev.target.value)}>
+          {!cur && <option value="">직접 입력: {f.model}</option>}
+          {MODELS.map(m => <option key={m.id} value={m.id}>{m.name} — {m.tag}</option>)}
+        </select>
+        <div className="ai-mest">
+          <span>대화 1번 약 <b>{e.next < 10 ? e.next.toFixed(1) : won(e.next)}원</b>{e.first > e.next * 1.3 && <small> (첫 번째는 약 {e.first < 10 ? e.first.toFixed(1) : won(e.first)}원)</small>}</span>
+          <span>초안 1건(대화 4번) 약 <b>{e.draft < 10 ? e.draft.toFixed(1) : won(e.draft)}원</b></span>
+          {lim > 0 && e.draft > 0 && <span>월 한도 {won(lim)}원이면 약 <b>{won(Math.floor(lim / e.draft))}건</b></span>}
+        </div>
+      </div>
+      <div className="ai-mcmp">
+        {MODELS.map(m => {
+          const x = estCost({ ...f, price_in: m.p.in, price_out: m.p.out, price_cache_read: m.p.cr, price_cache_write: m.p.cw })
+          return <button key={m.id} type="button" className={m.id === f.model ? 'on' : ''} onClick={() => pick(m.id)}><b>{m.name}</b><span>{m.tag}</span><em>초안 1건 약 {x.draft < 10 ? x.draft.toFixed(1) : won(x.draft)}원</em></button>
+        })}
+      </div>
+      <p className="ai-p muted">예상 금액은 규칙·참고 자료 약 9천 토큰, 한 번에 답 약 1.5천 토큰으로 가정한 어림값입니다(과거 변경이 많거나 대화가 길면 늘어남). 단가는 2026년 11월 공개 자료 기준이라 바뀔 수 있습니다{cur && !priceOk ? ' · 지금 단가를 직접 고쳐 둔 상태입니다' : ''}. 정확한 금액은 '시험해 보기'와 '사용 현황'에서 확인하세요. 저장해야 사용자에게 반영됩니다.</p>
+    </div>
+  )
 }
 
+/* ---------- 참고·경고 ---------- */
 function RefTab({ f, set }) {
   const { db } = useApp()
-  const past = usePast(f)
   const [q, setQ] = useState('')
+  const [open, setOpen] = useState({})
   const [word, setWord] = useState('')
   const ex = f.excluded || []
-  const exIds = new Set(ex.map(x => x.id))
-  const titleOf = id => (db.groupMap[id] ? db.groupMap[id].title + ' (묶음)' : db.changeMap[id] ? db.changeMap[id].title : '(삭제된 변경)')
-  const cands = useMemo(() => {
-    if (!q.trim()) return []
-    const xs = [...db.changes.filter(c => !c.group_id).map(c => ({ id: c.id, title: c.title, at: c.created_at, g: false })), ...db.groups.map(g => ({ id: g.id, title: g.title, at: g.created_at, g: true }))]
-    return xs.filter(x => !exIds.has(x.id) && hasAll(x.title, q)).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 8)
-  }, [q, db, f.excluded])
+  const exSet = new Set(ex.map(x => x.id))
+  const pinned = new Set(f.pinned || [])
+  const months = parseInt(f.past_months, 10) || 12
+  const from = Date.now() - months * 30.44 * 86400000
+  // 참고 후보: 종결된 변경에서 자동 추가된 목록(기간·중단 조건) + 저장한 목록(항상)
+  const rows = db.presets.map(p => {
+    const c = p.source_change_id ? db.changeMap[p.source_change_id] : null
+    const g = c && c.group ? c.group : null
+    const kind = p.source_change_id ? 'past' : 'saved'
+    const at = p.closed_at || p.updated_at || p.created_at
+    return { p, c, g, kind, at, title: kind === 'past' ? (g ? g.title : c ? c.title : p.name) : p.name,
+      off: exSet.has(p.id) || (c && exSet.has(c.id)) || (g && exSet.has(g.id)) }
+  }).filter(r => r.kind === 'saved' || ((!r.at || new Date(r.at).getTime() >= from) && !(f.skip_stopped && r.c && r.c.close_type === '중단')))
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+  const shown = rows.filter(r => !q.trim() || hasAll(r.title + ' ' + r.p.name, q))
+  const onN = rows.filter(r => !r.off).length
+  const setOn = (r, on) => {
+    const ids = [r.p.id, r.c && r.c.id, r.g && r.g.id].filter(Boolean)
+    const rest = ex.filter(x => !ids.includes(x.id))
+    set({ excluded: on ? rest : [...rest, { id: r.p.id, reason: '' }], ...(on ? {} : { pinned: (f.pinned || []).filter(x => x !== r.p.id) }) })
+  }
+  const setAll = on => {
+    const ids = new Set(shown.flatMap(r => [r.p.id, r.c && r.c.id, r.g && r.g.id].filter(Boolean)))
+    const rest = ex.filter(x => !ids.has(x.id))
+    set({ excluded: on ? rest : [...rest, ...shown.map(r => ({ id: r.p.id, reason: '' }))] })
+  }
+  const togglePin = r => set({ pinned: pinned.has(r.p.id) ? (f.pinned || []).filter(x => x !== r.p.id) : [...(f.pinned || []), r.p.id] })
+  const deptsOf = r => ORDER.filter(d => r.p.items.some(i => i.department === d)).map(d => SHORT[d] || d).join('·')
+  const Row = r => (
+    <div key={r.p.id}>
+      <div className={'ai-rr' + (r.off ? ' off' : '')}>
+        <input type="checkbox" checked={!r.off} aria-label={r.title + ' 참고'} onChange={e => setOn(r, e.target.checked)} />
+        <button type="button" className={'ai-star' + (pinned.has(r.p.id) ? ' on' : '')} disabled={r.off} title="꼭 참고: 대화와 덜 비슷해도 항상 AI에게 보냄" aria-label={r.title + ' 꼭 참고'} onClick={() => togglePin(r)}>{pinned.has(r.p.id) ? '★' : '☆'}</button>
+        <b className="ai-rt" title={r.title}>{r.title}</b>
+        <small>{r.kind === 'past' ? `${md2(stampFull(r.at).slice(0, 10))} ${r.c && r.c.close_type === '중단' ? '중단 종결' : '종결'}` : (r.p.created_by && db.people[r.p.created_by] ? db.people[r.p.created_by].name : '저장')} · 할 일 {r.p.items.length}건</small>
+        <span className="ai-rd">{deptsOf(r)}</span>
+        <button type="button" className="ai-rx" aria-expanded={!!open[r.p.id]} aria-label={r.title + ' 할 일 보기'} onClick={() => setOpen(o => ({ ...o, [r.p.id]: !o[r.p.id] }))}>{open[r.p.id] ? '▴' : '▾'}</button>
+      </div>
+      {open[r.p.id] && (
+        <div className="ai-rexp">
+          {ORDER.filter(d => r.p.items.some(i => i.department === d)).map(d => <div key={d}><b>{d}</b> {r.p.items.filter(i => i.department === d).map(i => i.title).join(' · ')}</div>)}
+        </div>
+      )}
+    </div>
+  )
+  const past = shown.filter(r => r.kind === 'past'), saved = shown.filter(r => r.kind === 'saved')
   const links = f.type_links || []
   const setLinks = l => set({ type_links: l })
   const words = f.conf_words || []
@@ -178,67 +239,75 @@ function RefTab({ f, set }) {
   const sampleW = words[0] || '배합비'
   return (
     <>
-      <div className="adm-two ai-two-c">
-        <div className="card adm-card">
-          <h2>참고할 과거 변경 <small className="us-sm">'과거 변경에서' 할 일 제안의 유일한 출처</small></h2>
-          <p className="ai-p">AI는 여기서 정한 과거 변경에 실제로 배정됐던 할 일과 기본 할 일에서만 고릅니다. 잘못 등록된 건은 '참고 제외'로 빼주세요.</p>
+      <div className="ai-ref2">
+        <div className="card adm-card ai-refl">
+          <h2>참고할 배정 목록 <small className="us-sm">체크된 목록만 AI가 참고 · 새로 생긴 목록은 자동 체크</small></h2>
           <div className="ai-pf">
             <label>기간 <select value={f.past_months} onChange={e => set({ past_months: parseInt(e.target.value, 10) })}>
               {[3, 6, 12, 24, 36].map(m => <option key={m} value={m}>최근 {m}개월</option>)}
             </select></label>
-            <label className="ck"><input type="checkbox" checked={!!f.closed_only} onChange={e => set({ closed_only: e.target.checked })} /> 종결된 건만</label>
             <label className="ck"><input type="checkbox" checked={!!f.skip_stopped} onChange={e => set({ skip_stopped: e.target.checked })} /> 중단 종결 제외</label>
-            <span className="ai-cnt">{!past ? '세는 중…' : past.err ? past.err : <>지금 참고 대상 <b>{past.total}건</b></>}</span>
+            <input className="ai-search sm" value={q} placeholder="목록 찾기" aria-label="참고 목록 찾기" onChange={e => setQ(e.target.value)} />
+            <button type="button" className="link" onClick={() => setAll(true)}>모두 체크</button>
+            <button type="button" className="link muted-l" onClick={() => setAll(false)}>모두 해제</button>
           </div>
-          {past && !past.err && past.total > 40 && <p className="ai-p muted">AI에게는 이 중 최근 40건만 보냅니다 (비용·정확도).</p>}
-          <h3 className="ai-h3">참고 제외 {ex.length}건</h3>
-          {ex.length > 0 && (
-            <table className="ai-exl">
-              <thead><tr><th>변경</th><th>제외 사유</th><th aria-label="되돌리기" /></tr></thead>
+          <div className="ai-rl">
+            <div className="ai-gh">종결된 변경에서 자동 추가 <span>· {past.length}건 중 {past.filter(r => !r.off).length}건 체크</span></div>
+            {past.length ? past.map(Row) : <p className="ai-p muted ai-rnone">{q ? '찾는 목록이 없습니다' : '이 기간에 종결된 변경이 없습니다'}</p>}
+            <div className="ai-gh">저장한 배정 목록 <span>· {saved.length}건 중 {saved.filter(r => !r.off).length}건 체크</span></div>
+            {saved.length ? saved.map(Row) : <p className="ai-p muted ai-rnone">{q ? '찾는 목록이 없습니다' : '저장한 목록이 없습니다 (변경 등록 › 배정 목록에서 저장)'}</p>}
+          </div>
+          <p className="ai-p muted">★ 꼭 참고: 대화와 덜 비슷해도 항상 AI에게 보냄 · 체크를 끄면 참고 안 함 · ▾ 누르면 할 일 보기 · 지금 체크 {onN}건 · ★ {[...pinned].filter(id => rows.some(r => r.p.id === id && !r.off)).length}건</p>
+        </div>
+
+        <div className="ai-refr">
+          <div className="card adm-card">
+            <h2>자동 최적화 <small className="us-sm">다 고르지 않아도 됩니다</small></h2>
+            <div className="ai-auto">
+              <b>대화마다 서버가 알아서 고릅니다</b>
+              <ol>
+                <li>체크된 목록 중 대화(업체·제품·원료·포장지·띠지·박스 등)와 <b>가장 비슷한 목록</b> + ★ 목록만 AI에게 보냄</li>
+                <li>비슷한 변경 여러 건에 <b>자주 배정된 할 일</b>은 '자주 쓰임'으로 알려줘서 먼저 고르게 함</li>
+                <li>보내는 양이 줄어 비용↓, 엉뚱한 과거 변경 참고↓</li>
+              </ol>
+            </div>
+            <div className="ai-pf">
+              <label>한 번에 보낼 목록 <select value={f.send_n} onChange={e => set({ send_n: parseInt(e.target.value, 10) })}>
+                {[5, 10, 15, 20, 30].map(n => <option key={n} value={n}>{n}건{n === 15 ? ' (추천)' : ''}</option>)}
+              </select></label>
+              <span className="ai-cnt">체크 <b>{onN}건</b></span>
+            </div>
+          </div>
+          <div className="card adm-card">
+            <h2>AI가 넣을 수 있는 할 일 <small className="us-sm">출처 규칙</small></h2>
+            <ul className="ai-srcs">
+              <li><b>기본 할 일</b> (관리자 › 기본 할 일)</li>
+              <li><b>과거 변경에 실제로 배정됐던 할 일</b> <span className="ai-src">과거 변경에서</span></li>
+              <li><b>저장한 배정 목록의 할 일</b> <span className="ai-src sv">저장한 목록에서</span></li>
+            </ul>
+            <p className="ai-p muted">세 곳 어디에도 없는 할 일은 AI가 만들지 않고, 서버가 한 번 더 걸러 뺍니다.</p>
+          </div>
+          <details className="card adm-card ai-adv">
+            <summary>고급 · 변경 종류 → 배정 목록 연결 <span className="us-sm">(자동 최적화가 대신함 · 연결하면 우선)</span></summary>
+            <p className="ai-p">대화에 이 종류의 낱말(예: '원료')이 나오면 연결한 목록을 꼭 보내고 먼저 참고합니다.</p>
+            <table className="ai-links">
+              <thead><tr><th>변경 종류</th><th aria-label="연결" /><th>먼저 참고할 배정 목록</th><th aria-label="삭제" /></tr></thead>
               <tbody>
-                {ex.map((x, i) => (
-                  <tr key={x.id}>
-                    <td>{titleOf(x.id)}</td>
-                    <td><input value={x.reason || ''} placeholder="예: 테스트로 등록한 건" aria-label="제외 사유" onChange={e => set({ excluded: ex.map((y, j) => (j === i ? { ...y, reason: e.target.value } : y)) })} /></td>
-                    <td><button type="button" className="link" onClick={() => set({ excluded: ex.filter((_, j) => j !== i) })}>되돌리기</button></td>
+                {links.map((l, i) => (
+                  <tr key={i}>
+                    <td><input value={l.kind} placeholder="예: 원료 변경" aria-label="변경 종류" onChange={e => setLinks(links.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)))} /></td>
+                    <td className="ar">→</td>
+                    <td><select value={l.preset || ''} aria-label={(l.kind || '변경 종류') + ' 배정 목록'} onChange={e => setLinks(links.map((x, j) => (j === i ? { ...x, preset: e.target.value || null } : x)))}>
+                      <option value="">— (연결 안 함)</option>
+                      {db.presets.map(p => <option key={p.id} value={p.id}>{p.name} · {p.items.length}건</option>)}
+                    </select></td>
+                    <td><button type="button" className="ai-x" aria-label="종류 삭제" onClick={() => setLinks(links.filter((_, j) => j !== i))}>✕</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-          <input className="ai-search" value={q} placeholder="제외할 변경 찾기 (제목 검색)" aria-label="제외할 변경 찾기" onChange={e => setQ(e.target.value)} />
-          {cands.length > 0 && (
-            <ul className="ai-cands">
-              {cands.map(c => (
-                <li key={c.id}><span>{c.title}{c.g && <em> 묶음</em>} <small>{md2(stampFull(c.at).slice(0, 10))}</small></span>
-                  <button type="button" className="btn sm ghost" onClick={() => { set({ excluded: [...ex, { id: c.id, reason: '' }] }); setQ('') }}>제외</button></li>
-              ))}
-            </ul>
-          )}
-          {q.trim() && !cands.length && <p className="ai-p muted">찾는 변경이 없습니다.</p>}
-        </div>
-
-        <div className="card adm-card">
-          <h2>변경 종류와 배정 목록 연결 <small className="us-sm">어떤 할 일을 먼저 켤지 참고</small></h2>
-          <p className="ai-p">이 종류의 변경이면 연결한 배정 목록을 먼저 참고합니다. 단, 목록에 있어도 <b>기본 할 일·과거 변경에 없는 할 일은 제안하지 않습니다.</b></p>
-          <table className="ai-links">
-            <thead><tr><th>변경 종류</th><th aria-label="연결" /><th>먼저 참고할 배정 목록</th><th aria-label="삭제" /></tr></thead>
-            <tbody>
-              {links.map((l, i) => (
-                <tr key={i}>
-                  <td><input value={l.kind} placeholder="예: 원료 변경" aria-label="변경 종류" onChange={e => setLinks(links.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)))} /></td>
-                  <td className="ar">→</td>
-                  <td><select value={l.preset || ''} aria-label={(l.kind || '변경 종류') + ' 배정 목록'} onChange={e => setLinks(links.map((x, j) => (j === i ? { ...x, preset: e.target.value || null } : x)))}>
-                    <option value="">— (연결 안 함)</option>
-                    {db.presets.map(p => <option key={p.id} value={p.id}>{p.name} · {p.items.length}건</option>)}
-                  </select></td>
-                  <td><button type="button" className="ai-x" aria-label="종류 삭제" onClick={() => setLinks(links.filter((_, j) => j !== i))}>✕</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!links.length && <p className="ai-p muted">아직 연결한 종류가 없습니다. 없어도 AI는 대화와 과거 변경을 보고 고릅니다.</p>}
-          <button type="button" className="link ai-addl" onClick={() => setLinks([...links, { kind: '', preset: null }])}>+ 종류 추가</button>
+            <button type="button" className="link ai-addl" onClick={() => setLinks([...links, { kind: '', preset: null }])}>+ 종류 추가</button>
+          </details>
         </div>
       </div>
 
@@ -292,7 +361,7 @@ function TestTab({ cfg, f, dirty, nf, setNf }) {
         <label>등록하는 사람 <select value={dept} onChange={e => setDept(e.target.value)}>{ORDER.map(x => <option key={x} value={x}>{x} · 가상 사용자</option>)}</select></label>
         <label className="ck" title={dirty ? '저장하기 전에 바꾼 설정으로 결과를 확인합니다' : '바꾼 설정이 없습니다'}><input type="checkbox" checked={unsaved} onChange={e => setUnsaved(e.target.checked)} /> 저장 안 한 설정도 반영{!dirty && <small> (바꾼 것 없음)</small>}</label>
         <button type="button" className="btn sm ghost" onClick={() => setNf(emptyForm())}>처음부터 다시</button>
-        <span className="ai-tcost">이번 시험 약 {ai ? won(ai.cost) : 0}원</span>
+        <span className="ai-tcost">모델 {(MODELS.find(m => m.id === use.model) || { name: use.model }).name} · 이번 시험 약 {ai ? (ai.cost < 10 ? Number(ai.cost).toFixed(1) : won(ai.cost)) : 0}원</span>
       </div>
       <div className="ai-tgrid">
         <div className="ai-tmain">
@@ -306,8 +375,13 @@ function TestTab({ cfg, f, dirty, nf, setNf }) {
               {used.length ? <ul>{used.map(x => <li key={x.r.id}><b>{x.i + 1}</b> {x.r.when}{x.n.why && <small> — {x.n.why}</small>}</li>)}</ul> : <p className="muted">없음</p>}
               <div className="ai-ts-k">안 물은 기준</div>
               {unused.length ? <ul className="dim">{unused.map(x => <li key={x.r.id}><b>{x.i + 1}</b> {x.r.when}{x.n && x.n.why ? <small> — {x.n.why}</small> : <small> — 대화와 관계없음</small>}</li>)}</ul> : <p className="muted">없음</p>}
-              <div className="ai-ts-k">참고한 과거 변경</div>
-              <p>{d.refs.length}건{info ? ` · 조건에 맞는 ${info.past_total}건 중 최근 ${info.past_sent}건을 AI에게 보냄` : ''}{info && info.excluded_n ? ` · 제외 ${info.excluded_n}건은 안 봄` : ''}</p>
+              <div className="ai-ts-k">자동으로 고른 목록 {info && info.picked ? `${info.picked.length}건` : ''}{info && info.refs_total ? <small> (체크 {info.refs_total}건 중)</small> : null}</div>
+              {info && info.picked && info.picked.length ? (
+                <ul>{info.picked.slice(0, 8).map(x => <li key={x.id}>{x.why.startsWith('꼭') ? '★ ' : '· '}{x.title}{x.kind === 'saved' ? ' (저장)' : ''} <small>— {x.why}</small>{d.refs.some(r => r.id === x.id) ? <small className="ai-used"> · 할 일 가져옴</small> : null}</li>)}
+                  {info.picked.length > 8 && <li className="muted">· …{info.picked.length - 8}건</li>}</ul>
+              ) : <p className="muted">없음 · 기본 할 일에서만 골랐어요</p>}
+              {info && info.refs_total > (info.picked || []).length && <p className="muted">안 보냄 {info.refs_total - info.picked.length}건 (대화와 관계 적음)</p>}
+              {info && info.freq && info.freq.length > 0 && <><div className="ai-ts-k">자주 쓰인 할 일</div><ul>{info.freq.map((x, i) => <li key={i}>{x.d} · {x.t} <small>({x.n}건)</small></li>)}</ul></>}
               <div className="ai-ts-k">변경 종류 → 배정 목록</div>
               <p>{d.link ? <>'{d.link}'{linkName ? <> → 「{linkName}」</> : ' (연결된 목록 없음)'}</> : '연결 없음'}</p>
               <div className="ai-ts-k">대외비 단어</div>

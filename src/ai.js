@@ -73,3 +73,17 @@ export function defaultMemo(open) {
 export const FIELD_LABEL = { title: '제목', desc: '변경 내용', reason: '변경 사유', items: '대상 품목', mode: '관리 방식', target: '전환일', list: '부서별 할 일' }
 // 미리보기 칸 → 양식 칸
 export const PV2F = { title: 'title', description: 'desc', reason: 'reason', items: 'items', mode: 'mode', target_date: 'target' }
+
+// 고를 수 있는 모델과 단가 (미국 달러 / 100만 토큰). 2026-11 공개 자료 기준 추정치 — 실제 가격은 docs.claude.com에서 확인
+export const MODELS = [
+  { id: 'claude-haiku-5-5', name: 'Haiku 5.5', tag: '빠르고 저렴 · 추천', p: { in: 0.10, out: 0.50, cr: 0.01, cw: 0.125 } },
+  { id: 'claude-sonnet-5-5', name: 'Sonnet 5.5', tag: '더 정확', p: { in: 2, out: 10, cr: 0.20, cw: 2.50 } },
+]
+// 초안 비용 어림 (원): 규칙·참고 자료 약 9천 토큰(캐시), 매번 질문·미리보기 약 1.2~1.5천, 답 약 1.5천 토큰 가정
+export function estCost(c) {
+  const n = v => Number(v) || 0
+  const usd = n(c.usd_krw)
+  const first = (9000 * n(c.price_cache_write) + 1200 * n(c.price_in) + 1500 * n(c.price_out)) / 1e6 * usd
+  const next = (9000 * n(c.price_cache_read) + 1500 * n(c.price_in) + 1500 * n(c.price_out)) / 1e6 * usd
+  return { first, next, draft: first + 3 * next }
+}
