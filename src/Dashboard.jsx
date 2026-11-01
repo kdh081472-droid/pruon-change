@@ -310,7 +310,7 @@ export default function Dashboard({ session }) {
             setTab(k); setSheet(null)
           }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} chatN={unreadAll} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
           <div className="wide-main">
-            <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '') + (tab === 'chat' ? ' full chat-in' : '')}>
+            <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '') + (tab === 'chat' ? ' full chat-in' : '') + (tab === 'product' || tab === 'group' ? ' edge' : '')}>
               {tab !== 'product' && tab !== 'timeline' && tab !== 'group' && tab !== 'chat' && <h1 className="page-t wide-t">{title}</h1>}
               {content}
             </div>

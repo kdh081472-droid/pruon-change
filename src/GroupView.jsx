@@ -121,7 +121,6 @@ export default function GroupView({ gid }) {
           })}
         </div>
       )}
-      {canWork && <p className="note gv-note">품목을 누르면 그 품목의 할 일·대화 화면으로 갑니다. <b>빼기</b>는 아직 아무 부서도 처리하지 않은 품목만 되고, 처리된 품목은 <b>중단</b>(이 품목만 중단 종결)으로 정리합니다.</p>}
 
       {g.logs.length > 0 && (
         <div className={'hist-mini gv-log' + (logOpen ? ' all' : '')}>

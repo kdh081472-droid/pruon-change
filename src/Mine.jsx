@@ -31,7 +31,6 @@ export function MineTab() {
     return (
       <>
         {head}
-        <p className="hint" style={{ margin: '0 4px 10px' }}>눌러서 확인 메모·처리 이력을 보고, 잘못 처리한 건은 <b>확인 취소</b>할 수 있습니다.</p>
         {cids.map(cid => {
           const c = C(cid)
           return (

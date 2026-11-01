@@ -209,7 +209,6 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
           <div className="ai-hello">
             <p><b>어떤 변경인지 편하게 말로 적어주세요.</b> 업체·제품·무엇이 어떻게 바뀌는지·<b>왜 바뀌는지(사유)</b>·언제부터인지 정도면 충분합니다. 모르는 건 비워 두셔도 돼요.</p>
             <button type="button" className="ai-ex" onClick={() => { setText(EXAMPLE); setTimeout(() => inRef.current && inRef.current.focus(), 20) }}>예: {EXAMPLE}</button>
-            <p className="ai-hello-s">할 일은 기본 할 일·과거 변경·저장한 배정 목록에서만 골라요. 등록은 양식에 채운 뒤 직접 눌러야 저장됩니다.</p>
           </div>
         )}
         {ai.msgs.map((m, i) => (
@@ -327,7 +326,7 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
     <div className="card ai-pv">
       <div className="ai-pv-h">
         <b>미리보기</b><span className="ai-badge">AI 초안</span>
-        <span className="ai-pv-hint">고친 곳은 노랗게 · 칸을 눌러 직접 고쳐도 됩니다</span>
+        <span className="ai-pv-hint" />
         <button type="button" className="btn ai-fill" disabled={!d || busy} onClick={onFill}>이대로 양식에 채우기</button>
       </div>
       {!d ? (

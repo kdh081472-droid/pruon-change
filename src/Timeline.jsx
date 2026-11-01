@@ -416,7 +416,7 @@ export function Calendar({ list, searching, title }) {
             )
           })}
         </div>
-      ) : <p className="hint" style={{ margin: '4px 4px 0' }}>전환일이 있는 날짜를 누르면 변경 내용과 사유가 아래에 나옵니다.</p>}
+      ) : null}
     </>
   )
 }

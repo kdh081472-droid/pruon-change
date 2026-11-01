@@ -1801,3 +1801,12 @@ textarea.grow { resize: none; overflow: hidden; line-height: 1.45; display: bloc
 .hb-video i { margin-left: auto; font-style: normal; font-size: 20px; color: var(--accent) }
 .hb-video:hover { border-color: var(--accent) }
 @media (prefers-color-scheme: dark) { .hb-video { background: rgba(99,102,241,.14); border-color: rgba(129,140,248,.4) } }
+
+/* 제품·묶음 화면(PC): 머리 부분을 위·왼쪽·오른쪽 끝까지, 바깥 흰 상자 없이 */
+.wide-in.edge { max-width: none; padding: 0 0 48px }
+.wide-in.edge .pcv-card, .wide-in.edge .card.gv { background: transparent; box-shadow: none; border: 0; border-radius: 0; margin: 0; overflow: visible }
+.wide-in.edge .pc-stick, .wide-in.edge .gv-h { border-radius: 0; padding: 16px 24px 14px; border-bottom: 1px solid var(--line); background: var(--surface) }
+.wide-in.edge .pcv-card .p-b { padding: 16px 24px 24px }
+.wide-in.edge .card.gv > :not(.gv-h) { margin-left: 24px; margin-right: 24px }
+.wide-in.edge .gv-tw { margin-top: 16px; background: var(--surface) }
+.wide-in.edge .gv-log { margin: 16px 24px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px }

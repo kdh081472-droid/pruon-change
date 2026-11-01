@@ -318,9 +318,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
         </button>
       </div>
       <span className="nf-tabs-h">
-        {aiOver ? '이번 달 AI 사용 한도를 다 써서 [AI로 작성]은 다음 달 1일에 다시 켜집니다'
-          : tab === 'ai' ? '말로 설명하면 양식을 채워드립니다 · 등록은 직접 눌러야 저장됩니다'
-            : '두 탭을 오가도 입력한 내용과 AI 대화는 그대로 남습니다'}
+        {aiOver ? '이번 달 AI 사용 한도를 다 써서 [AI로 작성]은 다음 달 1일에 다시 켜집니다' : ''}
       </span>
     </div>
   )
