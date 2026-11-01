@@ -3,12 +3,13 @@ import { supabase, ORDER, SIGNUP_DEPTS } from './supabase.js'
 import { useApp, ICON, useWidth, WIDE } from './ctx.jsx'
 import { errText, md, stampFull, iso, add, parse, todayMid } from './util.js'
 import Report from './Report.jsx'
+import AiAdmin from './AiAdmin.jsx'
 
 // 마지막 접속 = 앱을 쓴 시각 (없으면 마지막 로그인 시각)
 const seenOf = u => u.last_seen_at || u.last_sign_in_at || null
 
 // 관리자 모드: 관리 기능만 (업무 화면은 모두 꺼짐). 관리자 여부는 서버가 매번 다시 검사함
-const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat'], ['help', '도우미 설정', 'help']]
+const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat'], ['help', '도우미 설정', 'help'], ['ai', 'AI 초안 설정', 'spark']]
 
 export default function Admin({ onExit }) {
   const app = useApp()
@@ -39,6 +40,7 @@ export default function Admin({ onExit }) {
     tpl: <TplTab act={act} />,
     del: <DeleteTab act={act} openReport={setReportCid} />,
     help: <HelpTab />,
+    ai: <AiAdmin />,
     stat: <StatTab users={users} onGoUsers={() => { setTab('users'); window.scrollTo(0, 0) }} />,
   }[tab]
 
@@ -549,13 +551,13 @@ function StatTab({ users, onGoUsers }) {
       const sheets = {
         가입자: (users || []).map(u => ({ 이름: u.name, 이메일: u.email, 부서: u.department, 상태: u.left_at ? '퇴사' : '재직', 관리자: u.is_admin ? 'O' : '', 가입일: S(u.created_at), 마지막접속: S(seenOf(u)), 퇴사일: S(u.left_at) })),
         부서: depts.map(d => ({ 순서: d.sort_order, 부서: d.name, 짧은이름: d.short, 종류: d.kind === '업무' ? '업무 부서' : '보기 전용' })),
-        변경: db.changes.map(c => ({ 제목: c.title, 상태: c.status, 종결구분: c.close_type || '', 전환일: c.target_date, 처음전환일: c.first_target_date || '', 변경내용: c.description || '', 변경사유: c.reason || '', 대상품목: c.itemsText, 등록자: P(c.created_by), 등록부서: c.created_by_dept, 등록일: S(c.created_at), 종결일: S(c.closed_at), 중단사유: c.close_reason || '' })),
+        변경: db.changes.map(c => ({ 제목: c.title, 상태: c.status, 종결구분: c.close_type || '', 전환일: c.target_date, 처음전환일: c.first_target_date || '', 변경내용: c.description || '', 변경사유: c.reason || '', 대상품목: c.itemsText, 등록자: P(c.created_by), 등록부서: c.created_by_dept, 등록일: S(c.created_at), 종결일: S(c.closed_at), 중단사유: c.close_reason || '', AI초안: c.ai_turns ? '대화 ' + c.ai_turns + '회' : '' })),
         할일: db.tasks.map(t => ({ 변경: T(t.change_id), 부서: t.department, 할일: t.title, 상태: t.status, 메모: t.memo || '', 처리자: P(t.done_by), 처리일시: S(t.done_at), 추가배정: t.is_extra ? 'O' : '', 배정사유: t.assign_reason || '' })),
         처리이력: [
           ...db.taskLogs.map(x => ({ 일시: S(x.created_at), 변경: T(x.change_id), 할일: (db.tasks.find(t => t.id === x.task_id) || {}).title || '', 내용: x.action, 메모: x.memo || '', 처리자: P(x.user_id) })),
           ...db.changeLogs.map(x => ({ 일시: S(x.created_at), 변경: T(x.change_id), 할일: '', 내용: x.action + (x.old_date ? ` ${x.old_date} → ${x.new_date}` : '') + (x.detail ? ' · ' + x.detail : ''), 메모: x.memo || '', 처리자: P(x.user_id) })),
         ].sort((a, b) => a.일시.localeCompare(b.일시)),
-        대화: db.messages.map(m => ({ 일시: S(m.created_at), 변경: T(m.change_id), 작성자: P(m.user_id), 내용: m.deleted ? '(삭제된 메시지)' : m.body, 수정됨: m.edited ? 'O' : '' })),
+        대화: db.messages.map(m => ({ 일시: S(m.created_at), 변경: m.change_id ? T(m.change_id) : (db.groupMap[m.group_id] ? db.groupMap[m.group_id].title + ' (묶음 전체 대화)' : ''), 작성자: P(m.user_id), 내용: m.deleted ? '(삭제된 메시지)' : m.body, 수정됨: m.edited ? 'O' : '', AI메모: m.ai === 'ai' ? 'AI' : m.ai === 'ai_edit' ? 'AI·수정' : '' })),
       }
       const wb = XLSX.utils.book_new()
       Object.entries(sheets).forEach(([name, rows]) => {

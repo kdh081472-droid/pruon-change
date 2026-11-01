@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { supabase, ORDER, SHORT, SIGNUP_DEPTS } from './supabase.js'
 import { useApp, Person, MsgText, personName, Mark } from './ctx.jsx'
+import { AiTag } from './AiDraft.jsx'
 import { md, norm, parse, snip, stamp, errText, hasAll, words } from './util.js'
 import { openPopup } from './popchat.js'
 
@@ -275,7 +276,7 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
             return [divider, (
               <div key={m.id} data-mid={m.id}
                 className={'msg' + (mine ? ' mine' : '') + (hl ? ' hl' : '') + (cont ? ' cont' : '') + (p && p.department === '임원' ? ' ex' : '') + (flash === m.id ? ' flash' : '') + (q && hits[hitI] && hits[hitI].id === m.id ? ' hit' : '')}>
-                {!mine && !cont && <div className="m-who"><Person id={m.user_id} /></div>}
+                {!mine && !cont && <div className="m-who"><Person id={m.user_id} />{m.ai && <AiTag kind={m.ai} />}</div>}
                 <div className="b-row">
                   <div className="bub" onClick={e => openMenu(m, e)} onContextMenu={e => openMenu(m, e)}>
                     {o && (
@@ -290,6 +291,7 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
                   </div>
                   <span className="side">
                     {uc > 0 && <span className="rc" title={'아직 안 읽은 사람 ' + uc + '명'}>{uc}</span>}
+                    {m.ai && (mine || cont) && <AiTag kind={m.ai} />}
                     {m.edited && <span className="ed">수정됨</span>}
                     <span className="tm">{stamp(m.created_at)}</span>
                   </span>

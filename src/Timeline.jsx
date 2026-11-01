@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ORDER } from './supabase.js'
 import { GroupCrumb } from './GroupView.jsx'
 import { useApp, Person, ICON } from './ctx.jsx'
+import { AiDraftBadge } from './AiDraft.jsx'
 import Summary from './Summary.jsx'
 import { dd, iso, md, norm, parse, todayMid, stamp, snip } from './util.js'
 
@@ -133,7 +134,7 @@ export function ProductCard({ c, forceOpen }) {
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggle() } }}>
       <div className="p2-top">
         {pcView && !c.group && <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>}
-        <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.group && !pcView && <span className="g-chip g-in" title={'묶음: ' + c.group.title}>{c.group.title.length > 14 ? c.group.title.slice(0, 14) + '…' : c.group.title} {c.kidNo}/{c.group.kids.length}</span>}{c.title}</span>
+        <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.group && !pcView && <span className="g-chip g-in" title={'묶음: ' + c.group.title}>{c.group.title.length > 14 ? c.group.title.slice(0, 14) + '…' : c.group.title} {c.kidNo}/{c.group.kids.length}</span>}{c.title}<AiDraftBadge turns={c.ai_turns || (c.group && c.group.ai_turns)} /></span>
         {pcView && acts}
         <span className="dd-big"><DBadge c={c} /></span>
       </div>
@@ -180,7 +181,7 @@ export function ProductCard({ c, forceOpen }) {
           <div><dt>대상</dt><dd>{c.itemsText}</dd></div>
           {c.description && <div><dt>변경 내용</dt><dd>{c.description}</dd></div>}
           {c.reason && <div><dt>변경 사유</dt><dd>{c.reason}</dd></div>}
-          <div><dt>등록</dt><dd><Person id={c.created_by} fallback={c.created_by_dept} /></dd></div>
+          <div><dt>등록</dt><dd><Person id={c.created_by} fallback={c.created_by_dept} />{(c.ai_turns || (c.group && c.group.ai_turns)) ? <> <AiDraftBadge long turns={c.ai_turns || c.group.ai_turns} /></> : null}</dd></div>
         </dl>
   const histLine = x => (x.action === '전환일 변경'
     ? <>전환일 {md(x.old_date)} → <b>{md(x.new_date)}</b> · {x.memo} — <Person id={x.user_id} />, {stamp(x.created_at)}</>

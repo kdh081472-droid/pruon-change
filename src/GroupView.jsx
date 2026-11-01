@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ORDER } from './supabase.js'
 import { useApp, Person } from './ctx.jsx'
+import { AiDraftBadge } from './AiDraft.jsx'
 import { dd, md, stamp, snip } from './util.js'
 import Chat from './Chat.jsx'
 
@@ -47,7 +48,7 @@ export default function GroupView({ gid }) {
         <div className="gv-top">
           <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>
           <span className="g-chip">묶음 · 품목 {g.kids.length}</span>
-          <h2 className="gv-t">{g.title}</h2>
+          <h2 className="gv-t">{g.title}<AiDraftBadge turns={g.ai_turns} /></h2>
           {!wide && <button type="button" className="pill gv-chat" onClick={() => openChat('g:' + gid)}>묶음 대화{unread('g:' + gid).length > 0 && <span className="ub">{unread('g:' + gid).length}</span>}</button>}
           {canWork && (
             <span className="p-acts">
@@ -63,7 +64,7 @@ export default function GroupView({ gid }) {
           {g.description && <div><dt>변경 내용 (공통)</dt><dd>{g.description}</dd></div>}
           {g.reason && <div><dt>변경 사유 (공통)</dt><dd>{g.reason}</dd></div>}
           <div><dt>진행</dt><dd><span className="spg"><i><em style={{ width: s.pct + '%' }} /></i>{s.done}/{s.total}</span> <small className="gv-sn">진행 {s.openN} · 종결 {s.doneN}{s.stopN ? ' · 중단 ' + s.stopN : ''}</small></dd></div>
-          <div><dt>등록</dt><dd><Person id={g.created_by} fallback={g.created_by_dept} /></dd></div>
+          <div><dt>등록</dt><dd><Person id={g.created_by} fallback={g.created_by_dept} />{g.ai_turns ? <> <AiDraftBadge long turns={g.ai_turns} /></> : null}</dd></div>
         </dl>
       </div>
 
@@ -125,8 +126,8 @@ export default function GroupView({ gid }) {
         <div className={'hist-mini gv-log' + (logOpen ? ' all' : '')}>
           <b>묶음 이력 {g.logs.length}</b>
           {logOpen
-            ? <ol>{g.logs.slice().reverse().map(l => <li key={l.id}><b>{l.action}</b> · {String(l.detail || '').split('\n').join(' / ')}{l.memo ? <span className="gl-memo"> · 사유: {l.memo}</span> : ''} — <Person id={l.user_id} />, {stamp(l.created_at)}</li>)}</ol>
-            : <span className="hm-last">최근: <b>{g.logs[g.logs.length - 1].action}</b> · {snip(String(g.logs[g.logs.length - 1].detail || '').split('\n').join(' / '), 60)} — <Person id={g.logs[g.logs.length - 1].user_id} />, {stamp(g.logs[g.logs.length - 1].created_at)}</span>}
+            ? <ol>{g.logs.slice().reverse().map(l => <li key={l.id}><b>{l.action}</b> · {String(l.detail || '').split('\n').join(' / ')}{l.memo ? <span className="gl-memo"> · 사유: {l.memo}</span> : ''} — <Person id={l.user_id} />, {stamp(l.created_at)}{l.action === '등록' && g.ai_turns ? <> <AiDraftBadge long turns={g.ai_turns} /></> : null}</li>)}</ol>
+            : <span className="hm-last">최근: <b>{g.logs[g.logs.length - 1].action}</b> · {snip(String(g.logs[g.logs.length - 1].detail || '').split('\n').join(' / '), 60)} — <Person id={g.logs[g.logs.length - 1].user_id} />, {stamp(g.logs[g.logs.length - 1].created_at)}{g.logs[g.logs.length - 1].action === '등록' && g.ai_turns ? <> <AiDraftBadge long turns={g.ai_turns} /></> : null}</span>}
           <button type="button" onClick={() => setLogOpen(v => !v)}>{logOpen ? '접기 ▴' : '전체 보기 ▾'}</button>
         </div>
       )}

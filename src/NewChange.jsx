@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase, ORDER, SHORT, ITEM_TYPES } from './supabase.js'
 import { useApp, Person, useWidth, WIDE } from './ctx.jsx'
 import { errText, stampFull } from './util.js'
+import AiDraft, { AiTag } from './AiDraft.jsx'
+import { useAiPublic, memoFlag, defaultMemo, FIELD_LABEL, PV2F, md2 } from './ai.js'
 
 // 품목 종류별 이름 예시
 const NAME_HINT = {
@@ -21,11 +24,36 @@ export function emptyForm() {
     mode: 'one',                // 'one' 하나로 관리 | 'items' 품목별로 관리 (묶음)
     presetSel: 'base', presetUsed: 'base', presetMode: null, presetErr: '',
     addDept: null, err: '',
+    tab: 'manual',              // 'manual' 직접 작성 | 'ai' AI로 작성 (둘 사이를 오가도 내용 그대로)
+    ai: null,                   // AI 대화·미리보기
+    aiFill: null,               // 마지막으로 AI 초안을 양식에 채운 값 (직접 고친 칸을 알아보는 데 씀)
   }
 }
 
-export default function NewChange({ nf, setNf, onDone }) {
-  const { db, uid, C, reload, toast } = useApp()
+// 칸 값 비교용
+function sig(f, v) {
+  if (f === 'items') return JSON.stringify((v || []).map(i => [i.type, String(i.name || '').trim(), i.target || '']).filter(x => x[1]))
+  if (f === 'list') return JSON.stringify((v || []).filter(x => x.on).map(x => [x.dept, x.title]))
+  return String(v || '').trim()
+}
+
+// 변경 등록. test = 관리자 '시험해 보기' { dept, cfg, conf } → 똑같이 동작하지만 저장하지 않음
+export default function NewChange({ nf, setNf, onDone, test }) {
+  const { db, uid, me, C, reload, toast } = useApp()
+  const [ask, setAsk] = useState(null)          // 미확인 질문 확인창 { open, memoOn, memo, aiMemo }
+  const [testDone, setTestDone] = useState(null) // 시험 등록 결과
+  const pub = useAiPublic()
+  const aiOn = test ? true : !!(pub && pub.enabled)
+  const aiOver = !test && !!(pub && pub.over)
+  const conf = test ? test.conf : { words: (pub && pub.conf_words) || [], mode: (pub && pub.conf_mode) || 'warn' }
+  const tab = aiOn && !aiOver && nf.tab === 'ai' ? 'ai' : 'manual'
+  const upd = fn => setNf(prev => fn(prev || nf))
+  useEffect(() => {
+    if (!ask && !testDone) return
+    const k = e => { if (e.key === 'Escape') { setAsk(null); setTestDone(null) } }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [ask, testDone])
   const [busy, setBusy] = useState(false)
   const [addTitle, setAddTitle] = useState('')
   const [pName, setPName] = useState('')
@@ -152,7 +180,62 @@ export default function NewChange({ nf, setNf, onDone }) {
     }
   }
 
-  async function submit() {
+  // AI 미리보기 → 양식 채우기 (사람이 직접 고친 칸은 그대로 둠)
+  function fillFromAi() {
+    const d = nf.ai && nf.ai.draft
+    if (!d) return
+    const used = new Set(), list = []
+    ORDER.forEach(dp => {
+      d.tasks.filter(t => t.department === dp && t.on).forEach(t => {
+        const tp = t.source === 'template' && tpls.find(x => x.department === dp && x.title === t.title && !used.has(x.id))
+        if (tp) { used.add(tp.id); list.push(fromTpl(tp, true)) }
+        else list.push({ k: newK(), dept: dp, title: t.title, on: true, tpl: null, src: t.ref ? { title: t.ref.title, date: t.ref.date } : null })
+      })
+      tpls.filter(x => x.department === dp && !used.has(x.id)).forEach(x => list.push(fromTpl(x, false)))
+    })
+    const byI = d.mode === 'items' && d.items.length >= 2
+    const vals = {
+      title: d.title || '', desc: d.description || '', reason: d.reason || '', target: d.target_date || '',
+      mode: byI ? 'items' : 'one',
+      items: d.items.length ? d.items.map(i => ({ type: i.type, name: i.name, target: byI ? (i.target || '') : '' })) : [{ type: '단품', name: '' }],
+      list,
+    }
+    const aiVals = { ...vals }                   // AI가 낸 값 그대로 (사람이 고친 칸 통계용)
+    const cur = { title: nf.title, desc: nf.desc, reason: nf.reason, target: nf.target, mode: nf.mode, items: nf.items, list: nf.list }
+    const snap = nf.aiFill && nf.aiFill.snap
+    const empty = { title: !nf.title.trim(), desc: !nf.desc.trim(), reason: !nf.reason.trim(), target: !nf.target, mode: !snap && nf.mode === 'one', items: nf.items.every(i => !i.name.trim()), list: !nf.list }
+    const kept = []
+    Object.keys(vals).forEach(f => {
+      if (empty[f]) return
+      const mine = snap ? sig(f, cur[f]) !== sig(f, snap[f]) : true
+      if (mine && sig(f, cur[f]) !== sig(f, vals[f])) { kept.push(f); vals[f] = cur[f] }
+    })
+    setEdit(null)
+    setNf({ ...nf, ...vals, tab: 'manual', err: '', presetUsed: null, picks: undefined, extras: undefined, addDept: null,
+      aiFill: { snap: { ...vals }, ai: aiVals, session: nf.ai.session, turns: nf.ai.turns, questions: d.questions, memo: d.memo || '' } })
+    window.scrollTo(0, 0)
+    toast(kept.length ? `양식에 채웠어요 · 직접 고친 칸(${kept.map(f => FIELD_LABEL[f]).join(', ')})은 그대로 두었어요` : '양식에 채웠어요 · 내용을 확인한 뒤 등록해주세요')
+  }
+  // AI 초안 정보 (지금 대화가 채운 그 대화면 최신 질문 상태)
+  const aiQ = () => {
+    if (!nf.aiFill) return { questions: [], memo: '' }
+    const live = nf.ai && nf.ai.session === nf.aiFill.session && nf.ai.draft
+    return live ? { questions: nf.ai.draft.questions || [], memo: nf.ai.draft.memo || '' } : { questions: nf.aiFill.questions || [], memo: nf.aiFill.memo || '' }
+  }
+  // 사람이 고친 칸 (양식에서 + 미리보기에서)
+  const aiEdited = () => {
+    const snap = nf.aiFill.ai || nf.aiFill.snap
+    const now = { title: nf.title, desc: nf.desc, reason: nf.reason, target: nf.target, mode: byItem ? 'items' : 'one', items: nf.items, list }
+    const out = new Set(Object.keys(FIELD_LABEL).filter(f => sig(f, now[f]) !== sig(f, snap[f])).map(f => FIELD_LABEL[f]))
+    const a = nf.ai && nf.ai.session === nf.aiFill.session ? nf.ai : null
+    if (a) {
+      Object.entries(a.locked || {}).forEach(([k, v]) => { if (v && PV2F[k]) out.add(FIELD_LABEL[PV2F[k]]) })
+      if (Object.keys(a.taskEdits || {}).length) out.add(FIELD_LABEL.list)
+    }
+    return [...out]
+  }
+
+  async function submit(choice) {
     const items = nf.items.map(i => ({ type: i.type, name: i.name.trim(), target: i.target || '' })).filter(i => i.name)
     const err = !nf.title.trim() ? '제목을 입력해주세요.' : !nf.target ? '전환일을 골라주세요.'
       : !items.length ? '대상 품목을 1개 이상 입력해주세요.' : !pickedN ? '할 일을 1건 이상 배정해주세요.' : ''
@@ -162,13 +245,41 @@ export default function NewChange({ nf, setNf, onDone }) {
     if (byItem) {
       const names = items.map(i => i.name)
       if (new Set(names).size !== names.length) return set({ err: '같은 이름의 품목이 있습니다. 품목 이름을 서로 다르게 적어주세요.' })
+    }
+    // AI 초안으로 채운 경우: 확인 안 된 질문이 있으면 한 번 더 물어봄
+    const q = aiQ()
+    const open = q.questions.filter(x => x.status === 'open')
+    if (nf.aiFill && !choice && open.length) {
+      const m = (q.memo || '').trim() || defaultMemo(open)
+      return setAsk({ open, memoOn: true, memo: m, aiMemo: m })
+    }
+    setAsk(null)
+    const memo = choice && choice.memoOn && choice.memo.trim() ? { body: choice.memo.trim(), ai: memoFlag(choice.memo, choice.aiMemo) } : null
+    if (test) {
+      return setTestDone({ title: nf.title.trim(), items, byItem, tasks: tasks.length, open: open.length, memo, turns: nf.aiFill ? (nf.ai ? nf.ai.turns : nf.aiFill.turns) : 0, ai: !!nf.aiFill, edited: nf.aiFill ? aiEdited() : [] })
+    }
+    const after = async (id, isGroup) => {
+      if (!nf.aiFill) return
+      let posted = false
+      if (memo) {
+        const { error } = await supabase.from('messages').insert({ ...(isGroup ? { group_id: id } : { change_id: id }), user_id: uid, body: memo.body, ai: memo.ai })
+        if (error) toast('메모를 대화방에 남기지 못했습니다: ' + errText(error)); else posted = true
+      }
+      const { error } = await supabase.rpc('ai_finish', {
+        p_session: nf.aiFill.session, p_change: isGroup ? null : id, p_group: isGroup ? id : null, p_edited: aiEdited(),
+        p_q_answered: q.questions.filter(x => x.status === 'answered').length, p_q_open: open.length, p_memo: posted,
+      })
+      if (error) console.warn('ai_finish', error.message)
+    }
+    if (byItem) {
       setBusy(true)
       const { data, error } = await supabase.rpc('create_group', {
         p_title: nf.title.trim(), p_description: nf.desc.trim(), p_reason: nf.reason.trim(),
         p_items: items.map(i => ({ type: i.type, name: i.name, target: i.target || nf.target })), p_tasks: tasks,
       })
+      if (error) { setBusy(false); return set({ err: errText(error) }) }
+      await after(data, true)
       setBusy(false)
-      if (error) return set({ err: errText(error) })
       await reload()
       toast(`등록 완료 · 품목 ${items.length}개 · 할 일 ${tasks.length * items.length}건이 배정되었습니다`)
       return onDone(data, true)
@@ -178,8 +289,9 @@ export default function NewChange({ nf, setNf, onDone }) {
       p_title: nf.title.trim(), p_description: nf.desc.trim(), p_reason: nf.reason.trim(),
       p_target_date: nf.target, p_items: items, p_tasks: tasks,
     })
+    if (error) { setBusy(false); return set({ err: errText(error) }) }
+    await after(data, false)
     setBusy(false)
-    if (error) return set({ err: errText(error) })
     await reload()
     toast(`등록 완료 · 할 일 ${tasks.length}건이 배정되었습니다`)
     onDone(data)
@@ -190,8 +302,80 @@ export default function NewChange({ nf, setNf, onDone }) {
   const opt = p => <option key={p.id} value={p.id}>{p.name}{p.fixed ? '' : ' · ' + p.items.length + '건'}</option>
   const sc0 = curP.source_change_id ? C(curP.source_change_id) : null
 
+  const aiTurns = nf.ai ? nf.ai.turns : 0
+  const tabsBar = aiOn && (
+    <div className="nf-tabs">
+      <div className="seg ai-seg" role="tablist" aria-label="작성 방식">
+        <button type="button" role="tab" aria-selected={tab === 'manual'} className={tab === 'manual' ? 'on' : ''} onClick={() => set({ tab: 'manual' })}>직접 작성</button>
+        <button type="button" role="tab" aria-selected={tab === 'ai'} className={tab === 'ai' ? 'on' : ''} disabled={aiOver}
+          title={aiOver ? '이번 달 AI 사용 한도를 다 써서 다음 달 1일에 다시 켜집니다' : ''} onClick={() => set({ tab: 'ai' })}>
+          ✦ AI로 작성{aiTurns > 0 && <em> · 대화 {aiTurns}</em>}
+        </button>
+      </div>
+      <span className="nf-tabs-h">
+        {aiOver ? '이번 달 AI 사용 한도를 다 써서 [AI로 작성]은 다음 달 1일에 다시 켜집니다'
+          : tab === 'ai' ? '말로 설명하면 양식을 채워드립니다 · 등록은 직접 눌러야 저장됩니다'
+            : '두 탭을 오가도 입력한 내용과 AI 대화는 그대로 남습니다'}
+      </span>
+      {tab === 'manual' && nf.aiFill && <span className="ai-badge">AI 초안으로 채움</span>}
+    </div>
+  )
+  const dialogs = (ask || testDone) && createPortal(
+    <>
+      {ask && (
+        <>
+          <div className="scrim" onClick={() => setAsk(null)} />
+          <div className="ai-ask" role="dialog" aria-modal="true" aria-label="확인 안 된 질문">
+            <h3>확인 안 된 질문이 {ask.open.length}개 있습니다</h3>
+            <ul className="ai-ask-q">{ask.open.map((x, i) => <li key={i}>{x.q}</li>)}</ul>
+            <p className="ai-ask-s">AI 대화로 돌아가 답하면 초안에 바로 반영됩니다. 지금 등록해도 됩니다.</p>
+            <label className="ai-ask-ck">
+              <input type="checkbox" checked={ask.memoOn} onChange={e => setAsk({ ...ask, memoOn: e.target.checked })} />
+              대화방에 내 메모로 남기기 <small>(다른 부서 부르기 없음)</small>
+            </label>
+            {ask.memoOn && (
+              <div className="ai-ask-memo">
+                <div className="ai-ask-who"><b>{me.name}</b> <AiTag kind={memoFlag(ask.memo, ask.aiMemo) || undefined} />{!memoFlag(ask.memo, ask.aiMemo) && <small>새로 쓴 글이라 AI 표시 없음</small>}<span>· {byItem ? '묶음 전체 대화' : '이 변경의 대화방'}에 남습니다</span></div>
+                <textarea rows={3} value={ask.memo} aria-label="대화방에 남길 메모" onChange={e => setAsk({ ...ask, memo: e.target.value })} />
+                <p className="ai-ask-h">AI가 쓴 메모입니다. 고쳐도 되고, 등록한 뒤에도 대화방에서 수정·삭제할 수 있어요.</p>
+              </div>
+            )}
+            <div className="ai-ask-b">
+              <button type="button" className="btn ghost" onClick={() => { setAsk(null); set({ tab: 'ai' }) }}>AI 대화로 돌아가기</button>
+              <button type="button" className="btn" disabled={busy || (ask.memoOn && !ask.memo.trim())} onClick={() => submit({ memoOn: ask.memoOn, memo: ask.memo, aiMemo: ask.aiMemo })}>{busy ? '등록 중…' : '그래도 등록'}</button>
+            </div>
+          </div>
+        </>
+      )}
+      {testDone && (
+        <>
+          <div className="scrim" onClick={() => setTestDone(null)} />
+          <div className="ai-ask ai-tdone" role="dialog" aria-modal="true" aria-label="시험 등록 결과">
+            <h3>시험 등록 결과 <span className="ai-tsave">저장하지 않았습니다</span></h3>
+            <dl className="tg-dl">
+              <dt>제목</dt><dd>{testDone.title}</dd>
+              <dt>대상 품목</dt><dd>{testDone.items.length}개 · {testDone.byItem ? '품목별로 관리 (묶음)' : '하나로 관리'}</dd>
+              <dt>할 일</dt><dd>{testDone.byItem ? `${testDone.tasks}건 × 품목 ${testDone.items.length}개 = ${testDone.tasks * testDone.items.length}건` : testDone.tasks + '건'}</dd>
+              {testDone.ai && <><dt>AI 표시</dt><dd>제품·묶음 화면 <span className="ai-badge">AI 초안</span> · 이력 <span className="ai-badge">AI 초안으로 작성 · 대화 {testDone.turns}회</span></dd></>}
+              {testDone.ai && <><dt>고친 칸</dt><dd>{testDone.edited.length ? testDone.edited.join(', ') : '없음'} <small className="muted">(사용 현황 '사람이 자주 고친 칸'에 들어감 · 시험은 빼고 셈)</small></dd></>}
+            </dl>
+            {testDone.memo ? (
+              <div className="ai-tmemo">
+                <div className="ai-ask-l">대화방에 남을 메모 ({testDone.byItem ? '묶음 전체 대화' : '이 변경의 대화방'})</div>
+                <div className="msg"><div className="m-who"><b>{me.name}</b> <AiTag kind={testDone.memo.ai} /></div><div className="b-row"><div className="bub">{testDone.memo.body}</div></div></div>
+              </div>
+            ) : testDone.open > 0 && <p className="ai-ask-s">미확인 질문 {testDone.open}개 · 메모 남기지 않음</p>}
+            <div className="ai-ask-b"><button type="button" className="btn" onClick={() => setTestDone(null)}>닫기</button></div>
+          </div>
+        </>
+      )}
+    </>, document.body)
+  if (tab === 'ai') return <>{tabsBar}<AiDraft nf={nf} upd={upd} conf={conf} test={test} onFill={fillFromAi} />{dialogs}</>
+
   return (
     <>
+      {tabsBar}
+      {nf.aiFill && <div className="ai-filled">AI가 채운 내용입니다. 사실과 다른 곳이 없는지 확인한 뒤 등록해주세요. <button type="button" className="link" onClick={() => set({ tab: 'ai' })}>AI 대화로 돌아가기</button></div>}
       <div className="nf-wrap">
       <div className="nf-col">
       <div className="card nf">
@@ -298,7 +482,7 @@ export default function NewChange({ nf, setNf, onDone }) {
               <div className="pb-row"><button type="button" className="btn sm warn" onClick={() => presetAction('del')}>삭제</button><button type="button" className="btn sm ghost" onClick={() => set({ presetMode: null })}>취소</button></div>
             </div>
           )}
-          {!nf.presetMode && (
+          {!nf.presetMode && !test && (
             <div className="pb-row">
               <button type="button" className="pill" onClick={() => { setPName(''); set({ presetMode: 'save', presetErr: '' }) }}>현재 배정을 새 목록으로 저장</button>
               {!curP.fixed && (
@@ -344,7 +528,8 @@ export default function NewChange({ nf, setNf, onDone }) {
                         <span className="nr-eb"><button type="button" className="btn sm ghost" onClick={() => setEdit(null)}>취소</button><button type="button" className="btn sm" onClick={saveEdit}>저장</button></span>
                       </span>
                     ) : (
-                      <label htmlFor={x.tpl || x.plain ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.orig && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}</label>
+                      <label htmlFor={x.tpl || x.plain ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.orig && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}
+                        {x.src && <><span className="ai-src">과거 변경에서</span><small className="ai-srcl">출처: 「{x.src.title}」 ({md2(x.src.date)})</small></>}</label>
                     )}
                     {!editing && (
                       <span className="nr-act">
@@ -385,9 +570,10 @@ export default function NewChange({ nf, setNf, onDone }) {
         })}
       </div>
       {nf.err && <p className="nf-err">{nf.err}</p>}
-      <button type="button" className="btn nf-go" disabled={busy} onClick={submit}>{busy ? '등록 중…' : byItem ? `변경 등록 · 품목 ${namedN}개 · 할 일 ${pickedN * namedN}건 배정` : `변경 등록 · 할 일 ${pickedN}건 배정`}</button>
+      <button type="button" className="btn nf-go" disabled={busy} onClick={() => submit()}>{busy ? '등록 중…' : byItem ? `변경 등록 · 품목 ${namedN}개 · 할 일 ${pickedN * namedN}건 배정` : `변경 등록 · 할 일 ${pickedN}건 배정`}</button>
       </div>
       </div>
+      {dialogs}
     </>
   )
 }
