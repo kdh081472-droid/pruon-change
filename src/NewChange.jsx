@@ -188,10 +188,12 @@ export default function NewChange({ nf, setNf, onDone, test }) {
     ORDER.forEach(dp => {
       d.tasks.filter(t => t.department === dp && t.on).forEach(t => {
         const tp = t.source === 'template' && tpls.find(x => x.department === dp && x.title === t.title && !used.has(x.id))
-        if (tp) { used.add(tp.id); list.push(fromTpl(tp, true)) }
-        else list.push({ k: newK(), dept: dp, title: t.title, on: true, tpl: null, src: t.ref ? { title: t.ref.title, date: t.ref.date, saved: t.source === 'saved' } : null })
+        // 배정 목록 불러오기와 같게: AI가 고른 할 일은 모두 '보통 할 일'(추가·해제 흔적 없이)
+        if (tp) { used.add(tp.id); list.push({ ...fromTpl(tp, true), plain: true }) }
+        else list.push({ k: newK(), dept: dp, title: t.title, on: true, tpl: null, orig: t.title, plain: true, src: t.ref ? { title: t.ref.title, date: t.ref.date, saved: t.source === 'saved' } : null })
       })
-      tpls.filter(x => x.department === dp && !used.has(x.id)).forEach(x => list.push(fromTpl(x, false)))
+      // 고르지 않은 기본 할 일은 숨김 → 부서마다 '기본 할 일 다시 넣기'로 꺼냄
+      tpls.filter(x => x.department === dp && !used.has(x.id)).forEach(x => list.push({ ...fromTpl(x, false), hidden: true }))
     })
     const byI = d.mode === 'items' && d.items.length >= 2
     const vals = {
