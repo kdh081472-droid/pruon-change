@@ -133,7 +133,6 @@ function OnTab({ cfg, f, set }) {
         <summary>단가·환율 (고급) · 모델을 고르면 자동으로 채워짐 · 환율 {won(f.usd_krw)}원</summary>
         <p className="ai-p">추정 금액 = 쓴 토큰 수 × 단가(미국 달러, 100만 토큰당) × 환율. 위에서 모델을 고르면 단가가 자동으로 바뀝니다. AI 회사 가격이나 환율이 바뀌면 여기 숫자만 고치면 됩니다. 실제 청구 금액은 AI 회사 사이트에서 확인하세요.</p>
         <div className="ai-adv-g">
-          <label>모델 이름 (직접 입력)<input value={f.model} onChange={e => set({ model: e.target.value })} /></label>
           <label>입력 단가 ($)<input type="number" step="0.01" min="0" value={f.price_in} onChange={e => set({ price_in: e.target.value })} /></label>
           <label>출력 단가 ($)<input type="number" step="0.01" min="0" value={f.price_out} onChange={e => set({ price_out: e.target.value })} /></label>
           <label>캐시 읽기 ($)<input type="number" step="0.001" min="0" value={f.price_cache_read} onChange={e => set({ price_cache_read: e.target.value })} /></label>
@@ -159,7 +158,7 @@ function ModelCard({ f, set }) {
       <h2>사용 모델 <small className="us-sm">고르면 단가가 자동으로 채워지고 예상 금액이 바뀝니다</small></h2>
       <div className="ai-mrow">
         <select value={cur ? cur.id : ''} aria-label="사용 모델" onChange={ev => pick(ev.target.value)}>
-          {!cur && <option value="">직접 입력: {f.model}</option>}
+          {!cur && <option value="">모델을 골라주세요 (지금: {f.model})</option>}
           {MODELS.map(m => <option key={m.id} value={m.id}>{m.name} — {m.tag}</option>)}
         </select>
         <div className="ai-mest">
