@@ -1723,3 +1723,68 @@ html, body { max-width: 100%; overflow-x: hidden }
 .ai-base { background: #eef9f4; border: 1px solid #b9e6d5; color: #0f5e47; border-radius: 10px; padding: 7px 10px; font-size: 12.5px; margin-bottom: 8px }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ai-base { background: #12261f; border-color: #1f4d3e; color: #8fe6c6 } }
 :root[data-theme="dark"] .ai-base { background: #12261f; border-color: #1f4d3e; color: #8fe6c6 }
+
+/* ===== v14_8 UI 정리 ===== */
+textarea.grow { resize: none; overflow: hidden; line-height: 1.45; display: block; width: 100% }
+.nf textarea.grow { font: inherit; font-size: 15px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink) }
+.ai-srcline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 5px; border: 1px solid var(--ai-line); background: var(--ai-soft); color: var(--ai); border-radius: 10px; padding: 6px 10px; font-size: 12.8px; margin: 2px 0 8px }
+.ai-srcline b { color: var(--ink) } .ai-srcline span { color: var(--muted) }
+.pbox .ai-srcline { margin: 8px 0 0 }
+.ai-pv-h { position: sticky; top: 0; z-index: 3; background: var(--surface); padding: 8px 0; margin: -8px 0 8px }
+.wide-main .ai-pv-h { top: -1px }
+.ai-ch-h { flex-wrap: nowrap }
+.ai-items td.ixc { width: 22px; text-align: center; padding: 0 }
+.ai-ix { border: 0; background: none; color: var(--faint); cursor: pointer; font-size: 12px; padding: 4px; border-radius: 6px } .ai-ix:hover { color: var(--late); background: var(--late-soft) }
+.ai-items td:nth-child(2) { width: 76px }
+.ai-items td.dc { width: 118px }
+.ai-itf { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px }
+.ai-itf .link { font-size: 13px } .ai-itf .ai-seg2 { margin-top: 0 }
+.ai-t { padding: 2px 3px }
+/* 직접 작성: 품목 이름 칸 넓게 */
+.nf .nf-item.by-item select { flex: 0 0 112px; width: 112px }
+.nf .nf-item.by-item input.nf-idate { flex: 0 0 136px; width: 136px; padding-left: 8px; padding-right: 6px }
+.nf .nf-item.by-item input:not(.nf-idate) { min-width: 90px }
+.nf .nf-item select { width: 112px; flex: 0 0 112px }
+/* 관리자 · AI 초안 설정 */
+.ai-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 }
+@media (max-width: 899px) { .ai-cards { grid-template-columns: minmax(0, 1fr) } }
+.ai-limr { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 4px }
+.ai-limr .ai-lim { width: 100px }
+.ai-rules td textarea.grow { font: inherit; font-size: 13.5px; border: 1px solid transparent; background: transparent; color: var(--text); border-radius: 7px; padding: 5px 7px }
+.ai-rules td textarea.grow:hover { border-color: var(--line) } .ai-rules td textarea.grow:focus { border-color: var(--accent); background: var(--surface); outline: 0 }
+.ai-rules tr.off td textarea { color: var(--faint) }
+.ai-rules td { vertical-align: top } .ai-rules td.g, .ai-rules td.n { padding-top: 9px }
+.ai-rt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex: 1 1 auto }
+.ai-rr { align-items: flex-start } .ai-rr > input, .ai-rr > .ai-star, .ai-rr > .ai-rx { margin-top: 1px }
+.ai-rr small { margin-top: 1px }
+.ai-links td:first-child { width: 42% }
+.ai-tband { display: flex; flex-direction: column; align-items: stretch; gap: 8px }
+.ai-tb1, .ai-tb2 { display: flex; align-items: center; gap: 6px 16px; flex-wrap: wrap }
+.ai-tb1 > b { color: var(--ai) } .ai-tb1 > span { color: var(--muted) }
+.ai-tb2 label { display: inline-flex; align-items: center; gap: 6px; font-weight: 600 }
+.ai-tb2 .ck input { width: 16px; height: 16px; accent-color: var(--accent) } .ai-tb2 small { color: var(--muted); font-weight: 500 }
+.ai-tgrid { grid-template-columns: minmax(0, 1fr) 280px }
+@media (max-width: 1299px) {
+  .ai-tgrid { grid-template-columns: minmax(0, 1fr) }
+  .ai-tside { order: -1; column-width: 240px; column-gap: 20px }
+  .ai-tside > * { break-inside: avoid }
+}
+.us-b .l { font-size: 10.5px }
+/* 미리보기: 칸이 넉넉하면 왼쪽(양식 칸)을 넓게, 좁으면 한 줄로 */
+.ai-pv { container-type: inline-size }
+.ai-pv-g { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) }
+@container (max-width: 700px) { .ai-pv-g { grid-template-columns: minmax(0, 1fr) } }
+@media (max-width: 640px) {
+  .ai-items tr { grid-template-columns: 18px 80px minmax(0, 1fr) 24px }
+  .ai-items td.dc { grid-column: 2 / 4; width: auto }
+  .ai-items td.ixc { grid-column: 4; grid-row: 1 }
+}
+/* 직접 작성: 칸이 좁으면 품목별 전환일을 다음 줄로 */
+.card.nf { container-type: inline-size }
+@container (max-width: 480px) {
+  .nf .nf-item.by-item { flex-wrap: wrap; padding-bottom: 6px; border-bottom: 1px dashed var(--line); margin-bottom: 6px }
+  .nf .nf-item.by-item input:not(.nf-idate) { flex: 1 1 calc(100% - 170px); min-width: 0 }
+  .nf .nf-item.by-item input.nf-idate { flex: 0 0 160px; width: 160px; margin-left: 118px }
+}
+/* 묶음 이력 '최근' 줄: 좁은 화면에서는 줄바꿈 */
+@media (max-width: 1099px) { .hist-mini .hm-last { white-space: normal } }

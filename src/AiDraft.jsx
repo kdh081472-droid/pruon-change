@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { supabase, ORDER, ITEM_TYPES } from './supabase.js'
 import { useApp, useWidth, WIDE } from './ctx.jsx'
-import { callDraft, confHit, newSession, tkey, md2 } from './ai.js'
+import { callDraft, confHit, newSession, tkey } from './ai.js'
 
 // 대화방 메모의 AI 표시 (이름 옆 작은 알약)
 export function AiTag({ kind }) {
@@ -16,6 +16,24 @@ export function AiDraftBadge({ turns, long }) {
   return long
     ? <span className="ai-badge" title="변경 등록 [AI로 작성] 탭에서 만든 초안으로 등록했습니다">AI 초안으로 작성 · 대화 {turns}회</span>
     : <span className="ai-badge" title={'AI 초안으로 작성 · 대화 ' + turns + '회 (등록은 사람이 확인하고 누름)'}>AI 초안</span>
+}
+
+// 글자 수만큼 자동으로 늘어나는 한 줄 칸 (긴 제목도 다 보이게). Enter로 줄 바꾸지 않음
+export function Grow({ value, className, onKeyDown, ...rest }) {
+  const ref = useRef(null)
+  const fit = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px' } }
+  useLayoutEffect(fit, [value])
+  useEffect(() => { window.addEventListener('resize', fit); return () => window.removeEventListener('resize', fit) }, [])
+  return <textarea ref={ref} rows={1} value={value} className={(className || '') + ' grow'} {...rest}
+    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); if (onKeyDown) onKeyDown(e) }} />
+}
+
+// 미리보기·양식 위에 한 번만: 어느 배정 목록에서 가져왔는지
+export function srcOf(d) {
+  if (!d) return null
+  if (d.base) return { id: d.base.id, title: d.base.title, n: d.base.n, saved: true, more: 0, all: [d.base.title] }
+  const rs = d.refs || []
+  return rs.length ? { id: null, title: rs[0].title, saved: rs[0].kind === 'saved', more: rs.length - 1, all: rs.map(x => x.title) } : null
 }
 
 export function emptyAi() {
@@ -62,6 +80,18 @@ function skippedOf(tasks, given) {
   }))
 }
 const offTasks = ai => Object.values(ai.taskEdits || {}).filter(e => !e.on).map(e => ({ department: e.t.department, title: e.t.title }))
+
+export function SrcLine({ s, form, now }) {
+  if (!s) return null
+  return (
+    <div className="ai-srcline" title={s.all.join(', ')}>
+      ✦ {form ? 'AI 초안이 가져온 배정 목록' : '가져온 배정 목록'} <b>「{s.title}」</b>
+      {s.more > 0 && <span> 외 {s.more}건</span>}
+      {s.n ? <span> · 저장한 목록 · {s.n}건</span> : null}
+      {now && <span> · 지금 적용</span>}
+    </div>
+  )
+}
 
 // **굵게** 정도만
 function Txt({ s }) {
@@ -130,6 +160,14 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
     ...a, draft: { ...a.draft, items: a.draft.items.map((x, j) => (j === i ? { ...x, ...patch } : x)) },
     locked: { ...a.locked, items: true }, changed: a.changed.filter(x => x !== 'item:' + i && x !== 'itarget:' + i),
   }))
+  const addItem = () => setAi(a => {
+    const its = a.draft.items
+    return { ...a, draft: { ...a.draft, items: [...its, { type: its.length ? its[its.length - 1].type : '단품', name: '', target: '' }] }, locked: { ...a.locked, items: true } }
+  })
+  const removeItem = i => setAi(a => ({
+    ...a, draft: { ...a.draft, items: a.draft.items.filter((_, j) => j !== i) }, locked: { ...a.locked, items: true },
+    changed: a.changed.filter(x => !/^i(tem|target):/.test(x)),
+  }))
   const toggleTask = (t, on) => setAi(a => {
     const taskEdits = { ...a.taskEdits, [tkey(t)]: { on, t: { department: t.department, title: t.title, source: t.source, ref: t.ref } } }
     const tasks = a.draft.tasks.map(x => (tkey(x) === tkey(t) ? { ...x, on } : x))
@@ -151,13 +189,12 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
   const lk = ai.locked || {}
   const cls = (f, base = '') => base + (ch.has(f) ? ' chg' : '') + (lk[f] ? ' mine' : '')
   const Lbl = ({ f, children }) => <label className="ai-l">{children}{lk[f] && <span className="ai-mine" title="직접 고친 칸은 AI가 다시 바꾸지 않습니다">직접 고침</span>}</label>
-  const openQ = d ? d.questions.filter(q => q.status === 'open').length : 0
   const byItem = d && d.mode === 'items' && d.items.length >= 2
 
   const chat = (
     <div className="card ai-chat">
       <div className="ai-ch-h">
-        <b>AI와 대화</b><span>말로 설명하면 오른쪽 초안을 채우고, 모르는 건 여쭤봐요</span>
+        <b>AI와 대화</b>
         {ai.msgs.length > 0 && !test && <button type="button" className="ai-rsb" onClick={() => setReset(true)}>↺ 새로 시작</button>}
         {reset && (
           <div className="ai-rspop" role="dialog" aria-label="새로 시작">
@@ -208,53 +245,54 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
   const fieldsCol = d && (
     <div className="ai-col">
       <Lbl f="title">제목</Lbl>
-      <input className={cls('title', 'ai-f')} value={d.title} aria-label="제목 (미리보기)" onChange={e => editField('title', e.target.value)} />
+      <Grow className={cls('title', 'ai-f')} value={d.title} aria-label="제목 (미리보기)" onChange={e => editField('title', e.target.value)} />
       <div className="ai-two">
-        <div><Lbl f="description">변경 내용</Lbl><textarea rows={2} className={cls('description', 'ai-f')} value={d.description} aria-label="변경 내용 (미리보기)" onChange={e => editField('description', e.target.value)} /></div>
-        <div><Lbl f="reason">변경 사유</Lbl><textarea rows={2} className={cls('reason', 'ai-f')} value={d.reason} placeholder="(비어 있음)" aria-label="변경 사유 (미리보기)" onChange={e => editField('reason', e.target.value)} /></div>
+        <div><Lbl f="description">변경 내용</Lbl><textarea rows={3} className={cls('description', 'ai-f')} value={d.description} aria-label="변경 내용 (미리보기)" onChange={e => editField('description', e.target.value)} /></div>
+        <div><Lbl f="reason">변경 사유</Lbl><textarea rows={3} className={cls('reason', 'ai-f')} value={d.reason} placeholder="(비어 있음)" aria-label="변경 사유 (미리보기)" onChange={e => editField('reason', e.target.value)} /></div>
       </div>
-      <Lbl f="items">대상 품목 · <span className="ai-mode">{byItem ? '품목별로 관리 (묶음)' : '하나로 관리'}</span>{lk.mode && <span className="ai-mine">직접 고침</span>}</Lbl>
-      {d.items.length === 0 ? <p className="ai-empty-s">아직 품목이 없어요. 대화로 알려주세요.</p> : (
-        <table className="ai-items">
-          <thead><tr><th>#</th><th>종류</th><th>품목</th>{byItem && <th>전환일</th>}</tr></thead>
+      <Lbl f="items">대상 품목</Lbl>
+      {d.items.length === 0 ? <p className="ai-empty-s">아직 품목이 없어요. 대화로 알려주거나 아래에서 추가하세요.</p> : (
+        <table className={'ai-items' + (byItem ? ' by' : '')}>
+          <thead><tr><th>#</th><th>종류</th><th>품목</th>{byItem && <th>전환일</th>}<th aria-label="빼기" /></tr></thead>
           <tbody>
             {d.items.map((it, i) => (
               <tr key={i}>
                 <td className="n">{i + 1}</td>
                 <td><select className={'ai-f sm' + (ch.has('item:' + i) ? ' chg' : '')} value={it.type} aria-label={(i + 1) + '번 품목 종류'} onChange={e => editItem(i, { type: e.target.value })}>{ITEM_TYPES.map(t => <option key={t}>{t}</option>)}</select></td>
                 <td><input className={'ai-f sm' + (ch.has('item:' + i) ? ' chg' : '')} value={it.name} aria-label={(i + 1) + '번 품목 이름'} onChange={e => editItem(i, { name: e.target.value })} /></td>
-                {byItem && <td><input type="date" className={'ai-f sm mono' + (ch.has('itarget:' + i) ? ' chg' : '') + (it.target ? ' own' : '')} value={it.target || d.target_date || ''} aria-label={(i + 1) + '번 품목 전환일'}
+                {byItem && <td className="dc"><input type="date" className={'ai-f sm mono' + (ch.has('itarget:' + i) ? ' chg' : '') + (it.target ? ' own' : '')} value={it.target || d.target_date || ''} aria-label={(i + 1) + '번 품목 전환일'}
                   onChange={e => editItem(i, { target: e.target.value === d.target_date ? '' : e.target.value })} /></td>}
+                <td className="ixc"><button type="button" className="ai-ix" aria-label={(i + 1) + '번 품목 빼기'} onClick={() => removeItem(i)}>✕</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {d.items.length >= 2 && (
-        <div className="ai-seg2" role="radiogroup" aria-label="관리 방식 (미리보기)">
-          <button type="button" role="radio" aria-checked={!byItem} className={!byItem ? 'on' : ''} onClick={() => editField('mode', 'one')}>하나로 관리</button>
-          <button type="button" role="radio" aria-checked={byItem} className={byItem ? 'on' : ''} onClick={() => editField('mode', 'items')}>품목별로 관리</button>
-        </div>
-      )}
+      <div className="ai-itf">
+        <button type="button" className="link" onClick={addItem}>+ 품목 추가</button>
+        {d.items.length >= 2 && (
+          <div className="ai-seg2" role="radiogroup" aria-label="관리 방식 (미리보기)">
+            <button type="button" role="radio" aria-checked={!byItem} className={!byItem ? 'on' : ''} onClick={() => editField('mode', 'one')}>하나로 관리</button>
+            <button type="button" role="radio" aria-checked={byItem} className={byItem ? 'on' : ''} onClick={() => editField('mode', 'items')}>품목별로 관리</button>
+          </div>
+        )}
+        {lk.mode && <span className="ai-mine">직접 고침</span>}
+      </div>
       <Lbl f="target_date">{byItem ? '공통 전환일' : '전환일'}</Lbl>
       <input type="date" className={cls('target_date', 'ai-f mono ai-date') + (d.target_date ? '' : ' empty')} value={d.target_date || ''} aria-label="전환일 (미리보기)" onChange={e => editField('target_date', e.target.value)} />
       {!d.target_date && <span className="ai-need">전환일 미정 · 양식에서 꼭 골라야 등록됩니다</span>}
 
-      <div className="ai-l">확인 필요 · <span className="ai-sub">등록하는 분께만 여쭙니다 (다른 부서를 부르지 않음)</span></div>
+      <div className="ai-l">확인 필요 · <span className="ai-sub">등록하는 분께만 여쭙니다 · 미확인이어도 등록할 수 있어요</span></div>
       {d.questions.length === 0 ? <p className="ai-empty-s">확인할 질문이 없어요.</p> : (
         <ul className="ai-qs">
           {d.questions.map((q, i) => (
             <li key={i} className={(q.status === 'answered' ? 'ok' : 'open') + (ch.has('q:' + i) ? ' chg' : '')}>
               {q.status === 'answered'
                 ? <><b className="ai-qi">✓</b>{q.q} → <b>{q.answer || '답함'}</b></>
-                : <><b className="ai-qi">?</b>{q.q} → <b className="ai-qo">미확인</b> <small>등록은 가능 · 답하면 바로 반영</small></>}
+                : <><b className="ai-qi">?</b>{q.q} → <b className="ai-qo">미확인</b></>}
             </li>
           ))}
         </ul>
-      )}
-      <div className="ai-l">참고한 목록</div>
-      {d.refs.length === 0 ? <p className="ai-empty-s">없음 · 기본 할 일에서만 골랐어요</p> : (
-        <div className="ai-refs">{d.refs.map(r => <span key={r.id} className={'ai-ref' + (r.kind === 'saved' ? ' sv' : '')} title={(r.kind === 'saved' ? '저장한 목록 · ' : '과거 변경 · ') + r.title}>{r.kind === 'saved' ? '저장 · ' : ''}{r.title}{r.kind === 'saved' ? '' : ` (${md2(r.date)})`}</span>)}</div>
       )}
     </div>
   )
@@ -262,21 +300,15 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
   const shownDepts = d ? ORDER.filter(dp => d.tasks.some(t => t.department === dp)) : []
   const tasksCol = d && (
     <div className="ai-col">
-      <div className="ai-l">부서별 할 일 · <span className="ai-sub">기본 할 일·과거 변경·저장한 목록에서만 고릅니다</span></div>
-      <p className="ai-tnote">기본 할 일·과거 변경·저장한 목록 어디에도 없는 할 일은 AI가 새로 만들지 않습니다. 필요하면 양식에 채운 뒤 직접 추가하세요.{ai.dropped > 0 && <> (목록에 없는 할 일 {ai.dropped}건은 자동으로 뺐어요)</>}</p>
-      {d.base && <div className="ai-base">저장한 목록 「{d.base.title}」의 할 일 {d.base.n}건을 <b>그대로</b> 넣었어요. 필요 없는 건 체크를 끄세요.</div>}
+      <div className="ai-l">부서별 할 일</div>
+      <SrcLine s={srcOf(d)} />
       {shownDepts.map(dp => (
         <section key={dp} className="ai-dept">
           <b className="ai-dn">{dp}</b>
           {d.tasks.filter(t => t.department === dp).map(t => (
-            <label key={tkey(t)} className={'ai-t' + (t.on ? '' : ' off') + (t.source === 'past' ? ' past' : '') + (t.source === 'saved' ? ' saved' : '') + (ch.has('task:' + tkey(t)) ? ' chg' : '')}>
+            <label key={tkey(t)} className={'ai-t' + (t.on ? '' : ' off') + (ch.has('task:' + tkey(t)) ? ' chg' : '')}>
               <input type="checkbox" checked={t.on} onChange={e => toggleTask(t, e.target.checked)} />
-              <span className="ai-tt">
-                {t.title}
-                {t.source === 'past' && t.ref && <><span className="ai-src">과거 변경에서</span><small className="ai-srcl">출처: 「{t.ref.title}」 {dp} 할 일 ({md2(t.ref.date)}){t.freq > 1 ? ` · 비슷한 변경 ${t.freq}건에서 자주 쓰임` : ''}</small></>}
-                {t.source === 'saved' && t.ref && <><span className="ai-src sv">저장한 목록에서</span><small className="ai-srcl sv">출처: 저장한 목록 「{t.ref.title}」{t.freq > 1 ? ` · ${t.freq}건에서 자주 쓰임` : ''}</small></>}
-                {t.source === 'template' && t.freq > 1 && <small className="ai-srcl">비슷한 변경 {t.freq}건에서 자주 쓰임</small>}
-              </span>
+              <span className="ai-tt">{t.title}</span>
             </label>
           ))}
         </section>
@@ -301,15 +333,11 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
       {!d ? (
         <div className="ai-pv-empty">
           <p>왼쪽에 변경 내용을 말로 적어 보내면 여기에 초안이 만들어집니다.</p>
-          <ul><li>제목·변경 내용·사유·대상 품목·전환일</li><li>부서별 할 일 (기본 할 일·과거 변경에서만)</li><li>확인이 필요한 것 (등록하는 분께만 질문)</li></ul>
+          <ul><li>제목·변경 내용·사유·대상 품목·전환일</li><li>부서별 할 일</li><li>확인이 필요한 것 (등록하는 분께만 질문)</li></ul>
         </div>
       ) : (
         <>
           <div className="ai-pv-g">{fieldsCol}{tasksCol}</div>
-          <div className="ai-pv-f">
-            {openQ > 0 && <span className="ai-pv-open">미확인 질문 {openQ}개 · 등록할 때 한 번 더 알려드려요</span>}
-            <button type="button" className="btn ai-fill" disabled={busy} onClick={onFill}>이대로 양식에 채우기 →</button>
-          </div>
         </>
       )}
     </div>

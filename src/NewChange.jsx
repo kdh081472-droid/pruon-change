@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { supabase, ORDER, SHORT, ITEM_TYPES } from './supabase.js'
 import { useApp, Person, useWidth, WIDE } from './ctx.jsx'
 import { errText, stampFull } from './util.js'
-import AiDraft, { AiTag } from './AiDraft.jsx'
-import { useAiPublic, memoFlag, defaultMemo, FIELD_LABEL, PV2F, md2 } from './ai.js'
+import AiDraft, { AiTag, Grow, SrcLine, srcOf } from './AiDraft.jsx'
+import { useAiPublic, memoFlag, defaultMemo, FIELD_LABEL, PV2F } from './ai.js'
 
 // 품목 종류별 이름 예시
 const NAME_HINT = {
@@ -190,7 +190,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
         const tp = t.source === 'template' && tpls.find(x => x.department === dp && x.title === t.title && !used.has(x.id))
         // 배정 목록 불러오기와 같게: AI가 고른 할 일은 모두 '보통 할 일'(추가·해제 흔적 없이)
         if (tp) { used.add(tp.id); list.push({ ...fromTpl(tp, true), plain: true }) }
-        else list.push({ k: newK(), dept: dp, title: t.title, on: true, tpl: null, orig: t.title, plain: true, src: t.ref ? { title: t.ref.title, date: t.ref.date, saved: t.source === 'saved' } : null })
+        else list.push({ k: newK(), dept: dp, title: t.title, on: true, tpl: null, orig: t.title, plain: true })
       })
       // 고르지 않은 기본 할 일은 숨김 → 부서마다 '기본 할 일 다시 넣기'로 꺼냄
       tpls.filter(x => x.department === dp && !used.has(x.id)).forEach(x => list.push({ ...fromTpl(x, false), hidden: true }))
@@ -213,8 +213,11 @@ export default function NewChange({ nf, setNf, onDone, test }) {
       if (mine && sig(f, cur[f]) !== sig(f, vals[f])) { kept.push(f); vals[f] = cur[f] }
     })
     setEdit(null)
-    setNf({ ...nf, ...vals, tab: 'manual', err: '', presetUsed: null, picks: undefined, extras: undefined, addDept: null,
-      aiFill: { snap: { ...vals }, ai: aiVals, session: nf.ai.session, turns: nf.ai.turns, questions: d.questions, memo: d.memo || '' } })
+    const src = srcOf(d)
+    const baseP = d.base && !kept.includes('list') && db.presets.find(x => x.id === d.base.id)
+    setNf({ ...nf, ...vals, tab: 'manual', err: '', picks: undefined, extras: undefined, addDept: null,
+      presetUsed: baseP ? baseP.id : null, presetSel: baseP ? baseP.id : nf.presetSel, presetMode: null,
+      aiFill: { snap: { ...vals }, ai: aiVals, src, session: nf.ai.session, turns: nf.ai.turns, questions: d.questions, memo: d.memo || '' } })
     window.scrollTo(0, 0)
     toast(kept.length ? `양식에 채웠어요 · 직접 고친 칸(${kept.map(f => FIELD_LABEL[f]).join(', ')})은 그대로 두었어요` : '양식에 채웠어요 · 내용을 확인한 뒤 등록해주세요')
   }
@@ -319,7 +322,6 @@ export default function NewChange({ nf, setNf, onDone, test }) {
           : tab === 'ai' ? '말로 설명하면 양식을 채워드립니다 · 등록은 직접 눌러야 저장됩니다'
             : '두 탭을 오가도 입력한 내용과 AI 대화는 그대로 남습니다'}
       </span>
-      {tab === 'manual' && nf.aiFill && <span className="ai-badge">AI 초안으로 채움</span>}
     </div>
   )
   const dialogs = (ask || testDone) && createPortal(
@@ -383,7 +385,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
       <div className="card nf">
         <h3 className="nf-t">1. 기본 정보</h3>
         <label htmlFor="nf-title">제목</label>
-        <input id="nf-title" value={nf.title} onChange={e => set({ title: e.target.value, err: '' })} placeholder="예: 쿠팡_곰곰 교자만두_포장지 변경" />
+        <Grow id="nf-title" value={nf.title} onChange={e => set({ title: e.target.value, err: '' })} placeholder="예: 쿠팡_곰곰 교자만두_포장지 변경" />
         <p className="hint nf-hint">업체명_제품명_간단한 내용 순서로 적어주세요</p>
         <label htmlFor="nf-desc">변경 내용</label>
         <textarea id="nf-desc" rows={2} value={nf.desc} onChange={e => set({ desc: e.target.value })} placeholder="무엇이 어떻게 바뀌는지" />
@@ -452,7 +454,8 @@ export default function NewChange({ nf, setNf, onDone, test }) {
               {curP.fixed ? '기본 목록은 수정·삭제할 수 없습니다. 바꿔 쓰려면 고친 뒤 새 목록으로 저장하세요.' : <>저장: <Person id={curP.created_by} /> · 할 일 {curP.items.length}건</>}
             </div>
           )}
-          {usedP && <div className="pb-meta"><b>지금 적용: {usedP.name}</b></div>}
+          {nf.aiFill && nf.aiFill.src && <SrcLine s={nf.aiFill.src} form now={nf.aiFill.src.id && nf.presetUsed === nf.aiFill.src.id} />}
+          {usedP && !(nf.aiFill && nf.aiFill.src && nf.aiFill.src.id === usedP.id) && <div className="pb-meta"><b>지금 적용: {usedP.name}</b></div>}
           {nf.presetMode === 'save' && (
             <div className="pb-form">
               <label htmlFor="p-name">새 배정 목록 이름</label>
@@ -530,10 +533,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
                         <span className="nr-eb"><button type="button" className="btn sm ghost" onClick={() => setEdit(null)}>취소</button><button type="button" className="btn sm" onClick={saveEdit}>저장</button></span>
                       </span>
                     ) : (
-                      <label htmlFor={x.tpl || x.plain ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.orig && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}
-                        {x.src && (x.src.saved
-                          ? <><span className="ai-src sv">저장한 목록에서</span><small className="ai-srcl sv">출처: 저장한 목록 「{x.src.title}」</small></>
-                          : <><span className="ai-src">과거 변경에서</span><small className="ai-srcl">출처: 「{x.src.title}」 ({md2(x.src.date)})</small></>)}</label>
+                      <label htmlFor={x.tpl || x.plain ? 'pk' + x.k : undefined} className="nf-tt">{x.title}{x.orig && x.title !== x.orig && <span className="nr-mod" title={'원래: ' + x.orig}>수정함</span>}</label>
                     )}
                     {!editing && (
                       <span className="nr-act">

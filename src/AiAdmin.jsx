@@ -4,9 +4,10 @@ import { useApp } from './ctx.jsx'
 import { errText, stampFull, iso, add, todayMid, hasAll } from './util.js'
 import NewChange, { emptyForm } from './NewChange.jsx'
 import { resetAiPublic, md2, MODELS, estCost } from './ai.js'
+import { Grow } from './AiDraft.jsx'
 
 // 관리자 모드 › AI 초안 설정: 켜기·기준 / 참고·경고 / 시험해 보기 / 사용 현황
-const SUBS = [['on', '켜기·기준'], ['ref', '참고·경고'], ['test', '시험해 보기'], ['use', '사용 현황']]
+const SUBS = [['on', '켜기·기준'], ['ref', '참고·경고'], ['test', '시험해 보기'], ['use', 'AI 사용 현황']]
 const SUBT = {
   on: '켜기·한도·확인 필요 기준',
   ref: '참고할 과거 변경·변경 종류별 배정 목록·대외비 경고',
@@ -83,24 +84,23 @@ function OnTab({ cfg, f, set }) {
   const setRules = r => set({ rules: r })
   const move = (from, to) => { if (to < 0 || to >= rules.length || from === to) return; const r = rules.slice(); const [m] = r.splice(from, 1); r.splice(to, 0, m); setRules(r) }
   const editR = (i, patch) => setRules(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)))
-  const regRate = cfg.month_drafts ? Math.round((cfg.month_registered / cfg.month_drafts) * 100) : null
   return (
     <>
-      <div className="stats four ai-cards">
+      <div className="stats ai-cards">
         <div className="stat"><div className="k">AI로 작성</div><div className="v ai-onv"><Sw on={f.enabled} label="AI로 작성 켜기" onChange={v => set({ enabled: v })} /><b className={f.enabled ? 'on' : ''}>{f.enabled ? '켜짐' : '꺼짐'}</b></div><div className="s">끄면 모든 사람에게 [직접 작성]만 보임</div></div>
         <div className="stat"><div className="k">이번 달 추정 사용 금액</div>
-          <div className="v">약 {won(cfg.month_cost)}<small>원 / 한도 </small><input className="hb-num ai-lim" type="number" min="0" step="1000" value={f.monthly_limit} onChange={e => set({ monthly_limit: e.target.value })} aria-label="월 사용 한도 (원)" /><small>원</small></div>
+          <div className="v">약 {won(cfg.month_cost)}<small>원</small></div>
+          <label className="ai-limr">월 한도 <input className="hb-num ai-lim" type="number" min="0" step="1000" value={f.monthly_limit} onChange={e => set({ monthly_limit: e.target.value })} aria-label="월 사용 한도 (원)" /> 원</label>
           <div className={'meter ai-meter' + (pct >= 100 ? ' over' : pct >= 80 ? ' near' : '')}><i style={{ width: Math.max(1.5, pct) + '%' }} /></div>
-          <div className="s">{pct >= 100 ? '한도를 넘어 이번 달은 AI 탭이 멈췄습니다 · 한도를 올리면 다시 켜짐' : '한도를 넘으면 그달은 AI 탭 자동 멈춤 · 추정치'}</div></div>
-        <div className="stat"><div className="k">이번 달 초안</div><div className="v">{cfg.month_drafts}<small>건</small></div><div className="s">등록까지 이어짐 {cfg.month_registered}건{regRate != null ? ` (${regRate}%)` : ''}</div></div>
-        <div className="stat"><div className="k">확인 필요 최대 개수</div><div className="v"><input className="hb-num" type="number" min="0" max="10" value={f.max_questions} onChange={e => set({ max_questions: e.target.value })} aria-label="확인 필요 질문 최대 개수" /><small> 개 / 초안 1건</small></div><div className="s">많으면 아무도 안 읽음 · 3~5개 권장 · 0이면 묻지 않음</div></div>
+          <div className="s">{pct >= 100 ? '한도를 넘어 이번 달은 멈춤 · 한도를 올리면 다시 켜짐' : '넘으면 그달은 자동 멈춤 · 추정치'}</div></div>
+        <div className="stat"><div className="k">확인 필요 최대 개수</div><div className="v"><input className="hb-num" type="number" min="0" max="10" value={f.max_questions} onChange={e => set({ max_questions: e.target.value })} aria-label="확인 필요 질문 최대 개수" /><small> 개</small></div><div className="s">초안 1건당 · 3~5개 권장 · 0이면 묻지 않음</div></div>
       </div>
 
       <ModelCard f={f} set={set} />
 
       <div className="card adm-card">
-        <h2>확인 필요 기준 <small className="us-sm">AI는 아래 경우에만 질문을 남깁니다 · 위에 있을수록 먼저 묻습니다(끌어서 순서 변경)</small></h2>
-        <p className="ai-p"><b>모든 질문은 등록하는 사람에게만</b> AI 대화에서 묻습니다(다른 부서를 부르지 않음). AI가 <b>대화 내용으로 어떤 변경인지 판단해서 해당되는 기준만</b> 묻습니다(예: 박스 얘기가 없으면 박스 질문은 안 함). '경우'는 구체적으로 적어주세요.</p>
+        <h2>확인 필요 기준 <small className="us-sm">위에 있을수록 먼저 묻습니다 · 끌어서 순서 변경</small></h2>
+        <p className="ai-p">질문은 <b>등록하는 사람에게만</b>, 대화 내용에 <b>해당되는 기준만</b> 묻습니다.</p>
         <div className="us-tw">
           <table className="ai-rules">
             <thead><tr><th aria-label="끌기" /><th>순서</th><th>켜기</th><th>어떤 경우에 묻나요</th><th>예시 질문</th><th aria-label="삭제" /></tr></thead>
@@ -114,8 +114,8 @@ function OnTab({ cfg, f, set }) {
                     <span className="ai-ud"><button type="button" aria-label="위로" disabled={i === 0} onClick={() => move(i, i - 1)}>▲</button><button type="button" aria-label="아래로" disabled={i === rules.length - 1} onClick={() => move(i, i + 1)}>▼</button></span></td>
                   <td className="n">{i + 1}</td>
                   <td><Sw on={r.on} label={(i + 1) + '번 기준 켜기'} onChange={v => editR(i, { on: v })} /></td>
-                  <td><input value={r.when} aria-label={(i + 1) + '번 기준: 어떤 경우에 묻나요'} placeholder="예: 박스 인쇄·적재 규격도 바뀌는지 불분명할 때" onChange={e => editR(i, { when: e.target.value })} />{!r.base && <span className="ai-own">관리자 추가</span>}</td>
-                  <td><input value={r.ex} aria-label={(i + 1) + '번 기준: 예시 질문'} placeholder="예: 적재 규격(박스 크기)도 바뀌나요?" onChange={e => editR(i, { ex: e.target.value })} /></td>
+                  <td><Grow value={r.when} aria-label={(i + 1) + '번 기준: 어떤 경우에 묻나요'} placeholder="예: 박스 인쇄·적재 규격도 바뀌는지 불분명할 때" onChange={e => editR(i, { when: e.target.value })} />{!r.base && <span className="ai-own">관리자 추가</span>}</td>
+                  <td><Grow value={r.ex} aria-label={(i + 1) + '번 기준: 예시 질문'} placeholder="예: 적재 규격(박스 크기)도 바뀌나요?" onChange={e => editR(i, { ex: e.target.value })} /></td>
                   <td><button type="button" className="ai-x" aria-label={(i + 1) + '번 기준 삭제'} onClick={() => setRules(rules.filter((_, j) => j !== i))}>✕</button></td>
                 </tr>
               ))}
@@ -125,7 +125,7 @@ function OnTab({ cfg, f, set }) {
         <div className="ai-rf">
           <button type="button" className="link" onClick={() => setRules([...rules, { id: 'u' + Date.now().toString(36), on: true, base: false, when: '', ex: '' }])}>+ 기준 추가</button>
           <button type="button" className="link" onClick={() => setRules(cfg.default_rules.map(r => ({ ...r })))}>기본값으로 되돌리기</button>
-          <span className="muted">처음 7개는 기본값 · 지워도 '기본값으로 되돌리기'로 복구 (관리자가 추가한 기준은 지워짐)</span>
+          <span className="muted">기본값으로 되돌리면 관리자가 추가한 기준은 지워집니다</span>
         </div>
       </div>
 
@@ -155,25 +155,22 @@ function ModelCard({ f, set }) {
   const priceOk = cur && Number(f.price_in) === cur.p.in && Number(f.price_out) === cur.p.out && Number(f.price_cache_read) === cur.p.cr && Number(f.price_cache_write) === cur.p.cw
   return (
     <div className="card adm-card ai-model">
-      <h2>사용 모델 <small className="us-sm">고르면 단가가 자동으로 채워지고 예상 금액이 바뀝니다</small></h2>
+      <h2>사용 모델 <small className="us-sm">고르면 단가가 자동으로 채워집니다</small></h2>
+      <div className="ai-mcmp" role="radiogroup" aria-label="사용 모델">
+        {MODELS.map(m => {
+          const x = estCost({ ...f, price_in: m.p.in, price_out: m.p.out, price_cache_read: m.p.cr, price_cache_write: m.p.cw })
+          return <button key={m.id} type="button" role="radio" aria-checked={m.id === f.model} className={m.id === f.model ? 'on' : ''} onClick={() => pick(m.id)}><b>{m.name}</b><span>{m.tag}</span><em>초안 1건 약 {x.draft < 10 ? x.draft.toFixed(1) : won(x.draft)}원</em></button>
+        })}
+      </div>
+      {!cur && <p className="err">지금 설정된 모델({f.model})은 목록에 없습니다. 위에서 골라주세요.</p>}
       <div className="ai-mrow">
-        <select value={cur ? cur.id : ''} aria-label="사용 모델" onChange={ev => pick(ev.target.value)}>
-          {!cur && <option value="">모델을 골라주세요 (지금: {f.model})</option>}
-          {MODELS.map(m => <option key={m.id} value={m.id}>{m.name} — {m.tag}</option>)}
-        </select>
         <div className="ai-mest">
           <span>대화 1번 약 <b>{e.next < 10 ? e.next.toFixed(1) : won(e.next)}원</b>{e.first > e.next * 1.3 && <small> (첫 번째는 약 {e.first < 10 ? e.first.toFixed(1) : won(e.first)}원)</small>}</span>
           <span>초안 1건(대화 4번) 약 <b>{e.draft < 10 ? e.draft.toFixed(1) : won(e.draft)}원</b></span>
           {lim > 0 && e.draft > 0 && <span>월 한도 {won(lim)}원이면 약 <b>{won(Math.floor(lim / e.draft))}건</b></span>}
         </div>
       </div>
-      <div className="ai-mcmp">
-        {MODELS.map(m => {
-          const x = estCost({ ...f, price_in: m.p.in, price_out: m.p.out, price_cache_read: m.p.cr, price_cache_write: m.p.cw })
-          return <button key={m.id} type="button" className={m.id === f.model ? 'on' : ''} onClick={() => pick(m.id)}><b>{m.name}</b><span>{m.tag}</span><em>초안 1건 약 {x.draft < 10 ? x.draft.toFixed(1) : won(x.draft)}원</em></button>
-        })}
-      </div>
-      <p className="ai-p muted">예상 금액은 규칙·참고 자료 약 9천 토큰, 한 번에 답 약 1.5천 토큰으로 가정한 어림값입니다(과거 변경이 많거나 대화가 길면 늘어남). 단가는 2026년 11월 공개 자료 기준이라 바뀔 수 있습니다{cur && !priceOk ? ' · 지금 단가를 직접 고쳐 둔 상태입니다' : ''}. 정확한 금액은 '시험해 보기'와 '사용 현황'에서 확인하세요. 저장해야 사용자에게 반영됩니다.</p>
+      <p className="ai-p muted">어림값 (단가는 2026년 11월 공개 자료 기준){cur && !priceOk ? ' · 단가를 직접 고쳐 둔 상태' : ''}</p>
     </div>
   )
 }
@@ -200,7 +197,6 @@ function RefTab({ f, set }) {
   }).filter(r => r.kind === 'saved' || ((!r.at || new Date(r.at).getTime() >= from) && !(f.skip_stopped && r.c && r.c.close_type === '중단')))
     .sort((a, b) => String(b.at).localeCompare(String(a.at)))
   const shown = rows.filter(r => !q.trim() || hasAll(r.title + ' ' + r.p.name, q))
-  const onN = rows.filter(r => !r.off).length
   const setOn = (r, on) => {
     const ids = [r.p.id, r.c && r.c.id, r.g && r.g.id].filter(Boolean)
     const rest = ex.filter(x => !ids.includes(x.id))
@@ -240,7 +236,7 @@ function RefTab({ f, set }) {
     <>
       <div className="ai-ref2">
         <div className="card adm-card ai-refl">
-          <h2>참고할 배정 목록 <small className="us-sm">체크된 목록만 AI가 참고 · 새로 생긴 목록은 자동 체크</small></h2>
+          <h2>참고할 배정 목록 <small className="us-sm">체크된 목록만 참고 · 새 목록은 자동 체크</small></h2>
           <div className="ai-pf">
             <label>기간 <select value={f.past_months} onChange={e => set({ past_months: parseInt(e.target.value, 10) })}>
               {[3, 6, 12, 24, 36].map(m => <option key={m} value={m}>최근 {m}개월</option>)}
@@ -256,39 +252,22 @@ function RefTab({ f, set }) {
             <div className="ai-gh">저장한 배정 목록 <span>· {saved.length}건 중 {saved.filter(r => !r.off).length}건 체크</span></div>
             {saved.length ? saved.map(Row) : <p className="ai-p muted ai-rnone">{q ? '찾는 목록이 없습니다' : '저장한 목록이 없습니다 (변경 등록 › 배정 목록에서 저장)'}</p>}
           </div>
-          <p className="ai-p muted">★ 꼭 참고: 대화와 덜 비슷해도 항상 AI에게 보냄 · 체크를 끄면 참고 안 함 · ▾ 누르면 할 일 보기 · 지금 체크 {onN}건 · ★ {[...pinned].filter(id => rows.some(r => r.p.id === id && !r.off)).length}건</p>
+          <p className="ai-p muted">★ 꼭 참고 = 항상 AI에게 보냄 · ▾ 할 일 보기</p>
         </div>
 
         <div className="ai-refr">
           <div className="card adm-card">
             <h2>자동 최적화 <small className="us-sm">다 고르지 않아도 됩니다</small></h2>
-            <div className="ai-auto">
-              <b>대화마다 서버가 알아서 고릅니다</b>
-              <ol>
-                <li>체크된 목록 중 대화(업체·제품·원료·포장지·띠지·박스 등)와 <b>가장 비슷한 목록</b> + ★ 목록만 AI에게 보냄</li>
-                <li>비슷한 변경 여러 건에 <b>자주 배정된 할 일</b>은 '자주 쓰임'으로 알려줘서 먼저 고르게 함</li>
-                <li>보내는 양이 줄어 비용↓, 엉뚱한 과거 변경 참고↓</li>
-              </ol>
-            </div>
+            <p className="ai-p">체크된 목록 중 대화와 가장 비슷한 목록과 ★ 목록만 AI에게 보냅니다.</p>
             <div className="ai-pf">
               <label>한 번에 보낼 목록 <select value={f.send_n} onChange={e => set({ send_n: parseInt(e.target.value, 10) })}>
                 {[5, 10, 15, 20, 30].map(n => <option key={n} value={n}>{n}건{n === 15 ? ' (추천)' : ''}</option>)}
               </select></label>
-              <span className="ai-cnt">체크 <b>{onN}건</b></span>
             </div>
           </div>
-          <div className="card adm-card">
-            <h2>AI가 넣을 수 있는 할 일 <small className="us-sm">출처 규칙</small></h2>
-            <ul className="ai-srcs">
-              <li><b>기본 할 일</b> (관리자 › 기본 할 일)</li>
-              <li><b>과거 변경에 실제로 배정됐던 할 일</b> <span className="ai-src">과거 변경에서</span></li>
-              <li><b>저장한 배정 목록의 할 일</b> <span className="ai-src sv">저장한 목록에서</span></li>
-            </ul>
-            <p className="ai-p muted">세 곳 어디에도 없는 할 일은 AI가 만들지 않고, 서버가 한 번 더 걸러 뺍니다.</p>
-          </div>
           <details className="card adm-card ai-adv">
-            <summary>고급 · 변경 종류 → 배정 목록 연결 <span className="us-sm">(자동 최적화가 대신함 · 연결하면 우선)</span></summary>
-            <p className="ai-p">대화에 이 종류의 낱말(예: '원료')이 나오면 연결한 목록을 꼭 보내고 먼저 참고합니다.</p>
+            <summary>고급 · 변경 종류 → 배정 목록 연결</summary>
+            <p className="ai-p">대화에 이 종류 낱말(예: '원료')이 나오면 연결한 목록을 먼저 씁니다.</p>
             <table className="ai-links">
               <thead><tr><th>변경 종류</th><th aria-label="연결" /><th>먼저 참고할 배정 목록</th><th aria-label="삭제" /></tr></thead>
               <tbody>
@@ -356,11 +335,13 @@ function TestTab({ cfg, f, dirty, nf, setNf }) {
   return (
     <>
       <div className="ai-tband">
-        <b>시험 모드</b><span>실제 변경 등록 화면과 똑같이 동작하지만 아무것도 저장되지 않습니다</span>
+        <div className="ai-tb1"><b>시험 모드</b><span>실제 변경 등록과 똑같이 동작 · 저장 안 됨</span>
+          <span className="ai-tcost">모델 {(MODELS.find(m => m.id === use.model) || { name: use.model }).name} · 이번 시험 약 {ai ? (ai.cost < 10 ? Number(ai.cost).toFixed(1) : won(ai.cost)) : 0}원</span></div>
+        <div className="ai-tb2">
         <label>등록하는 사람 <select value={dept} onChange={e => setDept(e.target.value)}>{ORDER.map(x => <option key={x} value={x}>{x} · 가상 사용자</option>)}</select></label>
         <label className="ck" title={dirty ? '저장하기 전에 바꾼 설정으로 결과를 확인합니다' : '바꾼 설정이 없습니다'}><input type="checkbox" checked={unsaved} onChange={e => setUnsaved(e.target.checked)} /> 저장 안 한 설정도 반영{!dirty && <small> (바꾼 것 없음)</small>}</label>
         <button type="button" className="btn sm ghost" onClick={() => setNf(emptyForm())}>처음부터 다시</button>
-        <span className="ai-tcost">모델 {(MODELS.find(m => m.id === use.model) || { name: use.model }).name} · 이번 시험 약 {ai ? (ai.cost < 10 ? Number(ai.cost).toFixed(1) : won(ai.cost)) : 0}원</span>
+        </div>
       </div>
       <div className="ai-tgrid">
         <div className="ai-tmain">
@@ -476,13 +457,13 @@ function UseTab() {
       {!u ? (!err && <p className="muted">불러오는 중…</p>) : (
         <>
           <div className="us-kpis">
-            <div className="stat us-k"><div className="k">초안</div><div className="v">{u.drafts}<small> 건</small></div><div className="s">AI로 작성 탭에서 만든 초안</div></div>
-            <div className="stat us-k"><div className="k">등록까지 이어짐</div><div className="v">{u.registered}{rate != null && <small className="ai-rate"> {rate}%</small>}</div><div className="s">나머지는 중간에 그만둠·직접 작성</div></div>
+            <div className="stat us-k"><div className="k">초안</div><div className="v">{u.drafts}<small> 건</small></div><div className="s">AI로 만든 초안</div></div>
+            <div className="stat us-k"><div className="k">등록까지 이어짐</div><div className="v">{u.registered}{rate != null && <small className="ai-rate"> {rate}%</small>}</div><div className="s">나머지는 중간에 그만둠</div></div>
             <div className="stat us-k"><div className="k">평균 대화</div><div className="v">{u.avg_turns ?? '-'}<small> 회</small></div><div className="s">초안 1건당 보낸 횟수</div></div>
             <div className="stat us-k"><div className="k">추정 금액</div><div className="v">{won(u.cost)}<small> 원</small></div>
               {per === 'month' && <div className={'meter ai-meter' + (lim && u.cost >= lim ? ' over' : '')}><i style={{ width: (lim ? Math.min(100, Math.max(1.5, (u.cost / lim) * 100)) : 0) + '%' }} /></div>}
               <div className="s">{per === 'month' ? `한도 ${won(lim)}원 · ` : ''}시험 {won(u.cost_test)}원 포함</div></div>
-            <div className="stat us-k"><div className="k">시험해 보기</div><div className="v">{u.tests}<small> 회</small></div><div className="s">위 숫자에는 안 넣고 금액만 포함</div></div>
+            <div className="stat us-k"><div className="k">시험해 보기</div><div className="v">{u.tests}<small> 회</small></div><div className="s">숫자에선 빼고 금액만 포함</div></div>
           </div>
           <div className="ai-use3">
             <div className="card adm-card">
@@ -492,16 +473,16 @@ function UseTab() {
                   <div key={w.w} className={'us-b' + (i === weeks.length - 1 ? ' last' : '')}>
                     <span className="n">{Number(w.cost) ? won(w.cost) : ''}</span>
                     <i style={{ height: (Number(w.cost) ? Math.max(3, (Number(w.cost) / wmax) * 100) : 1.5) + '%' }} />
-                    <span className="l">{md2(w.w)}</span>
+                    <span className="l">{+w.w.slice(5, 7)}/{+w.w.slice(8, 10)}</span>
                   </div>
                 ))}
               </div>
-              {u.first && <p className="note">사용 기록은 {u.first}부터 쌓였습니다. 금액은 원 단위 반올림.</p>}
+              {u.first && <p className="note">기록 시작 {u.first}</p>}
             </div>
             <div className="card adm-card">
               <h2>사람이 자주 고친 칸 <small className="us-sm">AI가 어디서 자주 틀리는지</small></h2>
               <HBars rows={edited} cls="pu" />
-              <p className="note">'부서별 할 일'을 자주 고치면 → 참고 제외할 과거 변경이 있는지, 배정 목록 연결이 맞는지 확인하세요.</p>
+              <p className="note">'부서별 할 일'이 많으면 참고 목록 체크를 확인하세요.</p>
               <h3 className="us-h3">부서별 초안 수</h3>
               {(u.by_dept || []).length ? <HBars rows={u.by_dept.map(r => ({ k: r.dept, n: r.n }))} cls="bl" /> : <p className="muted">없음</p>}
             </div>
@@ -511,7 +492,7 @@ function UseTab() {
               <p className="note">미확인 {u.q_open}개 중 {u.q_open_memo}개는 AI 메모로 대화방에 남김</p>
               <h3 className="us-h3">대외비 경고</h3>
               <HBars rows={[{ k: '경고 뜸', n: u.conf_warn, c: 'rd' }, { k: '고쳐서 보냄', n: u.conf_fix, c: 'tq' }, { k: '그래도 보냄', n: u.conf_send, c: 'gy' }]} />
-              <p className="note">'그래도 보냄'이 많으면 경고 단어나 안내 문구를 손보세요.</p>
+              <p className="note">'그래도 보냄'이 많으면 경고 단어를 손보세요.</p>
             </div>
           </div>
         </>

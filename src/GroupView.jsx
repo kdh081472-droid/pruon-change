@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ORDER } from './supabase.js'
+import { ORDER, SHORT } from './supabase.js'
 import { useApp, Person } from './ctx.jsx'
 import { AiDraftBadge } from './AiDraft.jsx'
 import { dd, md, stamp, snip } from './util.js'
@@ -38,6 +38,7 @@ export default function GroupView({ gid }) {
   const g = db.groupMap[gid]
   if (!g || !g.kids.length) return <div className="card empty">묶음을 찾을 수 없습니다. 요약에서 다시 골라주세요.</div>
   const s = groupStats(g, overdue)
+  const anyNew = g.kids.some(k => unread(k.id).length > 0)
   const canWork = !viewer && s.openN > 0
   const canEdit = canWork && (me.department === g.created_by_dept || isAdmin)
   const processed = k => k.tasks.some(t => t.status !== '대기') || db.taskLogs.some(l => l.change_id === k.id && ['완료', '해당없음', '확인 취소'].includes(l.action))
@@ -47,8 +48,8 @@ export default function GroupView({ gid }) {
       <div className="gv-h">
         <div className="gv-top">
           <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>
-          <span className="g-chip">묶음 · 품목 {g.kids.length}</span>
-          <h2 className="gv-t">{g.title}<AiDraftBadge turns={g.ai_turns} /></h2>
+          <span className="g-chip">묶음 · 품목 {g.kids.length}</span><AiDraftBadge turns={g.ai_turns} />
+          <h2 className="gv-t">{g.title}</h2>
           {!wide && <button type="button" className="pill gv-chat" onClick={() => openChat('g:' + gid)}>묶음 대화{unread('g:' + gid).length > 0 && <span className="ub">{unread('g:' + gid).length}</span>}</button>}
           {canWork && (
             <span className="p-acts">
@@ -71,7 +72,7 @@ export default function GroupView({ gid }) {
       {wide ? (
         <div className="gv-tw">
           <table className="gv-table">
-            <thead><tr><th className="n">#</th><th className="l">품목</th><th>상태</th><th>처리</th><th>전환일</th><th className="l">남은 부서</th><th>새 대화</th>{canWork && <th />}</tr></thead>
+            <thead><tr><th className="n">#</th><th className="l">품목</th><th>상태</th><th>처리</th><th>전환일</th><th className="l">남은 부서</th>{anyNew && <th>새 대화</th>}{canWork && <th />}</tr></thead>
             <tbody>
               {g.kids.map(k => {
                 const st = kidStatus(k, overdue), n = k.tasks.length, d = k.tasks.filter(t => t.status !== '대기').length
@@ -84,8 +85,8 @@ export default function GroupView({ gid }) {
                     <td className="ctr"><span className={'sst ' + SCLS[st]}>{st}</span></td>
                     <td><span className={'spg' + (st === '전환일 지남' ? ' late' : '') + (live ? '' : ' fin')}><i><em style={{ width: (n ? (d / n) * 100 : 0) + '%' }} /></i>{d}/{n}</span></td>
                     <td className="ctr mono">{md(k.target_date)}{live && <span className={'tdd' + (dd(k.target_date) <= 7 ? ' hot' : '')}>{dTxt(dd(k.target_date))}</span>}</td>
-                    <td className="l rem">{live ? (rem.length === ORDER.length ? '전 부서' : rem.join('·') || '-') : '-'}</td>
-                    <td className="ctr">{u.length > 0 && <span className="tdot">{u.length}</span>}</td>
+                    <td className="l rem">{live ? (rem.length === ORDER.length ? '전 부서' : rem.map(x => SHORT[x] || x).join('·') || '-') : '-'}</td>
+                    {anyNew && <td className="ctr">{u.length > 0 && <span className="tdot">{u.length}</span>}</td>}
                     {canWork && (
                       <td className="ctr act" onClick={e => e.stopPropagation()}>
                         {live && (processed(k)
@@ -127,7 +128,7 @@ export default function GroupView({ gid }) {
           <b>묶음 이력 {g.logs.length}</b>
           {logOpen
             ? <ol>{g.logs.slice().reverse().map(l => <li key={l.id}><b>{l.action}</b> · {String(l.detail || '').split('\n').join(' / ')}{l.memo ? <span className="gl-memo"> · 사유: {l.memo}</span> : ''} — <Person id={l.user_id} />, {stamp(l.created_at)}{l.action === '등록' && g.ai_turns ? <> <AiDraftBadge long turns={g.ai_turns} /></> : null}</li>)}</ol>
-            : <span className="hm-last">최근: <b>{g.logs[g.logs.length - 1].action}</b> · {snip(String(g.logs[g.logs.length - 1].detail || '').split('\n').join(' / '), 60)} — <Person id={g.logs[g.logs.length - 1].user_id} />, {stamp(g.logs[g.logs.length - 1].created_at)}{g.logs[g.logs.length - 1].action === '등록' && g.ai_turns ? <> <AiDraftBadge long turns={g.ai_turns} /></> : null}</span>}
+            : <span className="hm-last">최근: <b>{g.logs[g.logs.length - 1].action}</b> · {snip(String(g.logs[g.logs.length - 1].detail || '').split('\n').join(' / '), 60)} — <Person id={g.logs[g.logs.length - 1].user_id} />, {stamp(g.logs[g.logs.length - 1].created_at)}</span>}
           <button type="button" onClick={() => setLogOpen(v => !v)}>{logOpen ? '접기 ▴' : '전체 보기 ▾'}</button>
         </div>
       )}
