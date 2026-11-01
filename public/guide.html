@@ -59,6 +59,9 @@ h1 small { font-size: .6em; color: #6b7280; font-weight: 600; margin-left: 8px }
 .player.full .ctl button { background: #1f2937; color: #fff; border-color: #374151 }
 .player.full .ctl button.main { background: var(--blue); border-color: var(--blue) }
 .player.full .now { color: #9ca3af }
+.player.full.rot { inset: auto; left: 0; top: 0; width: var(--vh); height: var(--vw); transform-origin: 0 0; transform: rotate(90deg) translateY(-100%); padding: 4px 12px }
+.player.full.rot .stage, .player.full.rot .bar, .player.full.rot .ctl { width: min(100%, calc((var(--vw) - 70px) * 16 / 9)) }
+.player.full.rot .ctl { margin-top: 6px; flex-wrap: nowrap } .player.full.rot .ctl button { padding: 6px 10px; font-size: 13px } .player.full.rot .now { font-size: 12px } .player.full.rot .bar { margin-top: 8px }
 </style></head><body>
 <div class="wrap">
 <div class="player" id="pw"><div class="stage" id="st"><div class="layer" id="ly"></div><div class="sub" id="sub"></div><div class="play" id="pl"><i>▶</i>눌러서 시작 (약 1분 40초)</div><button class="fs" id="fs" aria-label="전체 화면" title="전체 화면"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path class="fs-on" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="fs-off" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button></div>
@@ -193,11 +196,17 @@ document.getElementById('rs').onclick = () => seek(0)
 addEventListener('resize', () => { const t = ly.style.transition; ly.style.transition = 'none'; fit(); fitSub(); ly.offsetWidth; ly.style.transition = t })
 addEventListener('keydown', e => { if (e.key === ' ') { e.preventDefault(); setPlay(!playing) } if (e.key === 'ArrowRight') document.getElementById('nx').click(); if (e.key === 'ArrowLeft') document.getElementById('pv').click() })
 const pw = document.getElementById('pw')
-function setFull(v) { pw.classList.toggle('full', v); document.getElementById('fs').setAttribute('aria-label', v ? '전체 화면 끝내기' : '전체 화면'); setTimeout(() => { const t = ly.style.transition; ly.style.transition = 'none'; fit(); fitSub(); ly.offsetWidth; ly.style.transition = t }, 60) }
+function setRot() {
+  const v = pw.classList.contains('full') && innerHeight > innerWidth
+  document.documentElement.style.setProperty('--vw', innerWidth + 'px'); document.documentElement.style.setProperty('--vh', innerHeight + 'px')
+  pw.classList.toggle('rot', v)
+}
+addEventListener('resize', () => { setRot(); setTimeout(() => { const t = ly.style.transition; ly.style.transition = 'none'; fit(); fitSub(); ly.offsetWidth; ly.style.transition = t }, 80) })
+function setFull(v) { pw.classList.toggle('full', v); setRot();  document.getElementById('fs').setAttribute('aria-label', v ? '전체 화면 끝내기' : '전체 화면'); setTimeout(() => { const t = ly.style.transition; ly.style.transition = 'none'; fit(); fitSub(); ly.offsetWidth; ly.style.transition = t }, 60) }
 document.getElementById('fs').onclick = e => {
   e.stopPropagation()
   const on = pw.classList.contains('full')
-  if (!on) { if (pw.requestFullscreen) pw.requestFullscreen().catch(() => {}); else if (pw.webkitRequestFullscreen) pw.webkitRequestFullscreen(); setFull(true) }
+  if (!on) { if (innerHeight <= innerWidth) { if (pw.requestFullscreen) pw.requestFullscreen().catch(() => {}); else if (pw.webkitRequestFullscreen) pw.webkitRequestFullscreen() } setFull(true) }
   else { if (document.fullscreenElement) document.exitFullscreen(); else if (document.webkitFullscreenElement) document.webkitExitFullscreen(); setFull(false) }
 }
 const fsChange = () => { if (!document.fullscreenElement && !document.webkitFullscreenElement && pw.classList.contains('full') && (pw.requestFullscreen || pw.webkitRequestFullscreen)) setFull(false) }
