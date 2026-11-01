@@ -76,7 +76,7 @@ export default function HelpBot({ onClose, full }) {
           <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>
         </div>
         <div className="hb-list" ref={listRef}>
-          <a className="hb-video" href="guide.html" target="_blank" rel="noopener">{PLAY}<span><b>사용법 영상 보기 (약 1분 40초)</b><small>처음이면 먼저 보세요 · 새 창으로 열림</small></span><i>›</i></a>
+          <a className="hb-video" href="guide.html" target="_blank" rel="noopener">{PLAY}<span><b>사용법 영상 보기 (약 2분)</b><small>처음이면 먼저 보세요 · 새 창으로 열림</small></span><i>›</i></a>
           <div className="hb-a first">
             <div className="hb-who">도우미</div>
             안녕하세요. 변경점 관리 앱 사용법을 알려드려요. 궁금한 걸 편하게 물어보세요.

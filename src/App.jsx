@@ -64,6 +64,10 @@ function Login({ go }) {
         <a onClick={() => go('signup')}>가입하기</a>
         <a onClick={() => go('forgot')}>비밀번호 찾기</a>
       </div>
+      <a className="auth-video" href="guide.html" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor" /><path d="M10 8l6 4-6 4z" fill="#fff" /></svg>
+        <span><b>처음이세요? 사용법 영상 보기</b><small>약 2분 · 가입부터 등록까지</small></span><i>›</i>
+      </a>
     </Card>
   )
 }
