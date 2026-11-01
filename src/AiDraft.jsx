@@ -76,6 +76,8 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
   const ai = nf.ai || emptyAi()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sec, setSec] = useState(0)                 // 기다린 초
+  useEffect(() => { if (!busy) return setSec(0); const t0 = Date.now(); const id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 500); return () => clearInterval(id) }, [busy])
   const [warn, setWarn] = useState(null)           // { word, block }
   const [view, setView] = useState('chat')          // 휴대폰: 대화 / 미리보기
   const [reset, setReset] = useState(false)
@@ -179,7 +181,7 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
             {m.failed && !busy && i === ai.msgs.map(x => x.failed).lastIndexOf(true) && <button type="button" className="link ai-again" onClick={() => send(true, m.content)}>다시 보내기</button>}
           </div>
         ))}
-        {busy && <div className="ai-m assistant typing"><i /><i /><i /><span>초안을 만드는 중…</span></div>}
+        {busy && <div className="ai-m assistant typing"><i /><i /><i /><span>{sec < 4 ? '참고 목록을 고르는 중…' : '초안을 쓰는 중…'} {sec > 0 && <em className="ai-sec">{sec}초</em>}</span></div>}
       </div>
       {warn && (
         <div className={'ai-warn' + (warn.block ? ' block' : '')} role="alert">
@@ -262,6 +264,7 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
     <div className="ai-col">
       <div className="ai-l">부서별 할 일 · <span className="ai-sub">기본 할 일·과거 변경·저장한 목록에서만 고릅니다</span></div>
       <p className="ai-tnote">기본 할 일·과거 변경·저장한 목록 어디에도 없는 할 일은 AI가 새로 만들지 않습니다. 필요하면 양식에 채운 뒤 직접 추가하세요.{ai.dropped > 0 && <> (목록에 없는 할 일 {ai.dropped}건은 자동으로 뺐어요)</>}</p>
+      {d.base && <div className="ai-base">저장한 목록 「{d.base.title}」의 할 일 {d.base.n}건을 <b>그대로</b> 넣었어요. 필요 없는 건 체크를 끄세요.</div>}
       {shownDepts.map(dp => (
         <section key={dp} className="ai-dept">
           <b className="ai-dn">{dp}</b>

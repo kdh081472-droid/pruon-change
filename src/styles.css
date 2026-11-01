@@ -1719,3 +1719,7 @@ html, body { max-width: 100%; overflow-x: hidden }
 .ai-srcs { margin: 0 0 6px; padding-left: 18px; font-size: 13px; line-height: 1.9 }
 .ai-used { color: var(--ok-t) !important }
 .ai-ref.sv { border-color: #b9e6d5; color: #0f7a5c }
+.ai-sec { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--faint); margin-left: 4px }
+.ai-base { background: #eef9f4; border: 1px solid #b9e6d5; color: #0f5e47; border-radius: 10px; padding: 7px 10px; font-size: 12.5px; margin-bottom: 8px }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ai-base { background: #12261f; border-color: #1f4d3e; color: #8fe6c6 } }
+:root[data-theme="dark"] .ai-base { background: #12261f; border-color: #1f4d3e; color: #8fe6c6 }
