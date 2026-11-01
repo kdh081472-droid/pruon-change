@@ -4,6 +4,8 @@ import OrgTree from './Org.jsx'
 import { NewChatBlock } from './Mine.jsx'
 
 // PC 넓은 화면의 왼쪽: 계정 · 조직도 · 메뉴 (제품은 요약·달력·내 할 일에서 고름)
+export const PLAY = <svg className="play-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor" /><path d="M10 8l6 4-6 4z" fill="#fff" /></svg>
+
 export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, chatN, isAdmin, onAdmin, helpOpen, onHelp }) {
   const { db, me, viewer } = useApp()
   const [orgOpen, setOrgOpen] = useState(false)
@@ -36,6 +38,7 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, chatN, is
       </nav>
       <div className="sd-help">
         <button type="button" className={'sn' + (helpOpen ? ' on' : '')} onClick={onHelp} aria-expanded={!!helpOpen}>{ICON.help}<span>사용법 물어보기</span></button>
+        <a className="sd-video" href="guide.html" target="_blank" rel="noopener">{PLAY}<span>사용법 영상 보기</span>{new Date() < new Date('2026-11-16') && <em>NEW</em>}</a>
       </div>
       <div className="sd-fill" />
       {isAdmin && (
