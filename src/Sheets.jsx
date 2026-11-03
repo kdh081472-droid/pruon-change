@@ -24,6 +24,7 @@ export default function Sheet() {
   else if (sheet.kind === 'gedit') body = <GroupEditSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gtarget') body = <GroupTargetSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gstop') body = <GroupStopSheet gid={sheet.gid} close={close} />
+  else if (sheet.kind === 'gresume') body = <GroupResumeSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gadd') body = <GroupAddSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gremove') body = <GroupRemoveSheet cid={sheet.cid} close={close} />
   else if (sheet.kind === 'org') body = <><Top tag={'가입한 사람 ' + app.db.profiles.length + '명'} close={close} /><div className="s-title">조직도</div><OrgTree inSheet /></>
@@ -554,6 +555,38 @@ function GroupStopSheet({ gid, close }) {
       </div>
       <div className="s-acts">
         <button type="button" className="btn warn" disabled={busy} onClick={save}>{busy ? '처리 중…' : '묶음 중단 종결하기'}</button>
+        <button type="button" className="btn ghost" onClick={close}>취소</button>
+      </div>
+    </>
+  )
+}
+
+/* ---------- 묶음 다시 진행 ---------- */
+function GroupResumeSheet({ gid, close }) {
+  const { db, run } = useApp()
+  const g = db.groupMap[gid]
+  const stopped = g.kids.filter(k => k.status === '종결' && k.close_type === '중단')
+  const [reason, setReason] = useState('')
+  const { busy, err, setErr, go } = useBusy()
+  const ref = useFocus()
+  const save = () => go(async () => {
+    if (!reason.trim()) return { error: '다시 진행하는 사유를 입력해주세요.' }
+    const r = await run('group_resume', { p_group: gid, p_reason: reason.trim() }, n => `${n}개 품목을 다시 진행중으로 열었습니다`)
+    if (!r.error) close()
+    return r
+  })
+  return (
+    <>
+      <Top tag={'묶음 · ' + g.title} close={close} />
+      <div className="s-title">묶음 다시 진행</div>
+      <div className="lock">중단 종결된 품목 <b>{stopped.length}개</b>를 모두 다시 엽니다. 남은 할 일을 다시 처리할 수 있고, 중단 기록은 이력에 남습니다. 품목 하나만 열려면 그 품목 화면의 '다시 진행'을 쓰면 됩니다.</div>
+      <div className="form">
+        <label htmlFor="gr-r">다시 진행하는 사유 (필수)</label>
+        <textarea id="gr-r" ref={ref} rows={2} value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 고객사가 변경 재요청" />
+        {err && <p className="err">{err}</p>}
+      </div>
+      <div className="s-acts">
+        <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '처리 중…' : '묶음 다시 진행'}</button>
         <button type="button" className="btn ghost" onClick={close}>취소</button>
       </div>
     </>

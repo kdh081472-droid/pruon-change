@@ -59,6 +59,11 @@ export default function GroupView({ gid }) {
               <button type="button" className="pill stop" onClick={() => setSheet({ kind: 'gstop', gid })}>묶음 중단 종결</button>
             </span>
           )}
+          {!viewer && s.openN === 0 && s.stopN > 0 && (
+            <span className="p-acts">
+              <button type="button" className="pill" onClick={() => setSheet({ kind: 'gresume', gid })}>다시 진행</button>
+            </span>
+          )}
         </div>
         <dl className="kv2 gv-kv">
           <div><dt>전환일</dt><dd className="mono">{rangeTxt(s.from, s.to)}{s.next && <span className={'gv-d' + (dd(s.next) < 0 ? ' late' : '')}> · {dTxt(dd(s.next))}</span>}</dd></div>
