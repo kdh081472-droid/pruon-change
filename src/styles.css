@@ -1819,3 +1819,10 @@ textarea.grow { resize: none; overflow: hidden; line-height: 1.45; display: bloc
 .auth-video i { margin-left: auto; font-style: normal; font-size: 20px; color: var(--accent) }
 .auth-video:hover { border-color: var(--accent) }
 @media (prefers-color-scheme: dark) { .auth-video { background: rgba(99,102,241,.14); border-color: rgba(129,140,248,.4) } }
+
+/* 전환일 일괄 변경: 체크칸이 폭 100%로 늘어나던 문제 */
+.form .gt-h input[type=checkbox], .form .gt-list input[type=checkbox] { width: 18px; height: 18px; padding: 0; margin: 0; flex: none; accent-color: var(--accent) }
+.form .gt-h label { white-space: nowrap; color: var(--text) }
+.form .gt-list label { color: var(--text); font-weight: 600 }
+.gt-n { word-break: keep-all; overflow-wrap: anywhere }
+.gt-d { flex: none; white-space: nowrap }
