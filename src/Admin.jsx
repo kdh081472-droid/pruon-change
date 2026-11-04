@@ -556,56 +556,157 @@ function PresetEdit() {
 function DeleteTab({ act, openReport }) {
   const { db, tOf } = useApp()
   const [q, setQ] = useState('')
-  const [ask, setAsk] = useState(null)
+  const [open, setOpen] = useState({})          // 펼친 묶음 { group_id: true }
+  const [sel, setSel] = useState([])            // 고른 변경 id
+  const [ask, setAsk] = useState(false)         // 삭제 확인 열림
   const [typed, setTyped] = useState('')
   const { busy, err, setErr, go } = useBusyAct(act)
-  const list = [...db.changes]
-    .filter(c => !q.trim() || c.title.includes(q.trim()))
-    .sort((a, b) => (a.status === b.status ? 0 : a.status === '진행중' ? -1 : 1) || String(b.created_at).localeCompare(String(a.created_at)))
+  useEffect(() => { setSel(x => x.filter(id => db.changeMap[id])) }, [db.changes])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const qq = q.trim()
+  const hit = c => !qq || hasAll(c.title + ' ' + (c.group ? c.group.title : ''), qq)
+  const live = c => c.status === '진행중'
+  const byNew = (x, y) => String(y.created_at).localeCompare(String(x.created_at))
+  // 묶음은 한 줄로 · 일반 변경은 한 줄씩 (진행 중 먼저, 최근 등록 먼저)
+  const rows = []
+  const seen = new Set()
+  db.changes.forEach(c => {
+    if (c.group) {
+      if (seen.has(c.group.id)) return
+      seen.add(c.group.id)
+      const kids = c.group.kids.filter(hit)
+      if (kids.length) rows.push({ g: c.group, kids, live: c.group.kids.some(live), at: c.group.created_at })
+    } else if (hit(c)) rows.push({ c, live: live(c), at: c.created_at })
+  })
+  rows.sort((x, y) => (x.live === y.live ? 0 : x.live ? -1 : 1) || String(y.at).localeCompare(String(x.at)))
+  const visibleIds = rows.flatMap(r => (r.g ? r.kids.map(k => k.id) : [r.c.id]))
+  const S = new Set(sel)
+  const toggle = (ids, on) => { const n = new Set(sel); ids.forEach(id => (on ? n.add(id) : n.delete(id))); setSel([...n]); setAsk(false); setErr('') }
+  const allVis = visibleIds.length > 0 && visibleIds.every(id => S.has(id))
+  const msgN = cid => db.messages.filter(m => m.change_id === cid).length
+  const info = (c) => { const ts = tOf(c.id); return `전환 ${md(c.target_date)} · 할 일 ${ts.filter(t => t.status !== '대기').length}/${ts.length} 처리 · 대화 ${msgN(c.id)}개` }
+
+  // 고른 것 요약
+  const picked = sel.map(id => db.changeMap[id]).filter(Boolean)
+  const gSum = {}
+  picked.forEach(c => { if (c.group) (gSum[c.group.id] = gSum[c.group.id] || { g: c.group, n: 0 }).n++ })
+  const gList = Object.values(gSum)
+  const singles = picked.filter(c => !c.group)
+  const summary = [
+    ...gList.map(x => `「${x.g.title.length > 18 ? x.g.title.slice(0, 18) + '…' : x.g.title}」 ${x.n === x.g.kids.length ? `전체(${x.n})` : `중 ${x.n}개`}`),
+    ...(singles.length ? [`일반 변경 ${singles.length}건`] : []),
+  ].join(' + ')
+  const taskN = picked.reduce((n, c) => n + tOf(c.id).length, 0)
+  const msgTotal = picked.reduce((n, c) => n + msgN(c.id), 0) + gList.filter(x => x.n === x.g.kids.length).reduce((n, x) => n + db.messages.filter(m => m.group_id === x.g.id && !m.change_id).length, 0)
+  const liveN = picked.filter(live).length
+  const closed = picked.filter(c => c.status === '종결')
+
+  const startDel = ids => { setSel(ids); setAsk(true); setTyped(''); setErr(''); }
+  const doDel = async () => {
+    const r = await go('admin_delete_changes', { p_ids: sel, p_confirm: typed.trim() }, n => `${n}건을 완전히 삭제했습니다`)
+    if (!r.error) { setSel([]); setAsk(false); setTyped('') }
+  }
+
   return (
     <>
       <Head title="변경 삭제" sub="진행 중·종결 모두 완전히 지웁니다. 삭제 기록도 남지 않습니다">
         <label className="search adm-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-          <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="제목 검색" aria-label="변경 검색" />
+          <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="제목·묶음 이름 검색" aria-label="변경 검색" />
         </label>
       </Head>
-      <div className="card adm-card">
-        <div className="cl2">
-          {list.map(c => {
-            const ts = tOf(c.id), dn = ts.filter(t => t.status !== '대기').length
-            const isOpen = ask === c.id
+      <div className="dl-tools">
+        <label className="dl-ck"><input type="checkbox" checked={allVis} onChange={e => toggle(visibleIds, e.target.checked)} />보이는 것 모두 선택</label>
+        <button type="button" className="btn sm ghost" onClick={() => { const any = rows.some(r => r.g && open[r.g.id]); setOpen(any ? {} : Object.fromEntries(rows.filter(r => r.g).map(r => [r.g.id, true]))) }}>{rows.some(r => r.g && open[r.g.id]) ? '모두 접기' : '모두 펼치기'}</button>
+        <span className="muted">변경 {visibleIds.length}건 · 묶음 {rows.filter(r => r.g).length}개</span>
+      </div>
+      <div className="card adm-card dl">
+        {rows.map(r => {
+          if (!r.g) {
+            const c = r.c, on = S.has(c.id)
             return (
-              <div key={c.id} className="ci2">
-                <div className="t"><b>{c.group && <span className="g-chip g-in">묶음 · {c.group.title}</span>}{c.title}</b><span>전환 {md(c.target_date)} · 할 일 {dn}/{ts.length} 처리 · 대화 {db.messages.filter(m => m.change_id === c.id).length}개 · 등록 {stampFull(c.created_at).slice(0, 10)}</span></div>
-                <span className={'ps2 ' + (c.status === '진행중' ? 'live' : 'fin')}>{c.status === '진행중' ? '진행 중' : c.close_type === '중단' ? '중단 종결' : '종결'}</span>
-                <button type="button" className="btn sm ghost warn-t" onClick={() => { setAsk(isOpen ? null : c.id); setTyped(''); setErr('') }}>완전 삭제</button>
-                {isOpen && (
-                  <div className="adm-confirm">
-                    <h3>되살릴 수 없습니다</h3>
-                    <ul>
-                      <li>할 일 {ts.length}건, 처리 이력, 전환일 변경 이력</li>
-                      <li>제품 대화와 읽음 기록</li>
-                      <li>이 건으로 만든 배정 목록</li>
-                      {c.status === '진행중' && <li>각 부서 "내 할 일"에서도 바로 빠집니다</li>}
-                    </ul>
-                    {c.status === '종결' && <div className="row"><button type="button" className="btn sm ghost" onClick={() => openReport(c.id)}>결과 보고서 PDF 먼저 받기</button></div>}
-                    <p>확인을 위해 제목을 그대로 입력해주세요: <b>{c.title}</b></p>
-                    <div className="row">
-                      <input value={typed} onChange={e => setTyped(e.target.value)} autoComplete="off" aria-label="삭제할 변경 제목 입력" />
-                      <button type="button" className="btn sm warn" disabled={busy || typed.trim() !== c.title}
-                        onClick={async () => { const r = await go('admin_delete_change', { p_change: c.id, p_confirm: typed.trim() }, `"${c.title}"을 완전히 삭제했습니다`); if (!r.error) setAsk(null) }}>완전 삭제</button>
-                      <button type="button" className="btn sm ghost" onClick={() => setAsk(null)}>취소</button>
-                    </div>
-                    {err && <p className="err">{err}</p>}
-                  </div>
-                )}
+              <div key={c.id} className={'dl-r' + (on ? ' sel' : '')}>
+                <input type="checkbox" checked={on} onChange={e => toggle([c.id], e.target.checked)} aria-label={c.title + ' 선택'} />
+                <span className="dl-ar" />
+                <div className="dl-t"><b>{c.title}</b><span>{info(c)} · 등록 {stampFull(c.created_at).slice(0, 10)}</span></div>
+                <span className={'ps2 ' + (live(c) ? 'live' : 'fin')}>{live(c) ? '진행 중' : c.close_type === '중단' ? '중단 종결' : '종결'}</span>
+                <button type="button" className="btn sm ghost warn-t" onClick={() => startDel([c.id])}>완전 삭제</button>
               </div>
             )
-          })}
-          {!list.length && <p className="muted">맞는 변경이 없습니다.</p>}
-        </div>
+          }
+          const g = r.g, ids = r.kids.map(k => k.id), n = ids.filter(id => S.has(id)).length
+          const isOpen = !!open[g.id] || (!!qq && r.kids.length < g.kids.length)
+          const ts = g.kids.flatMap(k => tOf(k.id)), dates = g.kids.map(k => k.target_date).filter(Boolean).sort()
+          return (
+            <div key={g.id} className="dl-gw">
+              <div className={'dl-r g' + (n ? ' sel' : '')}>
+                <input type="checkbox" checked={n === ids.length} ref={el => { if (el) el.indeterminate = n > 0 && n < ids.length }} onChange={e => toggle(ids, e.target.checked)} aria-label={g.title + ' 묶음 선택'} />
+                <button type="button" className="dl-ar" onClick={() => setOpen({ ...open, [g.id]: !open[g.id] })} aria-expanded={isOpen} aria-label="품목 펼치기">{isOpen ? '▾' : '▸'}</button>
+                <div className="dl-t">
+                  <b><span className="g-chip g-in">묶음 · 품목 {g.kids.length}</span>{g.title}</b>
+                  <span>전환 {dates.length ? md(dates[0]) + (dates[0] !== dates[dates.length - 1] ? '~' + md(dates[dates.length - 1]) : '') : '-'} · 할 일 {ts.filter(t => t.status !== '대기').length}/{ts.length} 처리 · 대화 {db.messages.filter(m => m.room === 'g:' + g.id || g.kids.some(k => k.id === m.change_id)).length}개 · 등록 {stampFull(g.created_at).slice(0, 10)}{n > 0 && <em className="dl-n"> · {n === g.kids.length ? `${n}개 모두 선택` : `${g.kids.length}개 중 ${n}개 선택`}</em>}{qq && r.kids.length < g.kids.length && ` · 검색 맞는 품목 ${r.kids.length}개`}</span>
+                </div>
+                <span className={'ps2 ' + (r.live ? 'live' : 'fin')}>{r.live ? '진행 중' : '종결'}</span>
+                <button type="button" className="btn sm ghost warn-t" onClick={() => startDel(g.kids.map(k => k.id))}>묶음 전체 삭제</button>
+              </div>
+              {isOpen && (
+                <div className="dl-kids">
+                  {r.kids.map(k => {
+                    const on = S.has(k.id)
+                    return (
+                      <label key={k.id} className={'dl-k' + (on ? ' sel' : '')}>
+                        <input type="checkbox" checked={on} onChange={e => toggle([k.id], e.target.checked)} />
+                        <b>{k.title}</b><span>{info(k)}</span>
+                        <span className={'ps2 ' + (live(k) ? 'live' : 'fin')}>{live(k) ? '진행 중' : k.close_type === '중단' ? '중단 종결' : '종결'}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {!rows.length && <p className="muted">맞는 변경이 없습니다.</p>}
       </div>
+      {sel.length > 0 && (
+        <div className={'dl-bar' + (ask ? ' ask' : '')}>
+          {!ask ? (
+            <div className="dl-bar-in">
+              <div className="dl-sum"><b>{sel.length}건 선택</b> · {summary}</div>
+              <button type="button" className="btn sm ghost" onClick={() => setSel([])}>선택 풀기</button>
+              <button type="button" className="btn sm warn" onClick={() => { setAsk(true); setTyped(''); setErr('') }}>선택한 {sel.length}건 완전 삭제</button>
+            </div>
+          ) : (
+            <div className="dl-conf">
+              <h3>{sel.length}건을 완전히 삭제합니다 · 되살릴 수 없습니다</h3>
+              {gList.map(x => (
+                <p key={x.g.id}>묶음 「{x.g.title}」 {x.n === x.g.kids.length ? <>품목 {x.n}개 — <b>묶음 전체가 지워집니다</b> (묶음 대화·묶음 이력 포함)</> : <>중 {picked.filter(c => c.group_id === x.g.id).map(c => c.title).slice(0, 4).join(', ')}{x.n > 4 ? ` 외 ${x.n - 4}개` : ''} — 나머지 {x.g.kids.length - x.n}개 품목은 남습니다</>}</p>
+              ))}
+              {singles.length > 0 && <p>일반 변경: {singles.slice(0, 4).map(c => c.title).join(', ')}{singles.length > 4 ? ` 외 ${singles.length - 4}건` : ''}</p>}
+              <ul>
+                <li>할 일 {taskN}건, 처리 이력, 전환일 변경 이력</li>
+                <li>대화 {msgTotal}개와 읽음 기록</li>
+                <li>이 건들로 만든 배정 목록</li>
+                {liveN > 0 && <li>진행 중인 {liveN}건은 각 부서 "내 할 일"에서도 바로 빠집니다</li>}
+              </ul>
+              {closed.length > 0 && (
+                <div className="row wrap">
+                  <span className="muted">종결된 건 결과 보고서 PDF 먼저 받기:</span>
+                  {closed.slice(0, 6).map(c => <button type="button" key={c.id} className="btn sm ghost" onClick={() => openReport(c.id)}>{c.title.length > 16 ? c.title.slice(0, 16) + '…' : c.title}</button>)}
+                  {closed.length > 6 && <span className="muted">외 {closed.length - 6}건</span>}
+                </div>
+              )}
+              <p>확인을 위해 <b>삭제</b>라고 입력해주세요</p>
+              <div className="row">
+                <input value={typed} onChange={e => setTyped(e.target.value)} autoComplete="off" aria-label="삭제 확인 입력" placeholder="삭제" />
+                <button type="button" className="btn sm warn" disabled={busy || typed.trim() !== '삭제'} onClick={doDel}>{busy ? '삭제 중…' : `${sel.length}건 완전 삭제`}</button>
+                <button type="button" className="btn sm ghost" onClick={() => setAsk(false)}>취소</button>
+              </div>
+              {err && <p className="err">{err}</p>}
+            </div>
+          )}
+        </div>
+      )}
     </>
   )
 }
