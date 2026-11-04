@@ -24,6 +24,7 @@ export default function Sheet() {
   else if (sheet.kind === 'gedit') body = <GroupEditSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gtarget') body = <GroupTargetSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gstop') body = <GroupStopSheet gid={sheet.gid} close={close} />
+  else if (sheet.kind === 'gassign') body = <GroupAssignSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gresume') body = <GroupResumeSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gadd') body = <GroupAddSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gremove') body = <GroupRemoveSheet cid={sheet.cid} close={close} />
@@ -523,6 +524,65 @@ function GroupTargetSheet({ gid, close }) {
       </div>
       <div className="s-acts">
         <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '저장 중…' : `${ids.length}개 품목 변경`}</button>
+        <button type="button" className="btn ghost" onClick={close}>취소</button>
+      </div>
+    </>
+  )
+}
+
+/* ---------- 묶음 할 일 일괄 배정 ---------- */
+function GroupAssignSheet({ gid, close }) {
+  const { db, run } = useApp()
+  const g = db.groupMap[gid]
+  const kids = g.kids
+  const open = kids.filter(k => k.status === '진행중')
+  const [pick, setPick] = useState(() => Object.fromEntries(open.map(k => [k.id, true])))
+  const [dept, setDept] = useState(ORDER[0])
+  const [title, setTitle] = useState('')
+  const [reason, setReason] = useState('')
+  const { busy, err, setErr, go } = useBusy()
+  const norm = x => (x || '').replace(/\s+/g, ' ').trim()
+  const dup = k => !!norm(title) && k.tasks.some(t => t.department === dept && norm(t.title) === norm(title))
+  const can = open.filter(k => !dup(k))
+  const ids = can.filter(k => pick[k.id]).map(k => k.id)
+  const save = () => go(async () => {
+    if (!norm(title)) return { error: '할 일 내용을 입력해주세요.' }
+    if (!ids.length) return { error: '품목을 골라주세요.' }
+    if (!reason.trim()) return { error: '배정 사유를 입력해주세요.' }
+    const r = await run('group_assign_task', { p_group: gid, p_ids: ids, p_dept: dept, p_title: norm(title), p_reason: reason.trim() }, n => `${n}개 품목의 ${dept} 부서에 할 일을 배정했습니다`)
+    if (!r.error) close()
+    return r
+  })
+  const clr = f => e => { f(e.target.value); setErr('') }
+  return (
+    <>
+      <Top tag={'묶음 · ' + g.title} close={close} />
+      <div className="s-title">할 일 일괄 배정</div>
+      <div className="form">
+        <label htmlFor="ga-dept">담당 부서</label>
+        <select id="ga-dept" value={dept} onChange={clr(setDept)}>{ORDER.map(d => <option key={d}>{d}</option>)}</select>
+        <label htmlFor="ga-title">할 일</label>
+        <input id="ga-title" value={title} onChange={clr(setTitle)} placeholder="예: 번들 띠지 신규 도안 확인" />
+        <div className="gt-h"><span>품목 고르기 (진행 중 {open.length}개)</span><label><input type="checkbox" checked={can.length > 0 && ids.length === can.length} onChange={e => setPick(Object.fromEntries(open.map(k => [k.id, e.target.checked])))} /> 모두 선택</label></div>
+        <div className="gt-list">
+          {kids.map(k => {
+            const live = k.status === '진행중', d = live && dup(k), on = live && !d && !!pick[k.id]
+            return (
+              <label key={k.id} className={(on ? 'on' : '') + (!live || d ? ' off' : '')}>
+                <input type="checkbox" disabled={!live || d} checked={on} onChange={e => { setPick({ ...pick, [k.id]: e.target.checked }); setErr('') }} />
+                <span className="gt-n">{k.title}</span>
+                {!live ? <span className="gt-tag">{k.close_type === '중단' ? '중단 종결' : '종결'}</span> : d ? <span className="gt-tag">이미 있음</span> : null}
+              </label>
+            )
+          })}
+        </div>
+        <label htmlFor="ga-reason">배정 사유 (필수)</label>
+        <input id="ga-reason" value={reason} onChange={clr(setReason)} placeholder="예: 번들 띠지에도 구 제품명 표기가 있어 함께 교체 필요" />
+        <p className="note">고른 품목마다 배정 이력이 남고, 결과 보고서에도 들어갑니다. 품목 하나만 배정하려면 그 품목 화면의 '+ 할 일 배정'을 쓰면 됩니다.</p>
+        {err && <p className="err">{err}</p>}
+      </div>
+      <div className="s-acts">
+        <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '배정 중…' : `할 일 배정 · 품목 ${ids.length}개`}</button>
         <button type="button" className="btn ghost" onClick={close}>취소</button>
       </div>
     </>

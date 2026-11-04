@@ -55,6 +55,7 @@ export default function GroupView({ gid }) {
             <span className="p-acts">
               {canEdit && <button type="button" className="pill" onClick={() => setSheet({ kind: 'gedit', gid })}>내용 수정</button>}
               <button type="button" className="pill" onClick={() => setSheet({ kind: 'gtarget', gid })}>전환일 일괄 변경</button>
+              <button type="button" className="pill" onClick={() => setSheet({ kind: 'gassign', gid })}>+ 할 일 배정</button>
               <button type="button" className="pill add" onClick={() => setSheet({ kind: 'gadd', gid })}>+ 품목 추가</button>
               <button type="button" className="pill stop" onClick={() => setSheet({ kind: 'gstop', gid })}>묶음 중단 종결</button>
             </span>

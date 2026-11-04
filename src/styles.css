@@ -1826,3 +1826,6 @@ textarea.grow { resize: none; overflow: hidden; line-height: 1.45; display: bloc
 .form .gt-list label { color: var(--text); font-weight: 600 }
 .gt-n { word-break: keep-all; overflow-wrap: anywhere }
 .gt-d { flex: none; white-space: nowrap }
+/* 묶음 할 일 일괄 배정: 배정 못 하는 품목 */
+.gt-list label.off { opacity: .55; cursor: default }
+.gt-tag { flex: none; font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--bg); border: 1px solid var(--line); padding: 1px 7px; border-radius: 99px; white-space: nowrap }
