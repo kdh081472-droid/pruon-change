@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, ORDER, SIGNUP_DEPTS } from './supabase.js'
 import { useApp, ICON, useWidth, WIDE } from './ctx.jsx'
-import { errText, md, stampFull, iso, add, parse, todayMid } from './util.js'
+import { errText, md, stampFull, iso, add, parse, todayMid, hasAll } from './util.js'
 import Report from './Report.jsx'
 import AiAdmin from './AiAdmin.jsx'
 
@@ -9,7 +9,7 @@ import AiAdmin from './AiAdmin.jsx'
 const seenOf = u => u.last_seen_at || u.last_sign_in_at || null
 
 // 관리자 모드: 관리 기능만 (업무 화면은 모두 꺼짐). 관리자 여부는 서버가 매번 다시 검사함
-const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat'], ['help', '도우미 설정', 'help'], ['ai', 'AI 초안 설정', 'spark']]
+const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일·목록', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat'], ['help', '도우미 설정', 'help'], ['ai', 'AI 초안 설정', 'spark']]
 
 export default function Admin({ onExit }) {
   const app = useApp()
@@ -95,12 +95,40 @@ function UsersTab({ users, err, act }) {
   const { me } = useApp()
   const [f, setF] = useState('all')
   const [ask, setAsk] = useState(null)       // 퇴사 확인 대상
+  const [dq, setDq] = useState([])          // 부서 거르기 (빈 배열 = 전체)
+  const [pop, setPop] = useState(null)       // 부서 헤더 창 위치 (null = 닫힘)
+  const [sort, setSort] = useState({ k: null, dir: 1 })   // 헤더 눌러 정렬: 오름차순 → 내림차순 → 원래대로
   const { busy, err: aErr, setErr, go } = useBusyAct(act)
   if (err) return <><Head title="가입자" /><div className="card empty">{err}</div></>
   if (!users) return <><Head title="가입자" /><div className="card empty">불러오는 중…</div></>
   const active = users.filter(u => !u.left_at)
   const admins = active.filter(u => u.is_admin)
-  const list = users.filter(u => (f === 'all' ? !u.left_at : f === 'left' ? u.left_at : u.is_admin && !u.left_at))
+  const byState = users.filter(u => (f === 'all' ? !u.left_at : f === 'left' ? u.left_at : u.is_admin && !u.left_at))
+  const deptList = [...ORDER.filter(d => byState.some(u => u.department === d)), ...[...new Set(byState.map(u => u.department))].filter(d => d && !ORDER.includes(d))]
+  const base = dq.length ? byState.filter(u => dq.includes(u.department)) : byState
+  const deptNo = d => { const i = ORDER.indexOf(d); return i < 0 ? 999 : i }
+  const KEY = {
+    name: u => u.name || '',
+    email: u => u.email || '',
+    dept: u => deptNo(u.department),
+    created: u => u.created_at || '',
+    seen: u => seenOf(u) || '',
+    state: u => (u.left_at ? 2 : u.is_admin ? 0 : 1),
+  }
+  const cmp = (a, b) => (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'ko'))
+  const list = sort.k ? [...base].sort((a, b) => {
+    const x = KEY[sort.k](a), y = KEY[sort.k](b)
+    if (sort.k === 'seen' && (!x || !y)) return !x && !y ? 0 : !x ? 1 : -1   // 접속 기록 없는 사람은 항상 아래
+    return cmp(x, y) * sort.dir || cmp(a.name, b.name)
+  }) : base
+  const clickSort = k => setSort(sort.k !== k ? { k, dir: 1 } : sort.dir === 1 ? { k, dir: -1 } : { k: null, dir: 1 })
+  const Th = ({ k, children }) => (
+    <th aria-sort={sort.k === k ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={'th-sort' + (sort.k === k ? ' on' : '')} onClick={() => clickSort(k)} title="눌러서 정렬 (오름차순 → 내림차순 → 원래대로)">
+        {children}<span className="th-ar">{sort.k === k ? (sort.dir === 1 ? '▲' : '▼') : '↕'}</span>
+      </button>
+    </th>
+  )
   const target = ask && users.find(u => u.id === ask)
   return (
     <>
@@ -126,7 +154,27 @@ function UsersTab({ users, err, act }) {
       <div className="card adm-card">
         <div className="tw">
           <table className="adm-t">
-            <thead><tr><th>이름</th><th>이메일</th><th>부서</th><th>가입일</th><th>마지막 접속</th><th>상태</th><th className="ra">관리</th></tr></thead>
+            <thead><tr><Th k="name">이름</Th><Th k="email">이메일</Th><th className="th-pop-w" aria-sort={sort.k === 'dept' ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className={'th-sort' + (sort.k === 'dept' || dq.length ? ' on' : '')} aria-expanded={!!pop} onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setPop(pop ? null : { top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 252) }) }} title="정렬·부서 고르기">
+                  부서<span className="th-ar">{sort.k === 'dept' ? (sort.dir === 1 ? '▲' : '▼') : '▾'}</span>{dq.length > 0 && <span className="th-fl">{dq.length}개 선택</span>}
+                </button>
+                {pop && (
+                  <>
+                    <div className="th-scrim" onClick={() => setPop(null)} onWheel={() => setPop(null)} />
+                    <div className="th-pop" role="dialog" aria-label="부서 정렬·거르기" style={{ top: pop.top, left: pop.left }}>
+                      <button type="button" className={'th-pr' + (sort.k === 'dept' && sort.dir === 1 ? ' on' : '')} onClick={() => setSort(sort.k === 'dept' && sort.dir === 1 ? { k: null, dir: 1 } : { k: 'dept', dir: 1 })}>▲ 오름차순 (부서 순서)</button>
+                      <button type="button" className={'th-pr' + (sort.k === 'dept' && sort.dir === -1 ? ' on' : '')} onClick={() => setSort(sort.k === 'dept' && sort.dir === -1 ? { k: null, dir: 1 } : { k: 'dept', dir: -1 })}>▼ 내림차순</button>
+                      <hr />
+                      <div className="th-cap">부서 고르기</div>
+                      <label className="th-pr"><input type="checkbox" checked={!dq.length} onChange={() => setDq([])} />모두<span>{byState.length}</span></label>
+                      {deptList.map(d => (
+                        <label key={d} className="th-pr"><input type="checkbox" checked={dq.includes(d)} onChange={e => setDq(e.target.checked ? [...dq, d] : dq.filter(x => x !== d))} />{d}<span>{byState.filter(u => u.department === d).length}</span></label>
+                      ))}
+                      <div className="th-pb"><button type="button" className="btn sm ghost" onClick={() => { setDq([]); setSort(sort.k === 'dept' ? { k: null, dir: 1 } : sort) }}>거르기 풀기</button><button type="button" className="btn sm" onClick={() => setPop(null)}>닫기</button></div>
+                    </div>
+                  </>
+                )}
+              </th><Th k="created">가입일</Th><Th k="seen">마지막 접속</Th><Th k="state">상태</Th><th className="ra">관리</th></tr></thead>
             <tbody>
               {list.map(u => (
                 <tr key={u.id} className={u.left_at ? 'left' : ''}>
@@ -160,7 +208,7 @@ function UsersTab({ users, err, act }) {
                   </td>
                 </tr>
               ))}
-              {!list.length && <tr><td colSpan={7} className="muted">해당하는 사람이 없습니다.</td></tr>}
+              {!list.length && <tr><td colSpan={7} className="muted">해당하는 사람이 없습니다.{dq.length > 0 && <> <button type="button" className="linkish" onClick={() => setDq([])}>부서 거르기 풀기</button></>}</td></tr>}
             </tbody>
           </table>
         </div>
@@ -279,47 +327,228 @@ function DeptTab({ users, act }) {
 /* ---------- 기본 할 일 ---------- */
 function TplTab({ act }) {
   const { db } = useApp()
-  const [dept, setDept] = useState(ORDER[0])
-  const [title, setTitle] = useState('')
-  const [edit, setEdit] = useState({})
-  const { busy, err, go } = useBusyAct(act)
-  const cur = ORDER.includes(dept) ? dept : ORDER[0]
-  const rows = db.templates.filter(t => t.department === cur)
+  const [sub, setSub] = useState('tpl')
+  const total = db.templates.filter(t => ORDER.includes(t.department)).length
   return (
     <>
-      <Head title="기본 할 일" sub={`변경을 등록할 때 자동으로 나오는 할 일 · 업무 부서 ${ORDER.length}곳, 모두 ${db.templates.filter(t => ORDER.includes(t.department)).length}건`} />
-      <div className="card adm-card">
-        <div className="seg sm wrap">
-          {ORDER.map(d => <button key={d} type="button" className={cur === d ? 'on' : ''} onClick={() => setDept(d)}>{d} {db.templates.filter(t => t.department === d).length}</button>)}
+      <Head title="기본 할 일 · 배정 목록" sub="변경을 등록할 때 쓰는 할 일 묶음">
+        <div className="seg sm">
+          <button type="button" className={sub === 'tpl' ? 'on' : ''} onClick={() => setSub('tpl')}>기본 할 일 {total}</button>
+          <button type="button" className={sub === 'preset' ? 'on' : ''} onClick={() => setSub('preset')}>배정 목록 {db.presets.length}</button>
         </div>
-        {err && <p className="err">{err}</p>}
-        <div className="tl2">
-          {rows.map(t => {
-            const v = edit[t.id] !== undefined ? edit[t.id] : t.title
-            const changed = v.trim() !== t.title
-            return (
-              <div className="tr2" key={t.id}>
-                <input value={v} aria-label="할 일 내용" onChange={e => setEdit({ ...edit, [t.id]: e.target.value })} />
-                <div className="acts">
-                  {changed && <button type="button" className="btn sm" disabled={busy} onClick={async () => { const r = await go('admin_tpl_save', { p_id: t.id, p_dept: cur, p_title: v.trim() }, '기본 할 일을 고쳤습니다'); if (!r.error) setEdit(x => { const y = { ...x }; delete y[t.id]; return y }) }}>저장</button>}
-                  <button type="button" className="btn sm ghost warn-t" disabled={busy} onClick={() => go('admin_tpl_delete', { p_id: t.id }, '기본 할 일을 삭제했습니다')}>삭제</button>
-                </div>
-              </div>
-            )
-          })}
-          {!rows.length && <p className="muted">아직 기본 할 일이 없습니다. 아래에서 추가해주세요.</p>}
-        </div>
-        <form className="adm-add" onSubmit={async e => {
-          e.preventDefault()
-          const r = await go('admin_tpl_save', { p_id: null, p_dept: cur, p_title: title.trim() }, '기본 할 일을 추가했습니다')
-          if (!r.error) setTitle('')
-        }}>
-          <label className="w1">{cur} 할 일 추가<input value={title} onChange={e => setTitle(e.target.value)} placeholder="예: 신규 자재 샘플 승인" required /></label>
-          <button type="submit" className="btn sm" disabled={busy}>추가</button>
-        </form>
-        <p className="note">마감일은 없습니다. 고친 내용은 앞으로 등록하는 변경부터 적용되고, 진행 중인 변경은 바뀌지 않습니다. 포장지가 아닌 변경(원료 등)은 변경 등록 화면에서 할 일을 고른 뒤 배정 목록으로 저장해 쓰세요.</p>
-      </div>
+      </Head>
+      {sub === 'tpl' ? <TplList act={act} /> : <PresetEdit />}
     </>
+  )
+}
+
+function TplList({ act }) {
+  const { db } = useApp()
+  const [add, setAdd] = useState({})       // 부서별 추가 입력 { 부서: 글 }
+  const [edit, setEdit] = useState({})
+  const { busy, err, go } = useBusyAct(act)
+  const total = db.templates.filter(t => ORDER.includes(t.department)).length
+  const addOne = async d => {
+    const v = (add[d] || '').trim()
+    if (!v) return
+    const r = await go('admin_tpl_save', { p_id: null, p_dept: d, p_title: v }, `${d}에 기본 할 일을 추가했습니다`)
+    if (!r.error) setAdd(x => ({ ...x, [d]: '' }))
+  }
+  return (
+    <>
+      {err && <p className="err">{err}</p>}
+      <div className="tpl-grid">
+        {ORDER.map(d => {
+          const rows = db.templates.filter(t => t.department === d)
+          return (
+            <section className="card tpl-d" key={d}>
+              <h3><span className="dchip">{d}</span><small>{rows.length}건</small></h3>
+              <div className="tpl-l">
+                {rows.map((t, i) => {
+                  const v = edit[t.id] !== undefined ? edit[t.id] : t.title
+                  const changed = v.trim() !== t.title
+                  const save = async () => { const r = await go('admin_tpl_save', { p_id: t.id, p_dept: d, p_title: v.trim() }, '기본 할 일을 고쳤습니다'); if (!r.error) setEdit(x => { const y = { ...x }; delete y[t.id]; return y }) }
+                  return (
+                    <div className={'tpl-r' + (changed ? ' ch' : '')} key={t.id}>
+                      <span className="tpl-no">{i + 1}</span>
+                      <textarea rows={1} value={v} aria-label={d + ' 할 일 내용'} onChange={e => setEdit({ ...edit, [t.id]: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (changed && v.trim()) save() } if (e.key === 'Escape') setEdit(x => { const y = { ...x }; delete y[t.id]; return y }) }} />
+                      {changed
+                        ? <button type="button" className="btn sm" disabled={busy || !v.trim()} onClick={save}>저장</button>
+                        : <button type="button" className="tpl-x" disabled={busy} title="삭제" aria-label={t.title + ' 삭제'} onClick={() => go('admin_tpl_delete', { p_id: t.id }, '기본 할 일을 삭제했습니다')}>✕</button>}
+                    </div>
+                  )
+                })}
+                {!rows.length && <p className="muted tpl-empty">아직 없습니다.</p>}
+              </div>
+              <form className="tpl-add" onSubmit={e => { e.preventDefault(); addOne(d) }}>
+                <input value={add[d] || ''} onChange={e => setAdd({ ...add, [d]: e.target.value })} placeholder={`+ ${d} 할 일 추가 (Enter)`} aria-label={d + ' 할 일 추가'} />
+                {(add[d] || '').trim() && <button type="submit" className="btn sm" disabled={busy}>추가</button>}
+              </form>
+            </section>
+          )
+        })}
+      </div>
+      <p className="note">글을 고치면 '저장' 버튼이 나옵니다(Enter로도 저장, Esc는 취소). 마감일은 없습니다. 고친 내용은 앞으로 등록하는 변경부터 적용되고, 진행 중인 변경은 바뀌지 않습니다. 포장지가 아닌 변경(원료 등)은 변경 등록 화면에서 할 일을 고른 뒤 배정 목록으로 저장해 쓰세요.</p>
+    </>
+  )
+}
+
+/* ---------- 배정 목록 만들기·고치기 (왼쪽 부서별 할 일에서 골라 담기) ---------- */
+const nrm2 = x => (x || '').replace(/\s+/g, ' ').trim()
+const k2 = (d, t) => d + '|' + nrm2(t)
+function PresetEdit() {
+  const { db, uid, reload, toast } = useApp()
+  const [sel, setSel] = useState('new')
+  const [name, setName] = useState('')
+  const [items, setItems] = useState([])      // [{ d, t }]
+  const [q, setQ] = useState('')
+  const [showAuto, setShowAuto] = useState(false)
+  const [over, setOver] = useState(false)
+  const [drag, setDrag] = useState(null)       // 담은 칸 안에서 옮기는 줄 번호
+  const [askDel, setAskDel] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const saved = db.presets.filter(p => !p.source_change_id)
+  const when = p => p.closed_at || p.updated_at || p.created_at || ''
+  const auto = db.presets.filter(p => p.source_change_id).sort((x, y) => String(when(y)).localeCompare(String(when(x))))
+  const P = sel === 'new' ? null : db.presets.find(p => p.id === sel)
+  const load = p => {
+    setSel(p ? p.id : 'new'); setName(p ? p.name : ''); setErr(''); setAskDel(false)
+    setItems(p ? (p.items || []).filter(x => x && x.department && x.title).map(x => ({ d: x.department, t: nrm2(x.title) })) : [])
+  }
+  useEffect(() => { if (sel !== 'new' && !db.presets.some(p => p.id === sel)) load(null) }, [db.presets])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 왼쪽: 부서별 할 일 = 기본 할 일 + 지금까지 실제로 배정된 할 일 (많이 쓴 순)
+  const pool = {}
+  ORDER.forEach(d => { pool[d] = new Map() })
+  db.templates.filter(t => t.active !== false && pool[t.department]).forEach(t => { const k = k2(t.department, t.title); pool[t.department].set(k, { d: t.department, t: nrm2(t.title), n: 0, tpl: t.id }) })
+  db.tasks.forEach(t => {
+    if (!pool[t.department] || !nrm2(t.title)) return
+    const k = k2(t.department, t.title), m = pool[t.department]
+    const x = m.get(k) || { d: t.department, t: nrm2(t.title), n: 0, tpl: null }
+    x.n++; m.set(k, x)
+  })
+  const inBag = new Set(items.map(x => k2(x.d, x.t)))
+  const add = list => { const s2 = new Set(inBag), nx = [...items]; list.forEach(x => { const k = k2(x.d, x.t); if (nrm2(x.t) && !s2.has(k)) { s2.add(k); nx.push({ d: x.d, t: nrm2(x.t) }) } }); setItems(nx); setErr('') }
+  const ordered = ORDER.flatMap(d => items.map((x, i) => ({ ...x, i })).filter(x => x.d === d))
+  const tplId = x => { const t = db.templates.find(y => y.department === x.d && nrm2(y.title) === x.t); return t ? t.id : null }
+
+  const save = async () => {
+    const nm = name.trim()
+    if (!nm) return setErr('목록 이름을 입력해주세요.')
+    if (db.presets.some(p => p.name === nm && p.id !== sel)) return setErr('같은 이름의 목록이 이미 있습니다.')
+    if (!items.length) return setErr('할 일을 하나 이상 담아주세요.')
+    const out = ordered.map(x => { const id = tplId(x); return id ? { department: x.d, title: x.t, tpl: id } : { department: x.d, title: x.t } })
+    setBusy(true); setErr('')
+    const now = new Date().toISOString()
+    const res = P
+      ? await supabase.from('assign_presets').update({ name: nm, items: out, updated_at: now, ...(nm !== P.name ? { renamed: true } : {}) }).eq('id', P.id).select('id')
+      : await supabase.from('assign_presets').insert({ name: nm, items: out, created_by: uid }).select('id')
+    setBusy(false)
+    if (res.error || !res.data || !res.data.length) return setErr(res.error ? errText(res.error) : '저장할 권한이 없습니다.')
+    await reload()
+    setSel(res.data[0].id)
+    toast(`"${nm.length > 24 ? nm.slice(0, 24) + '…' : nm}" 배정 목록을 ${P ? '저장했습니다' : '만들었습니다'}`)
+  }
+  const del = async () => {
+    if (!P) return
+    setBusy(true)
+    const res = await supabase.from('assign_presets').delete().eq('id', P.id).select('id')
+    setBusy(false)
+    if (res.error || !res.data || !res.data.length) return setErr(res.error ? errText(res.error) : '삭제할 권한이 없습니다.')
+    await reload(); load(null); toast('배정 목록을 삭제했습니다')
+  }
+  const dirty = P ? (name.trim() !== P.name || JSON.stringify(ordered.map(x => k2(x.d, x.t))) !== JSON.stringify((P.items || []).map(x => k2(x.department, x.title)))) : (name.trim() || items.length)
+
+  const onDropBag = e => {
+    e.preventDefault(); setOver(false)
+    const mv = e.dataTransfer.getData('application/x-pmove')
+    if (mv) return
+    try { add(JSON.parse(e.dataTransfer.getData('text/plain'))) } catch (_) { /* 무시 */ }
+  }
+  const moveTo = (from, to) => {
+    if (from == null || from === to || items[from].d !== items[to].d) return
+    const nx = [...items]; const [x] = nx.splice(from, 1); nx.splice(to, 0, x); setItems(nx)
+  }
+
+  return (
+    <div className="pe">
+      <div className="pe-list">
+        <button type="button" className={'pe-chip nw' + (sel === 'new' ? ' on' : '')} onClick={() => load(null)}>＋ 새 목록</button>
+        {saved.map(p => <button type="button" key={p.id} className={'pe-chip' + (sel === p.id ? ' on' : '')} onClick={() => load(p)}>{p.name} · {(p.items || []).length}건</button>)}
+        {auto.length > 0 && <button type="button" className="pe-chip mu" onClick={() => setShowAuto(!showAuto)}>종결 자동 추가 {auto.length}개 {showAuto ? '▾' : '▸'}</button>}
+        {showAuto && auto.map(p => <button type="button" key={p.id} className={'pe-chip au' + (sel === p.id ? ' on' : '')} onClick={() => load(p)}>{p.name} · {(p.items || []).length}건</button>)}
+      </div>
+      <div className="pe-two">
+        <section className="card pe-l">
+          <input className="ga-q" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="할 일 찾기" aria-label="할 일 찾기" />
+          <p className="pe-cap">부서별 할 일 · 기본 할 일 + 지금까지 배정된 할 일 (많이 쓴 순)</p>
+          <div className="pe-pool">
+            {ORDER.map(d => {
+              const list = [...pool[d].values()].filter(x => hasAll(d + ' ' + x.t, q)).sort((x, y) => y.n - x.n || (y.tpl ? 1 : 0) - (x.tpl ? 1 : 0) || x.t.localeCompare(y.t, 'ko'))
+              if (!list.length) return null
+              return (
+                <div key={d}>
+                  <div className="ga-sub"><span className="dchip">{d}</span><button type="button" className="ga-all sm" onClick={() => add(list.filter(x => x.tpl).length ? list.filter(x => x.tpl) : list)} title="이 부서의 기본 할 일을 모두 담기">기본 전부 담기</button></div>
+                  {list.map(x => {
+                    const on = inBag.has(k2(x.d, x.t))
+                    return (
+                      <div key={x.t} className={'ga-it' + (on ? ' has' : '')} draggable={!on} onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify([{ d: x.d, t: x.t }])); e.dataTransfer.effectAllowed = 'copy' }}>
+                        <span className="ga-h" aria-hidden>⋮⋮</span><span className="ga-n">{x.t}</span>
+                        {x.tpl && <span className="gt-tag">기본</span>}{x.n > 0 && <span className="pe-n">{x.n}회</span>}
+                        {on ? <span className="gt-tag">담음</span> : <button type="button" className="ga-add" onClick={() => add([x])} aria-label="담기">＋</button>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+        <section className="card pe-r form">
+          <label htmlFor="pe-name">목록 이름{P && P.source_change_id && <small> · 종결된 변경에서 자동 추가된 목록</small>}</label>
+          <input id="pe-name" className="pe-name" value={name} onChange={e => { setName(e.target.value); setErr('') }} placeholder="예: 원료 변경용" maxLength={60} />
+          <div className={'ga-bag pe-bag' + (over ? ' over' : '')} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDropBag}>
+            {ORDER.map(d => {
+              const rows = ordered.filter(x => x.d === d)
+              if (!rows.length) return null
+              return (
+                <div key={d} className="pe-g">
+                  <div className="pe-gh"><span className="dchip">{d}</span>{rows.length}건</div>
+                  {rows.map(x => (
+                    <div key={x.i} className={'ga-bk' + (drag === x.i ? ' dragging' : '')} draggable
+                      onDragStart={e => { setDrag(x.i); e.dataTransfer.setData('application/x-pmove', String(x.i)); e.dataTransfer.effectAllowed = 'move' }}
+                      onDragEnd={() => setDrag(null)}
+                      onDragOver={e => { if (drag != null && items[drag] && items[drag].d === d) { e.preventDefault(); e.stopPropagation() } }}
+                      onDrop={e => { if (drag != null) { e.preventDefault(); e.stopPropagation(); moveTo(drag, x.i); setDrag(null) } }}>
+                      <span className="ga-h" title="끌어서 순서 바꾸기">⋮⋮</span><span className="ga-n">{x.t}</span>
+                      <button type="button" className="ga-del" aria-label="빼기" onClick={() => setItems(items.filter((_, j) => j !== x.i))}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+            <div className="pe-drop">{items.length ? '여기에 끌어다 놓기 · 또는 ＋ (부서 순서대로 자동 정리, 부서 안 순서는 ⋮⋮로 끌어서)' : '왼쪽 할 일을 ＋로 담거나 여기에 끌어다 놓으세요'}</div>
+          </div>
+          {err && <p className="err">{err}</p>}
+          {askDel ? (
+            <div className="adm-confirm">
+              <h3>「{P.name}」 목록을 삭제할까요?</h3>
+              <p>업무 모드의 배정 목록에서도 사라집니다. 이미 등록된 변경의 할 일은 그대로입니다.</p>
+              <div className="row"><button type="button" className="btn sm warn" disabled={busy} onClick={del}>삭제</button><button type="button" className="btn sm ghost" onClick={() => setAskDel(false)}>취소</button></div>
+            </div>
+          ) : (
+            <div className="s-acts">
+              <button type="button" className="btn" disabled={busy || !dirty} onClick={save}>{busy ? '저장 중…' : `${name.trim() ? '「' + (name.trim().length > 18 ? name.trim().slice(0, 18) + '…' : name.trim()) + '」 ' : ''}${P ? '저장' : '새 목록 저장'} · ${items.length}건`}</button>
+              {P && <button type="button" className="btn ghost warn-t" onClick={() => setAskDel(true)}>이 목록 삭제</button>}
+            </div>
+          )}
+          <p className="note">이름 고치기·할 일 빼고 넣기·순서 바꾸기 모두 여기서 합니다. 저장하면 업무 모드 변경 등록·묶음 할 일 배정의 '배정 목록'에 바로 보입니다.</p>
+        </section>
+      </div>
+    </div>
   )
 }
 
