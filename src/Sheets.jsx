@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ORDER, ITEM_TYPES } from './supabase.js'
 import { useApp, Person, MsgText } from './ctx.jsx'
 import OrgTree from './Org.jsx'
-import { md, stamp } from './util.js'
+import { md, stamp, hasAll } from './util.js'
 
 export default function Sheet() {
   const app = useApp()
@@ -32,7 +32,7 @@ export default function Sheet() {
   return (
     <>
       <div className="scrim" onClick={close} />
-      <div className="sheet" role="dialog" aria-modal="true">
+      <div className={'sheet' + (sheet.kind === 'gassign' ? ' sheet-xl' : '')} role="dialog" aria-modal="true">
         <div className="grab" />
         {body}
       </div>
@@ -530,60 +530,147 @@ function GroupTargetSheet({ gid, close }) {
   )
 }
 
-/* ---------- 묶음 할 일 일괄 배정 ---------- */
+/* ---------- 묶음 할 일 일괄 배정 (왼쪽 목록 → 바구니 → 고른 품목에 한 번에) ---------- */
+const nrm = x => (x || '').replace(/\s+/g, ' ').trim()
+const tkey = (d, t) => d + '|' + nrm(t)
 function GroupAssignSheet({ gid, close }) {
   const { db, run } = useApp()
   const g = db.groupMap[gid]
   const kids = g.kids
   const open = kids.filter(k => k.status === '진행중')
+  const [tab, setTab] = useState('preset')
+  const [q, setQ] = useState('')
+  const [fold, setFold] = useState({})     // 목록 펼침 { id: true }
+  const [more, setMore] = useState({})     // 6건 넘는 목록 전부 보기
+  const [bag, setBag] = useState([])       // [{ d, t }]
+  const [over, setOver] = useState(false)
   const [pick, setPick] = useState(() => Object.fromEntries(open.map(k => [k.id, true])))
-  const [dept, setDept] = useState(ORDER[0])
-  const [title, setTitle] = useState('')
   const [reason, setReason] = useState('')
+  const [keep, setKeep] = useState(true)
+  const [self, setSelf] = useState({ d: ORDER[0], t: '' })
   const { busy, err, setErr, go } = useBusy()
-  const norm = x => (x || '').replace(/\s+/g, ' ').trim()
-  const dup = k => !!norm(title) && k.tasks.some(t => t.department === dept && norm(t.title) === norm(title))
-  const can = open.filter(k => !dup(k))
-  const ids = can.filter(k => pick[k.id]).map(k => k.id)
+
+  const inBag = new Set(bag.map(x => tkey(x.d, x.t)))
+  const add = list => { const s2 = new Set(inBag); const nx = [...bag]; list.forEach(x => { const k = tkey(x.d, x.t); if (nrm(x.t) && !s2.has(k)) { s2.add(k); nx.push({ d: x.d, t: nrm(x.t) }) } }); setBag(nx); setErr('') }
+  const has = k => new Set(k.tasks.map(t => tkey(t.department, t.title)))
+  const newFor = k => { const h = has(k); return bag.filter(x => !h.has(tkey(x.d, x.t))).length }
+  const ids = open.filter(k => pick[k.id] && newFor(k) > 0).map(k => k.id)
+  const total = open.filter(k => pick[k.id]).reduce((n, k) => n + newFor(k), 0)
+  const skip = bag.length * open.filter(k => pick[k.id]).length - total
+
+  // 왼쪽 목록
+  const tpls = db.templates.filter(t => t.active)
+  const tplRows = ORDER.map(d => [d, tpls.filter(t => t.department === d && hasAll(d + ' ' + t.title, q))]).filter(([, l]) => l.length)
+  const when = p => p.closed_at || p.updated_at || p.created_at || ''
+  const saved = db.presets.filter(p => !p.source_change_id)
+  const auto = db.presets.filter(p => p.source_change_id).sort((a, b) => String(when(b)).localeCompare(String(when(a))))
+  const pItems = p => (p.items || []).map(x => ({ d: x.department, t: x.title })).filter(x => ORDER.includes(x.d))
+  const pMatch = p => { if (!q.trim()) return pItems(p); if (hasAll(p.name, q)) return pItems(p); return pItems(p).filter(x => hasAll(x.d + ' ' + x.t, q)) }
+
+  const Item = ({ x }) => {
+    const on = inBag.has(tkey(x.d, x.t))
+    return (
+      <div className={'ga-it' + (on ? ' has' : '')} draggable={!on} onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify([x])); e.dataTransfer.effectAllowed = 'copy' }}>
+        <span className="ga-h" aria-hidden>⋮⋮</span><span className="dchip">{x.d}</span><span className="ga-n">{x.t}</span>
+        {on ? <span className="gt-tag">담음</span> : <button type="button" className="ga-add" onClick={() => add([x])} aria-label="담기">＋</button>}
+      </div>
+    )
+  }
+  const Preset = ({ p }) => {
+    const list = pMatch(p)
+    if (q.trim() && !list.length) return null
+    const isOpen = q.trim() ? true : !!fold[p.id]
+    const shown = more[p.id] ? list : list.slice(0, 6)
+    return (
+      <div className={'ga-pr' + (isOpen ? ' open' : '')}>
+        <div className="ga-ph">
+          <button type="button" className="ga-pt" onClick={() => setFold({ ...fold, [p.id]: !fold[p.id] })} draggable onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify(pItems(p))); e.dataTransfer.effectAllowed = 'copy' }}>
+            <span className="ga-ar">{isOpen ? '▾' : '▸'}</span><span className="ga-pn">{p.name}</span><span className="ga-ct">{pItems(p).length}건</span>
+          </button>
+          <button type="button" className="ga-all" onClick={() => add(pItems(p))}>전부 담기</button>
+        </div>
+        {isOpen && (
+          <div className="ga-pb">
+            {shown.map((x, i) => <Item key={i} x={x} />)}
+            {list.length > 6 && !more[p.id] && <button type="button" className="ga-more" onClick={() => setMore({ ...more, [p.id]: true })}>… {list.length - 6}건 더 보기</button>}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const save = () => go(async () => {
-    if (!norm(title)) return { error: '할 일 내용을 입력해주세요.' }
-    if (!ids.length) return { error: '품목을 골라주세요.' }
+    if (!bag.length) return { error: '배정할 할 일을 담아주세요.' }
+    if (!ids.length) return { error: total === 0 && bag.length ? '고른 품목에 담은 할 일이 이미 모두 있습니다.' : '품목을 골라주세요.' }
     if (!reason.trim()) return { error: '배정 사유를 입력해주세요.' }
-    const r = await run('group_assign_task', { p_group: gid, p_ids: ids, p_dept: dept, p_title: norm(title), p_reason: reason.trim() }, n => `${n}개 품목의 ${dept} 부서에 할 일을 배정했습니다`)
+    const r = await run('group_assign_tasks', { p_group: gid, p_ids: ids, p_tasks: bag.map(x => ({ department: x.d, title: x.t })), p_reason: reason.trim(), p_keep: keep }, n => `할 일 ${n}건을 배정했습니다`)
     if (!r.error) close()
     return r
   })
-  const clr = f => e => { f(e.target.value); setErr('') }
+  const onDrop = e => { e.preventDefault(); setOver(false); try { add(JSON.parse(e.dataTransfer.getData('text/plain'))) } catch (_) { /* 다른 끌기 무시 */ } }
+
   return (
     <>
       <Top tag={'묶음 · ' + g.title} close={close} />
       <div className="s-title">할 일 일괄 배정</div>
-      <div className="form">
-        <label htmlFor="ga-dept">담당 부서</label>
-        <select id="ga-dept" value={dept} onChange={clr(setDept)}>{ORDER.map(d => <option key={d}>{d}</option>)}</select>
-        <label htmlFor="ga-title">할 일</label>
-        <input id="ga-title" value={title} onChange={clr(setTitle)} placeholder="예: 번들 띠지 신규 도안 확인" />
-        <div className="gt-h"><span>품목 고르기 (진행 중 {open.length}개)</span><label><input type="checkbox" checked={can.length > 0 && ids.length === can.length} onChange={e => setPick(Object.fromEntries(open.map(k => [k.id, e.target.checked])))} /> 모두 선택</label></div>
-        <div className="gt-list">
-          {kids.map(k => {
-            const live = k.status === '진행중', d = live && dup(k), on = live && !d && !!pick[k.id]
-            return (
-              <label key={k.id} className={(on ? 'on' : '') + (!live || d ? ' off' : '')}>
-                <input type="checkbox" disabled={!live || d} checked={on} onChange={e => { setPick({ ...pick, [k.id]: e.target.checked }); setErr('') }} />
-                <span className="gt-n">{k.title}</span>
-                {!live ? <span className="gt-tag">{k.close_type === '중단' ? '중단 종결' : '종결'}</span> : d ? <span className="gt-tag">이미 있음</span> : null}
-              </label>
-            )
-          })}
+      <div className="ga">
+        <div className="ga-l">
+          <div className="ga-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'tpl'} className={tab === 'tpl' ? 'on' : ''} onClick={() => setTab('tpl')}>기본 할 일</button>
+            <button type="button" role="tab" aria-selected={tab === 'preset'} className={tab === 'preset' ? 'on' : ''} onClick={() => setTab('preset')}>배정 목록</button>
+          </div>
+          <input className="ga-q" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={tab === 'tpl' ? '할 일 찾기' : '목록 이름·할 일 찾기'} />
+          <div className="ga-list">
+            {tab === 'tpl' ? (
+              tplRows.length ? tplRows.map(([d, l]) => (
+                <div key={d}><div className="ga-sub"><span className="dchip">{d}</span><button type="button" className="ga-all sm" onClick={() => add(l.map(t => ({ d, t: t.title })))}>부서 전부 담기</button></div>{l.map(t => <Item key={t.id} x={{ d, t: t.title }} />)}</div>
+              )) : <p className="ga-none">찾는 할 일이 없습니다.</p>
+            ) : (
+              <>
+                {saved.length > 0 && <div className="ga-sub">저장한 목록 · {saved.length}개</div>}
+                {saved.map(p => <Preset key={p.id} p={p} />)}
+                {auto.length > 0 && <div className="ga-sub">종결된 변경에서 자동 추가 · 최근 순 · {auto.length}개</div>}
+                {auto.map(p => <Preset key={p.id} p={p} />)}
+                {!db.presets.length && <p className="ga-none">아직 배정 목록이 없습니다.</p>}
+              </>
+            )}
+          </div>
         </div>
-        <label htmlFor="ga-reason">배정 사유 (필수)</label>
-        <input id="ga-reason" value={reason} onChange={clr(setReason)} placeholder="예: 번들 띠지에도 구 제품명 표기가 있어 함께 교체 필요" />
-        <p className="note">고른 품목마다 배정 이력이 남고, 결과 보고서에도 들어갑니다. 품목 하나만 배정하려면 그 품목 화면의 '+ 할 일 배정'을 쓰면 됩니다.</p>
-        {err && <p className="err">{err}</p>}
-      </div>
-      <div className="s-acts">
-        <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '배정 중…' : `할 일 배정 · 품목 ${ids.length}개`}</button>
-        <button type="button" className="btn ghost" onClick={close}>취소</button>
+        <div className="ga-r form">
+          <label>배정할 할 일 ({bag.length}건) <small>목록에서 끌어다 놓거나 ＋를 누르면 담깁니다</small></label>
+          <div className={'ga-bag' + (over ? ' over' : '')} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
+            {bag.map((x, i) => (
+              <div className="ga-bk" key={tkey(x.d, x.t)}><span className="dchip">{x.d}</span><span className="ga-n">{x.t}</span><button type="button" className="ga-del" aria-label="빼기" onClick={() => setBag(bag.filter((_, j) => j !== i))}>✕</button></div>
+            ))}
+            <div className="ga-self">
+              <select value={self.d} onChange={e => setSelf({ ...self, d: e.target.value })} aria-label="부서">{ORDER.map(d => <option key={d}>{d}</option>)}</select>
+              <input value={self.t} onChange={e => setSelf({ ...self, t: e.target.value })} onKeyDown={e => { if (e.key === 'Enter' && nrm(self.t)) { e.preventDefault(); add([self]); setSelf({ ...self, t: '' }) } }} placeholder={bag.length ? '목록에 없는 할 일 직접 쓰기' : '여기에 끌어다 놓기 · 또는 직접 쓰기'} />
+              <button type="button" className="ga-all" disabled={!nrm(self.t)} onClick={() => { add([self]); setSelf({ ...self, t: '' }) }}>담기</button>
+            </div>
+          </div>
+          <div className="gt-h"><span>품목 고르기 (진행 중 {open.length}개)</span><label><input type="checkbox" checked={open.length > 0 && open.every(k => pick[k.id])} onChange={e => setPick(Object.fromEntries(open.map(k => [k.id, e.target.checked])))} /> 모두 선택</label></div>
+          <div className="gt-list ga-pl">
+            {kids.map(k => {
+              const live = k.status === '진행중', n = live ? newFor(k) : 0, dupN = live ? bag.length - n : 0, full = live && bag.length > 0 && n === 0
+              const on = live && !full && !!pick[k.id]
+              return (
+                <label key={k.id} className={(on ? 'on' : '') + (!live || full ? ' off' : '')}>
+                  <input type="checkbox" disabled={!live || full} checked={on} onChange={e => { setPick({ ...pick, [k.id]: e.target.checked }); setErr('') }} />
+                  <span className="gt-n">{k.title}</span>
+                  {!live ? <span className="gt-tag">{k.close_type === '중단' ? '중단 종결' : '종결'}</span> : full ? <span className="gt-tag">모두 이미 있음</span> : dupN > 0 ? <span className="gt-tag">{dupN}건 이미 있음</span> : null}
+                </label>
+              )
+            })}
+          </div>
+          <label htmlFor="ga-reason">배정 사유 (필수, 공통)</label>
+          <input id="ga-reason" value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 원료 공급처 변경으로 추가 확인 필요" />
+          <label className="ck ga-keep"><input type="checkbox" checked={keep} onChange={e => setKeep(e.target.checked)} /> 앞으로 추가하는 품목에도 이 할 일 넣기</label>
+          {err && <p className="err">{err}</p>}
+          <div className="s-acts">
+            <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '배정 중…' : bag.length ? <>할 일 {total}건 배정<small className="ga-sum">{bag.length}건 × 품목 {ids.length}개{skip > 0 ? ` · 이미 있는 ${skip}건 제외` : ''}</small></> : '할 일을 담아주세요'}</button>
+            <button type="button" className="btn ghost" onClick={close}>취소</button>
+          </div>
+        </div>
       </div>
     </>
   )
