@@ -1974,3 +1974,156 @@ textarea.grow { resize: none; overflow: hidden; line-height: 1.45; display: bloc
 .ga-ct.done { opacity: .62 } .ga-st { flex: none; font-size: 11px; color: var(--mint, #1e9c84) }
 .ga-cadd { flex: none; border: 0; background: none; color: var(--accent); font-weight: 800; font-size: 14px; line-height: 1; padding: 0 2px; cursor: pointer }
 .ga-r > label:not(.ga-keep) { margin-top: 6px }
+
+/* ===== 노션 스타일 (밝은 화면) : 흰 바탕·옅은 선, 왼쪽 메뉴·대화 칸 연회색, 끝난 부서 흐린 민트 테두리 ===== */
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) {--bg: #ffffff; --surface: #ffffff; --ink: #37352f; --text: #37352f; --muted: #9b9a97; --faint: #b9b8b5;
+  --line: #ededeb; --rail: #ededeb; --accent: #2383e2; --accent-2: #529cca; --accent-soft: #e7f3f8;
+  --late: #e03e3e; --late-soft: #fbe4e4; --shadow: none;
+  --f: -apple-system, 'Segoe UI', 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;}
+  html:not([data-theme="dark"]) body {background: #fff !important}
+  html:not([data-theme="dark"]) .card {box-shadow: none !important; border-radius: 6px !important; border: 0 !important}
+  html:not([data-theme="dark"]) .sidebar {background: #f7f7f5 !important; border-right: 1px solid #ededeb !important}
+  html:not([data-theme="dark"]) .sd-top {border-bottom-color: transparent !important}
+  html:not([data-theme="dark"]) .sd-nav button, html:not([data-theme="dark"]) .sd-nav a {border-radius: 4px !important}
+  html:not([data-theme="dark"]) .btn {border-radius: 5px !important; box-shadow: none !important}
+  html:not([data-theme="dark"]) .btn:not(.ghost):not(.warn) {background: #2383e2 !important}
+  html:not([data-theme="dark"]) .pill, html:not([data-theme="dark"]) .gm-seg button {border-radius: 5px !important}
+  html:not([data-theme="dark"]) .g-chip, html:not([data-theme="dark"]) .chip, html:not([data-theme="dark"]) .dchip, html:not([data-theme="dark"]) .ps2, html:not([data-theme="dark"]) .st, html:not([data-theme="dark"]) .tag {border-radius: 4px !important}
+  html:not([data-theme="dark"]) .seg {background: transparent !important; border-bottom: 1px solid #ededeb; border-radius: 0 !important; padding: 0 !important; gap: 18px !important}
+  html:not([data-theme="dark"]) .seg button {background: none !important; box-shadow: none !important; border-radius: 0 !important; padding: 6px 2px 9px !important; color: #9b9a97 !important; flex: none !important}
+  html:not([data-theme="dark"]) .seg button.on {color: #37352f !important; box-shadow: inset 0 -2px 0 #37352f !important}
+  html:not([data-theme="dark"]) .gm-t {border: 0 !important; border-radius: 4px !important; margin-bottom: 1px !important; background: none !important}
+  html:not([data-theme="dark"]) .gm-t.open {background: #f7f7f5 !important; border: 0 !important}
+  html:not([data-theme="dark"]) .gm-th {padding: 7px 8px !important}
+  html:not([data-theme="dark"]) .gm-th::before {content: '▶'; font-size: 10px; color: #9b9a97; margin-right: 2px}
+  html:not([data-theme="dark"]) .gm-t.open .gm-th::before {content: '▼'}
+  html:not([data-theme="dark"]) .gm-b {padding-left: 34px !important}
+  html:not([data-theme="dark"]) .gm-i {border: 0 !important; background: transparent !important; padding: 2px 6px !important}
+  html:not([data-theme="dark"]) .gm-i.on {background: transparent !important}
+  html:not([data-theme="dark"]) .gm-items {flex-direction: column !important; gap: 0 !important}
+  html:not([data-theme="dark"]) table th {color: #9b9a97 !important; font-weight: 500 !important}
+  html:not([data-theme="dark"]) table td, html:not([data-theme="dark"]) table th {border-color: #ededeb !important}
+  html:not([data-theme="dark"]) .dc, html:not([data-theme="dark"]) .dept-card, html:not([data-theme="dark"]) .dcard {box-shadow: none !important; border: 1px solid #ededeb !important; border-radius: 6px !important}
+  html:not([data-theme="dark"]) .chat {background: #fff !important; border-left: 1px solid #ededeb !important}
+  html:not([data-theme="dark"]) .dg-grid {gap: 0 !important}
+  html:not([data-theme="dark"]) .dg-grid .dg2 {border: 0 !important; border-top: 1px solid #ededeb !important; border-radius: 0 !important; box-shadow: none !important; background: none !important; padding: 6px 6px 10px !important}
+  html:not([data-theme="dark"]) .dg-grid .dg2.od {box-shadow: inset 3px 0 0 #e03e3e !important}
+  html:not([data-theme="dark"]) .dg-grid .dg2.mine .dg2-h b::after {content: ''}
+  html:not([data-theme="dark"]) .gv-table th {background: none !important; font-weight: 500 !important}
+  html:not([data-theme="dark"]) .card.gv-log, html:not([data-theme="dark"]) .gv-wrap, html:not([data-theme="dark"]) .gv-t {box-shadow: none !important}
+  html:not([data-theme="dark"]) .wide-in .card {border: 1px solid #ededeb !important}
+  html:not([data-theme="dark"]) .wide-in.edge .card {border: 0 !important}
+  html:not([data-theme="dark"]) .sidebar {background: #f7f7f5 !important; border-right: 1px solid #ededeb !important; font-family: -apple-system, 'Segoe UI', 'Pretendard', 'Noto Sans KR', sans-serif}
+  html:not([data-theme="dark"]) .sd-top {border-bottom: 0 !important; padding: 12px 8px 4px !important; gap: 2px !important}
+  html:not([data-theme="dark"]) .sd-top .brand {font-size: 12px !important; color: #91918e !important; font-weight: 600 !important; letter-spacing: 0 !important; padding: 0 10px 6px}
+  html:not([data-theme="dark"]) .sd-top .me-chip {background: transparent !important; padding: 5px 10px !important; border-radius: 5px !important; font-size: 14px !important; color: #37352f !important}
+  html:not([data-theme="dark"]) .sd-top .me-chip:hover {background: #ebebea !important}
+  html:not([data-theme="dark"]) .sd-top .me-chip .av {width: 20px !important; height: 20px !important; border-radius: 4px !important; background: #f2d4c0 !important; color: #7a3f12 !important; font-size: 11px !important}
+  html:not([data-theme="dark"]) .sd-org {font-size: 12px !important; color: #91918e !important; font-weight: 600 !important; letter-spacing: 0 !important; padding: 10px 10px 4px !important}
+  html:not([data-theme="dark"]) .sd-nav, html:not([data-theme="dark"]) .sd-help {border-bottom: 0 !important; padding: 2px 8px !important; gap: 1px !important}
+  html:not([data-theme="dark"]) .sn {padding: 5px 10px !important; border-radius: 5px !important; font-size: 14px !important; font-weight: 500 !important; color: #5f5e5b !important; min-height: 30px; gap: 9px !important}
+  html:not([data-theme="dark"]) .sn svg {width: 18px !important; height: 18px !important; color: #91918e !important}
+  html:not([data-theme="dark"]) .sn:hover {background: #ebebea !important}
+  html:not([data-theme="dark"]) .sn.on {background: #ebebea !important; color: #37352f !important; font-weight: 600 !important}
+  html:not([data-theme="dark"]) .sn.on svg {color: #37352f !important}
+  html:not([data-theme="dark"]) .sn-g {font-size: 12px !important; color: #91918e !important; font-weight: 600 !important; letter-spacing: 0 !important; padding: 14px 10px 4px !important}
+  html:not([data-theme="dark"]) .sn-ext {color: #b4b4b0 !important; font-weight: 400 !important}
+  html:not([data-theme="dark"]) .sd-video {color: #5f5e5b !important; font-weight: 500 !important; font-size: 14px !important; padding: 5px 10px !important; border-radius: 5px !important; margin-top: 1px !important; gap: 9px !important}
+  html:not([data-theme="dark"]) .sd-video:hover {background: #ebebea !important}
+  html:not([data-theme="dark"]) .sd-video .play-ic {color: #91918e !important; width: 18px !important; height: 18px !important}
+  html:not([data-theme="dark"]) .sd-video em {background: #e7f3f8 !important; color: #2383e2 !important; font-weight: 700}
+  html:not([data-theme="dark"]) .sd-help {margin-top: 10px}
+  html:not([data-theme="dark"]) .sd-help::before {content: '도움말'; display: block; font-size: 12px; color: #91918e; font-weight: 600; padding: 4px 10px}
+  html:not([data-theme="dark"]) .sd-admin {border-top: 0 !important; padding: 8px !important}
+  html:not([data-theme="dark"]) .admin-btn {border: 0 !important; background: none !important; justify-content: flex-start !important; padding: 5px 10px !important; border-radius: 5px !important; color: #5f5e5b !important; font-weight: 500 !important; font-size: 14px !important; gap: 9px !important}
+  html:not([data-theme="dark"]) .admin-btn:hover {background: #ebebea !important}
+  html:not([data-theme="dark"]) .admin-btn svg {color: #91918e !important; width: 18px !important; height: 18px !important}
+  html:not([data-theme="dark"]) .sn .n {background: #eb5757 !important; height: 18px !important; min-width: 18px !important; font-size: 10.5px !important; padding: 0 5px !important; border-radius: 4px !important}
+  html:not([data-theme="dark"]) .search {border: 1px solid #ededeb !important; box-shadow: none !important; border-radius: 6px !important}
+  html:not([data-theme="dark"]) .chat, html:not([data-theme="dark"]) .chat.docked {background: #f7f7f5 !important; border-left: 1px solid #ededeb !important}
+  html:not([data-theme="dark"]) .chat .ch-h, html:not([data-theme="dark"]) .chat .ch-list, html:not([data-theme="dark"]) .chat .ch-c, html:not([data-theme="dark"]) .chat .ch-foot, html:not([data-theme="dark"]) .chat .ch-in {background: #f7f7f5 !important; border-color: #ededeb !important}
+  html:not([data-theme="dark"]) .chat .bub {background: #ffffff !important; box-shadow: none !important; border: 1px solid #ededeb !important}
+  html:not([data-theme="dark"]) .chat .msg.me .bub, html:not([data-theme="dark"]) .chat .mine .bub {background: #e7f3f8 !important; border-color: #d3e5ef !important; color: #37352f !important}
+  html:not([data-theme="dark"]) .chat textarea {background: #fff !important; border-color: #e3e2e0 !important}
+  html:not([data-theme="dark"]) .chat .card, html:not([data-theme="dark"]) .chat .nc {background: #fff !important; border: 1px solid #ededeb !important}
+  html:not([data-theme="dark"]) .gdock, html:not([data-theme="dark"]) .gdock > *:not(.chat) {background: #f7f7f5 !important; border-color: #ededeb !important}
+  html:not([data-theme="dark"]) .dock-empty .ch-list > *, html:not([data-theme="dark"]) .chat .nc-blk {background: #fff !important}
+  html:not([data-theme="dark"]) .dg-grid {gap: 8px !important}
+  html:not([data-theme="dark"]) .dg-grid .dg2.done {border: 1.5px solid color-mix(in srgb, var(--mint, #14b8a6) 45%, transparent) !important; border-radius: 10px !important; padding: 4px 10px 8px !important; background: none !important}
+}
+html[data-theme="light"] {--bg: #ffffff; --surface: #ffffff; --ink: #37352f; --text: #37352f; --muted: #9b9a97; --faint: #b9b8b5;
+  --line: #ededeb; --rail: #ededeb; --accent: #2383e2; --accent-2: #529cca; --accent-soft: #e7f3f8;
+  --late: #e03e3e; --late-soft: #fbe4e4; --shadow: none;
+  --f: -apple-system, 'Segoe UI', 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;}
+html[data-theme="light"] body {background: #fff !important}
+html[data-theme="light"] .card {box-shadow: none !important; border-radius: 6px !important; border: 0 !important}
+html[data-theme="light"] .sidebar {background: #f7f7f5 !important; border-right: 1px solid #ededeb !important}
+html[data-theme="light"] .sd-top {border-bottom-color: transparent !important}
+html[data-theme="light"] .sd-nav button, html[data-theme="light"] .sd-nav a {border-radius: 4px !important}
+html[data-theme="light"] .btn {border-radius: 5px !important; box-shadow: none !important}
+html[data-theme="light"] .btn:not(.ghost):not(.warn) {background: #2383e2 !important}
+html[data-theme="light"] .pill, html[data-theme="light"] .gm-seg button {border-radius: 5px !important}
+html[data-theme="light"] .g-chip, html[data-theme="light"] .chip, html[data-theme="light"] .dchip, html[data-theme="light"] .ps2, html[data-theme="light"] .st, html[data-theme="light"] .tag {border-radius: 4px !important}
+html[data-theme="light"] .seg {background: transparent !important; border-bottom: 1px solid #ededeb; border-radius: 0 !important; padding: 0 !important; gap: 18px !important}
+html[data-theme="light"] .seg button {background: none !important; box-shadow: none !important; border-radius: 0 !important; padding: 6px 2px 9px !important; color: #9b9a97 !important; flex: none !important}
+html[data-theme="light"] .seg button.on {color: #37352f !important; box-shadow: inset 0 -2px 0 #37352f !important}
+html[data-theme="light"] .gm-t {border: 0 !important; border-radius: 4px !important; margin-bottom: 1px !important; background: none !important}
+html[data-theme="light"] .gm-t.open {background: #f7f7f5 !important; border: 0 !important}
+html[data-theme="light"] .gm-th {padding: 7px 8px !important}
+html[data-theme="light"] .gm-th::before {content: '▶'; font-size: 10px; color: #9b9a97; margin-right: 2px}
+html[data-theme="light"] .gm-t.open .gm-th::before {content: '▼'}
+html[data-theme="light"] .gm-b {padding-left: 34px !important}
+html[data-theme="light"] .gm-i {border: 0 !important; background: transparent !important; padding: 2px 6px !important}
+html[data-theme="light"] .gm-i.on {background: transparent !important}
+html[data-theme="light"] .gm-items {flex-direction: column !important; gap: 0 !important}
+html[data-theme="light"] table th {color: #9b9a97 !important; font-weight: 500 !important}
+html[data-theme="light"] table td, html[data-theme="light"] table th {border-color: #ededeb !important}
+html[data-theme="light"] .dc, html[data-theme="light"] .dept-card, html[data-theme="light"] .dcard {box-shadow: none !important; border: 1px solid #ededeb !important; border-radius: 6px !important}
+html[data-theme="light"] .chat {background: #fff !important; border-left: 1px solid #ededeb !important}
+html[data-theme="light"] .dg-grid {gap: 0 !important}
+html[data-theme="light"] .dg-grid .dg2 {border: 0 !important; border-top: 1px solid #ededeb !important; border-radius: 0 !important; box-shadow: none !important; background: none !important; padding: 6px 6px 10px !important}
+html[data-theme="light"] .dg-grid .dg2.od {box-shadow: inset 3px 0 0 #e03e3e !important}
+html[data-theme="light"] .dg-grid .dg2.mine .dg2-h b::after {content: ''}
+html[data-theme="light"] .gv-table th {background: none !important; font-weight: 500 !important}
+html[data-theme="light"] .card.gv-log, html[data-theme="light"] .gv-wrap, html[data-theme="light"] .gv-t {box-shadow: none !important}
+html[data-theme="light"] .wide-in .card {border: 1px solid #ededeb !important}
+html[data-theme="light"] .wide-in.edge .card {border: 0 !important}
+html[data-theme="light"] .sidebar {background: #f7f7f5 !important; border-right: 1px solid #ededeb !important; font-family: -apple-system, 'Segoe UI', 'Pretendard', 'Noto Sans KR', sans-serif}
+html[data-theme="light"] .sd-top {border-bottom: 0 !important; padding: 12px 8px 4px !important; gap: 2px !important}
+html[data-theme="light"] .sd-top .brand {font-size: 12px !important; color: #91918e !important; font-weight: 600 !important; letter-spacing: 0 !important; padding: 0 10px 6px}
+html[data-theme="light"] .sd-top .me-chip {background: transparent !important; padding: 5px 10px !important; border-radius: 5px !important; font-size: 14px !important; color: #37352f !important}
+html[data-theme="light"] .sd-top .me-chip:hover {background: #ebebea !important}
+html[data-theme="light"] .sd-top .me-chip .av {width: 20px !important; height: 20px !important; border-radius: 4px !important; background: #f2d4c0 !important; color: #7a3f12 !important; font-size: 11px !important}
+html[data-theme="light"] .sd-org {font-size: 12px !important; color: #91918e !important; font-weight: 600 !important; letter-spacing: 0 !important; padding: 10px 10px 4px !important}
+html[data-theme="light"] .sd-nav, html[data-theme="light"] .sd-help {border-bottom: 0 !important; padding: 2px 8px !important; gap: 1px !important}
+html[data-theme="light"] .sn {padding: 5px 10px !important; border-radius: 5px !important; font-size: 14px !important; font-weight: 500 !important; color: #5f5e5b !important; min-height: 30px; gap: 9px !important}
+html[data-theme="light"] .sn svg {width: 18px !important; height: 18px !important; color: #91918e !important}
+html[data-theme="light"] .sn:hover {background: #ebebea !important}
+html[data-theme="light"] .sn.on {background: #ebebea !important; color: #37352f !important; font-weight: 600 !important}
+html[data-theme="light"] .sn.on svg {color: #37352f !important}
+html[data-theme="light"] .sn-g {font-size: 12px !important; color: #91918e !important; font-weight: 600 !important; letter-spacing: 0 !important; padding: 14px 10px 4px !important}
+html[data-theme="light"] .sn-ext {color: #b4b4b0 !important; font-weight: 400 !important}
+html[data-theme="light"] .sd-video {color: #5f5e5b !important; font-weight: 500 !important; font-size: 14px !important; padding: 5px 10px !important; border-radius: 5px !important; margin-top: 1px !important; gap: 9px !important}
+html[data-theme="light"] .sd-video:hover {background: #ebebea !important}
+html[data-theme="light"] .sd-video .play-ic {color: #91918e !important; width: 18px !important; height: 18px !important}
+html[data-theme="light"] .sd-video em {background: #e7f3f8 !important; color: #2383e2 !important; font-weight: 700}
+html[data-theme="light"] .sd-help {margin-top: 10px}
+html[data-theme="light"] .sd-help::before {content: '도움말'; display: block; font-size: 12px; color: #91918e; font-weight: 600; padding: 4px 10px}
+html[data-theme="light"] .sd-admin {border-top: 0 !important; padding: 8px !important}
+html[data-theme="light"] .admin-btn {border: 0 !important; background: none !important; justify-content: flex-start !important; padding: 5px 10px !important; border-radius: 5px !important; color: #5f5e5b !important; font-weight: 500 !important; font-size: 14px !important; gap: 9px !important}
+html[data-theme="light"] .admin-btn:hover {background: #ebebea !important}
+html[data-theme="light"] .admin-btn svg {color: #91918e !important; width: 18px !important; height: 18px !important}
+html[data-theme="light"] .sn .n {background: #eb5757 !important; height: 18px !important; min-width: 18px !important; font-size: 10.5px !important; padding: 0 5px !important; border-radius: 4px !important}
+html[data-theme="light"] .search {border: 1px solid #ededeb !important; box-shadow: none !important; border-radius: 6px !important}
+html[data-theme="light"] .chat, html[data-theme="light"] .chat.docked {background: #f7f7f5 !important; border-left: 1px solid #ededeb !important}
+html[data-theme="light"] .chat .ch-h, html[data-theme="light"] .chat .ch-list, html[data-theme="light"] .chat .ch-c, html[data-theme="light"] .chat .ch-foot, html[data-theme="light"] .chat .ch-in {background: #f7f7f5 !important; border-color: #ededeb !important}
+html[data-theme="light"] .chat .bub {background: #ffffff !important; box-shadow: none !important; border: 1px solid #ededeb !important}
+html[data-theme="light"] .chat .msg.me .bub, html[data-theme="light"] .chat .msg.me .bub *, html[data-theme="light"] .chat .mine .bub {background: #e7f3f8 !important; border-color: #d3e5ef !important; color: #37352f !important}
+html[data-theme="light"] .chat textarea {background: #fff !important; border-color: #e3e2e0 !important}
+html[data-theme="light"] .chat .card, html[data-theme="light"] .chat .nc {background: #fff !important; border: 1px solid #ededeb !important}
+html[data-theme="light"] .gdock, html[data-theme="light"] .gdock > *:not(.chat) {background: #f7f7f5 !important; border-color: #ededeb !important}
+html[data-theme="light"] .dock-empty .ch-list > *, html[data-theme="light"] .chat .nc-blk {background: #fff !important}
+html[data-theme="light"] .dg-grid {gap: 8px !important}
+html[data-theme="light"] .dg-grid .dg2.done {border: 1.5px solid color-mix(in srgb, var(--mint, #14b8a6) 45%, transparent) !important; border-radius: 10px !important; padding: 4px 10px 8px !important; background: none !important}
+@media (prefers-color-scheme: light) { html:not([data-theme="dark"]) .chat .msg.me .bub * { color: inherit } }
