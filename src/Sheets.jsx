@@ -32,7 +32,7 @@ export default function Sheet() {
   return (
     <>
       <div className="scrim" onClick={close} />
-      <div className={'sheet' + (sheet.kind === 'gassign' ? ' sheet-xl' : '')} role="dialog" aria-modal="true">
+      <div className={'sheet' + (sheet.kind === 'gassign' || sheet.kind === 'assign' ? ' sheet-xl' : '')} role="dialog" aria-modal="true">
         <div className="grab" />
         {body}
       </div>
@@ -322,43 +322,6 @@ function ResumeSheet({ cid, close }) {
 }
 
 /* ---------- 다른 부서에 할 일 배정 ---------- */
-function AssignSheet({ cid, close }) {
-  const { C, run } = useApp()
-  const c = C(cid)
-  const [dept, setDept] = useState(ORDER[0])
-  const [title, setTitle] = useState('')
-  const [reason, setReason] = useState('')
-  const { busy, err, setErr, go } = useBusy()
-  const save = () => go(async () => {
-    if (!title.trim()) return { error: '할 일 내용을 입력해주세요.' }
-    if (!reason.trim()) return { error: '배정 사유를 입력해주세요.' }
-    const r = await run('assign_task', { p_change: cid, p_dept: dept, p_title: title.trim(), p_reason: reason.trim() }, `${dept} 부서에 할 일을 배정했습니다`)
-    if (!r.error) close()
-    return r
-  })
-  const clr = f => e => { f(e.target.value); setErr('') }
-  return (
-    <>
-      <Top tag={c.short} close={close} />
-      <div className="s-title">다른 부서에 할 일 배정</div>
-      <div className="form">
-        <label htmlFor="f-dept">담당 부서</label>
-        <select id="f-dept" value={dept} onChange={clr(setDept)}>{ORDER.map(d => <option key={d}>{d}</option>)}</select>
-        <label htmlFor="f-title">할 일</label>
-        <input id="f-title" value={title} onChange={clr(setTitle)} placeholder="예: 번들 띠지 신규 도안 확인" />
-        <label htmlFor="f-reason">배정 사유 (필수)</label>
-        <textarea id="f-reason" rows={2} value={reason} onChange={clr(setReason)} placeholder="예: 번들 띠지에도 구 제품명 표기가 있어 함께 교체 필요" />
-        <p className="note">배정한 사람·부서·사유가 이력에 남고, 결과 보고서에도 들어갑니다.</p>
-        {err && <p className="err">{err}</p>}
-      </div>
-      <div className="s-acts">
-        <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '배정 중…' : '배정하기'}</button>
-        <button type="button" className="btn ghost" onClick={close}>취소</button>
-      </div>
-    </>
-  )
-}
-
 /* ---------- 변경 내용 수정 (등록 부서 + 관리자, 진행 중인 건만) ---------- */
 function EditSheet({ cid, close }) {
   const { C, run } = useApp()
@@ -530,49 +493,34 @@ function GroupTargetSheet({ gid, close }) {
   )
 }
 
-/* ---------- 묶음 할 일 일괄 배정 (왼쪽 목록 → 바구니 → 고른 품목에 한 번에) ---------- */
+/* ---------- 할 일 배정 공통: 왼쪽 목록(기본 할 일·배정 목록) → 바구니, 오른쪽 위 '지금 배정된 할 일' ---------- */
 const nrm = x => (x || '').replace(/\s+/g, ' ').trim()
 const tkey = (d, t) => d + '|' + nrm(t)
-function GroupAssignSheet({ gid, close }) {
-  const { db, run } = useApp()
-  const g = db.groupMap[gid]
-  const kids = g.kids
-  const open = kids.filter(k => k.status === '진행중')
+
+// cover(d, t) → { n, total }  (묶음: 몇 개 품목에 있는지 / 품목 하나: total 1)
+function PickLeft({ inBag, add, cover }) {
+  const { db } = useApp()
   const [tab, setTab] = useState('preset')
   const [q, setQ] = useState('')
-  const [fold, setFold] = useState({})     // 목록 펼침 { id: true }
-  const [more, setMore] = useState({})     // 6건 넘는 목록 전부 보기
-  const [bag, setBag] = useState([])       // [{ d, t }]
-  const [over, setOver] = useState(false)
-  const [pick, setPick] = useState(() => Object.fromEntries(open.map(k => [k.id, true])))
-  const [reason, setReason] = useState('')
-  const [keep, setKeep] = useState(true)
-  const [self, setSelf] = useState({ d: ORDER[0], t: '' })
-  const { busy, err, setErr, go } = useBusy()
-
-  const inBag = new Set(bag.map(x => tkey(x.d, x.t)))
-  const add = list => { const s2 = new Set(inBag); const nx = [...bag]; list.forEach(x => { const k = tkey(x.d, x.t); if (nrm(x.t) && !s2.has(k)) { s2.add(k); nx.push({ d: x.d, t: nrm(x.t) }) } }); setBag(nx); setErr('') }
-  const has = k => new Set(k.tasks.map(t => tkey(t.department, t.title)))
-  const newFor = k => { const h = has(k); return bag.filter(x => !h.has(tkey(x.d, x.t))).length }
-  const ids = open.filter(k => pick[k.id] && newFor(k) > 0).map(k => k.id)
-  const total = open.filter(k => pick[k.id]).reduce((n, k) => n + newFor(k), 0)
-  const skip = bag.length * open.filter(k => pick[k.id]).length - total
-
-  // 왼쪽 목록
-  const tpls = db.templates.filter(t => t.active)
+  const [fold, setFold] = useState({})
+  const [more, setMore] = useState({})
+  const tpls = db.templates.filter(t => t.active !== false)
   const tplRows = ORDER.map(d => [d, tpls.filter(t => t.department === d && hasAll(d + ' ' + t.title, q))]).filter(([, l]) => l.length)
   const when = p => p.closed_at || p.updated_at || p.created_at || ''
   const saved = db.presets.filter(p => !p.source_change_id)
   const auto = db.presets.filter(p => p.source_change_id).sort((a, b) => String(when(b)).localeCompare(String(when(a))))
-  const pItems = p => (p.items || []).map(x => ({ d: x.department, t: x.title })).filter(x => ORDER.includes(x.d))
-  const pMatch = p => { if (!q.trim()) return pItems(p); if (hasAll(p.name, q)) return pItems(p); return pItems(p).filter(x => hasAll(x.d + ' ' + x.t, q)) }
+  const pItems = p => (p.items || []).map(x => ({ d: x.department, t: nrm(x.title) })).filter(x => ORDER.includes(x.d) && x.t)
+  const pMatch = p => { if (!q.trim() || hasAll(p.name, q)) return pItems(p); return pItems(p).filter(x => hasAll(x.d + ' ' + x.t, q)) }
+  const fresh = list => list.filter(x => { const c = cover(x.d, x.t); return !c || c.n < c.total })
 
-  const Item = ({ x }) => {
-    const on = inBag.has(tkey(x.d, x.t))
+  const Item = ({ x, chip }) => {
+    const on = inBag.has(tkey(x.d, x.t)), c = cover(x.d, x.t), full = c && c.n >= c.total
     return (
-      <div className={'ga-it' + (on ? ' has' : '')} draggable={!on} onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify([x])); e.dataTransfer.effectAllowed = 'copy' }}>
-        <span className="ga-h" aria-hidden>⋮⋮</span><span className="dchip">{x.d}</span><span className="ga-n">{x.t}</span>
-        {on ? <span className="gt-tag">담음</span> : <button type="button" className="ga-add" onClick={() => add([x])} aria-label="담기">＋</button>}
+      <div className={'ga-it' + (on || full ? ' has' : '')} draggable={!on && !full} onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify([x])); e.dataTransfer.effectAllowed = 'copy' }}>
+        <span className="ga-h" aria-hidden>⋮⋮</span>{chip && <span className="dchip">{x.d}</span>}<span className="ga-n">{x.t}</span>
+        {full ? <span className="gt-tag ok">{c.total > 1 ? `${c.n}/${c.total} ` : ''}배정됨</span>
+          : on ? <span className="gt-tag">담음</span>
+          : <>{c && c.n > 0 && <span className="gt-tag">{c.n}/{c.total}</span>}<button type="button" className="ga-add" onClick={() => add([x])} aria-label="담기">＋</button></>}
       </div>
     )
   }
@@ -584,20 +532,125 @@ function GroupAssignSheet({ gid, close }) {
     return (
       <div className={'ga-pr' + (isOpen ? ' open' : '')}>
         <div className="ga-ph">
-          <button type="button" className="ga-pt" onClick={() => setFold({ ...fold, [p.id]: !fold[p.id] })} draggable onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify(pItems(p))); e.dataTransfer.effectAllowed = 'copy' }}>
+          <button type="button" className="ga-pt" onClick={() => setFold({ ...fold, [p.id]: !fold[p.id] })} draggable onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify(fresh(pItems(p)))); e.dataTransfer.effectAllowed = 'copy' }}>
             <span className="ga-ar">{isOpen ? '▾' : '▸'}</span><span className="ga-pn">{p.name}</span><span className="ga-ct">{pItems(p).length}건</span>
           </button>
-          <button type="button" className="ga-all" onClick={() => add(pItems(p))}>전부 담기</button>
+          <button type="button" className="ga-all" onClick={() => add(fresh(pItems(p)))}>전부 담기</button>
         </div>
         {isOpen && (
           <div className="ga-pb">
-            {shown.map((x, i) => <Item key={i} x={x} />)}
+            {shown.map((x, i) => <Item key={i} x={x} chip />)}
             {list.length > 6 && !more[p.id] && <button type="button" className="ga-more" onClick={() => setMore({ ...more, [p.id]: true })}>… {list.length - 6}건 더 보기</button>}
           </div>
         )}
       </div>
     )
   }
+  return (
+    <div className="ga-l">
+      <div className="ga-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'tpl'} className={tab === 'tpl' ? 'on' : ''} onClick={() => setTab('tpl')}>기본 할 일</button>
+        <button type="button" role="tab" aria-selected={tab === 'preset'} className={tab === 'preset' ? 'on' : ''} onClick={() => setTab('preset')}>배정 목록</button>
+      </div>
+      <input className="ga-q" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={tab === 'tpl' ? '할 일 찾기' : '목록 이름·할 일 찾기'} aria-label="할 일 찾기" />
+      <div className="ga-list">
+        {tab === 'tpl' ? (
+          tplRows.length ? tplRows.map(([d, l]) => (
+            <div key={d}><div className="ga-sub"><span className="dchip">{d}</span><button type="button" className="ga-all sm" onClick={() => add(fresh(l.map(t => ({ d, t: nrm(t.title) }))))}>부서 전부 담기</button></div>{l.map(t => <Item key={t.id} x={{ d, t: nrm(t.title) }} />)}</div>
+          )) : <p className="ga-none">찾는 할 일이 없습니다.</p>
+        ) : (
+          <>
+            {saved.length > 0 && <div className="ga-sub">저장한 목록 · {saved.length}개</div>}
+            {saved.map(p => <Preset key={p.id} p={p} />)}
+            {auto.length > 0 && <div className="ga-sub">종결된 변경에서 자동 추가 · 최근 순 · {auto.length}개</div>}
+            {auto.map(p => <Preset key={p.id} p={p} />)}
+            {!db.presets.length && <p className="ga-none">아직 배정 목록이 없습니다.</p>}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// 지금 배정된 할 일: 부서별로, 한 줄에 여러 개(넘치면 다음 줄), 이름은 끝까지
+function CurTasks({ rows, total, add, inBag }) {
+  if (!rows.length) return <p className="ga-cur-none">아직 배정된 할 일이 없습니다.</p>
+  return (
+    <div className="ga-cur">
+      {ORDER.map(d => {
+        const l = rows.filter(r => r.d === d)
+        if (!l.length) return null
+        return (
+          <div className="ga-cg" key={d}>
+            <span className="dchip">{d}</span>
+            <div className="ga-cl">
+              {l.map(r => {
+                const part = total > 1 && r.n < total, on = inBag.has(tkey(r.d, r.t))
+                return (
+                  <span key={r.t} className={'ga-ct' + (part ? ' part' : '') + (r.st ? ' done' : '')}>
+                    <span className="ga-ctx">{r.t}</span>
+                    {total > 1 && <span className="ga-cv">{r.n}/{total}</span>}
+                    {r.st && <span className="ga-st">✓ {r.st}</span>}
+                    {part && (on ? <span className="ga-cv">담음</span> : <button type="button" className="ga-cadd" onClick={() => add([{ d: r.d, t: r.t }])} aria-label="나머지 품목에 담기" title="나머지 품목에 담기">＋</button>)}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function Bag({ bag, setBag, add, setErr }) {
+  const [self, setSelf] = useState({ d: ORDER[0], t: '' })
+  const [over, setOver] = useState(false)
+  const onDrop = e => { e.preventDefault(); setOver(false); try { add(JSON.parse(e.dataTransfer.getData('text/plain'))) } catch (_) { /* 다른 끌기 무시 */ } }
+  const put = () => { if (nrm(self.t)) { add([self]); setSelf({ ...self, t: '' }) } }
+  return (
+    <div className={'ga-bag' + (over ? ' over' : '')} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
+      {bag.map((x, i) => (
+        <div className="ga-bk" key={tkey(x.d, x.t)}><span className="dchip">{x.d}</span><span className="ga-n">{x.t}</span><button type="button" className="ga-del" aria-label="빼기" onClick={() => { setBag(bag.filter((_, j) => j !== i)); setErr('') }}>✕</button></div>
+      ))}
+      <div className="ga-self">
+        <select value={self.d} onChange={e => setSelf({ ...self, d: e.target.value })} aria-label="부서">{ORDER.map(d => <option key={d}>{d}</option>)}</select>
+        <input value={self.t} onChange={e => setSelf({ ...self, t: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); put() } }} placeholder={bag.length ? '목록에 없는 할 일 직접 쓰기' : '여기에 끌어다 놓기 · 또는 직접 쓰기'} />
+        <button type="button" className="ga-all" disabled={!nrm(self.t)} onClick={put}>담기</button>
+      </div>
+    </div>
+  )
+}
+
+function useBag(setErr) {
+  const [bag, setBag] = useState([])
+  const inBag = new Set(bag.map(x => tkey(x.d, x.t)))
+  const add = list => { const s2 = new Set(inBag); const nx = [...bag]; list.forEach(x => { const k = tkey(x.d, x.t); if (nrm(x.t) && !s2.has(k)) { s2.add(k); nx.push({ d: x.d, t: nrm(x.t) }) } }); setBag(nx); setErr('') }
+  return { bag, setBag, inBag, add }
+}
+
+/* ---------- 묶음 할 일 일괄 배정 ---------- */
+function GroupAssignSheet({ gid, close }) {
+  const { db, run } = useApp()
+  const g = db.groupMap[gid]
+  const kids = g.kids
+  const open = kids.filter(k => k.status === '진행중')
+  const base = open.length ? open : kids
+  const [pick, setPick] = useState(() => Object.fromEntries(open.map(k => [k.id, true])))
+  const [reason, setReason] = useState('')
+  const [keep, setKeep] = useState(true)
+  const { busy, err, setErr, go } = useBusy()
+  const { bag, setBag, inBag, add } = useBag(setErr)
+
+  const sets = new Map(kids.map(k => [k.id, new Set(k.tasks.map(t => tkey(t.department, t.title)))]))
+  const cur = new Map()
+  base.forEach(k => k.tasks.forEach(t => { const key = tkey(t.department, t.title); const r = cur.get(key) || { d: t.department, t: nrm(t.title), n: 0 }; r.n++; cur.set(key, r) }))
+  const curRows = [...cur.values()]
+  const cover = (d, t) => ({ n: (cur.get(tkey(d, t)) || { n: 0 }).n, total: base.length })
+  const newFor = k => { const h = sets.get(k.id); return bag.filter(x => !h.has(tkey(x.d, x.t))).length }
+  const ids = open.filter(k => pick[k.id] && newFor(k) > 0).map(k => k.id)
+  const total = open.filter(k => pick[k.id]).reduce((n, k) => n + newFor(k), 0)
+  const skip = bag.length * open.filter(k => pick[k.id]).length - total
 
   const save = () => go(async () => {
     if (!bag.length) return { error: '배정할 할 일을 담아주세요.' }
@@ -607,47 +660,18 @@ function GroupAssignSheet({ gid, close }) {
     if (!r.error) close()
     return r
   })
-  const onDrop = e => { e.preventDefault(); setOver(false); try { add(JSON.parse(e.dataTransfer.getData('text/plain'))) } catch (_) { /* 다른 끌기 무시 */ } }
 
   return (
     <>
       <Top tag={'묶음 · ' + g.title} close={close} />
       <div className="s-title">할 일 일괄 배정</div>
       <div className="ga">
-        <div className="ga-l">
-          <div className="ga-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={tab === 'tpl'} className={tab === 'tpl' ? 'on' : ''} onClick={() => setTab('tpl')}>기본 할 일</button>
-            <button type="button" role="tab" aria-selected={tab === 'preset'} className={tab === 'preset' ? 'on' : ''} onClick={() => setTab('preset')}>배정 목록</button>
-          </div>
-          <input className="ga-q" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={tab === 'tpl' ? '할 일 찾기' : '목록 이름·할 일 찾기'} />
-          <div className="ga-list">
-            {tab === 'tpl' ? (
-              tplRows.length ? tplRows.map(([d, l]) => (
-                <div key={d}><div className="ga-sub"><span className="dchip">{d}</span><button type="button" className="ga-all sm" onClick={() => add(l.map(t => ({ d, t: t.title })))}>부서 전부 담기</button></div>{l.map(t => <Item key={t.id} x={{ d, t: t.title }} />)}</div>
-              )) : <p className="ga-none">찾는 할 일이 없습니다.</p>
-            ) : (
-              <>
-                {saved.length > 0 && <div className="ga-sub">저장한 목록 · {saved.length}개</div>}
-                {saved.map(p => <Preset key={p.id} p={p} />)}
-                {auto.length > 0 && <div className="ga-sub">종결된 변경에서 자동 추가 · 최근 순 · {auto.length}개</div>}
-                {auto.map(p => <Preset key={p.id} p={p} />)}
-                {!db.presets.length && <p className="ga-none">아직 배정 목록이 없습니다.</p>}
-              </>
-            )}
-          </div>
-        </div>
+        <PickLeft inBag={inBag} add={add} cover={cover} />
         <div className="ga-r form">
+          <label>지금 배정된 할 일 · {curRows.length}종 <small>초록 = 모든 품목에 있음 · 노랑 = 일부 품목에만 있음(＋로 나머지 품목에 담기)</small></label>
+          <CurTasks rows={curRows} total={base.length} add={add} inBag={inBag} />
           <label>배정할 할 일 ({bag.length}건) <small>목록에서 끌어다 놓거나 ＋를 누르면 담깁니다</small></label>
-          <div className={'ga-bag' + (over ? ' over' : '')} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
-            {bag.map((x, i) => (
-              <div className="ga-bk" key={tkey(x.d, x.t)}><span className="dchip">{x.d}</span><span className="ga-n">{x.t}</span><button type="button" className="ga-del" aria-label="빼기" onClick={() => setBag(bag.filter((_, j) => j !== i))}>✕</button></div>
-            ))}
-            <div className="ga-self">
-              <select value={self.d} onChange={e => setSelf({ ...self, d: e.target.value })} aria-label="부서">{ORDER.map(d => <option key={d}>{d}</option>)}</select>
-              <input value={self.t} onChange={e => setSelf({ ...self, t: e.target.value })} onKeyDown={e => { if (e.key === 'Enter' && nrm(self.t)) { e.preventDefault(); add([self]); setSelf({ ...self, t: '' }) } }} placeholder={bag.length ? '목록에 없는 할 일 직접 쓰기' : '여기에 끌어다 놓기 · 또는 직접 쓰기'} />
-              <button type="button" className="ga-all" disabled={!nrm(self.t)} onClick={() => { add([self]); setSelf({ ...self, t: '' }) }}>담기</button>
-            </div>
-          </div>
+          <Bag bag={bag} setBag={setBag} add={add} setErr={setErr} />
           <div className="gt-h"><span>품목 고르기 (진행 중 {open.length}개)</span><label><input type="checkbox" checked={open.length > 0 && open.every(k => pick[k.id])} onChange={e => setPick(Object.fromEntries(open.map(k => [k.id, e.target.checked])))} /> 모두 선택</label></div>
           <div className="gt-list ga-pl">
             {kids.map(k => {
@@ -668,6 +692,51 @@ function GroupAssignSheet({ gid, close }) {
           {err && <p className="err">{err}</p>}
           <div className="s-acts">
             <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '배정 중…' : bag.length ? <>할 일 {total}건 배정<small className="ga-sum">{bag.length}건 × 품목 {ids.length}개{skip > 0 ? ` · 이미 있는 ${skip}건 제외` : ''}</small></> : '할 일을 담아주세요'}</button>
+            <button type="button" className="btn ghost" onClick={close}>취소</button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ---------- 품목 하나(변경 1건) 할 일 배정: 묶음과 같은 방식 ---------- */
+function AssignSheet({ cid, close }) {
+  const { C, tOf, run } = useApp()
+  const c = C(cid)
+  const ts = tOf(cid)
+  const [reason, setReason] = useState('')
+  const { busy, err, setErr, go } = useBusy()
+  const { bag, setBag, inBag, add } = useBag(setErr)
+  const have = new Set(ts.map(t => tkey(t.department, t.title)))
+  const curRows = ts.map(t => ({ d: t.department, t: nrm(t.title), n: 1, st: t.status === '대기' ? '' : t.status === '완료' ? '확인완료' : t.status }))
+  const seenKey = new Set(); const rows = curRows.filter(r => { const k = tkey(r.d, r.t); if (seenKey.has(k)) return false; seenKey.add(k); return true })
+  const cover = (d, t) => ({ n: have.has(tkey(d, t)) ? 1 : 0, total: 1 })
+  const addNew = list => add(list.filter(x => !have.has(tkey(x.d, x.t))))
+  const save = () => go(async () => {
+    if (!bag.length) return { error: '배정할 할 일을 담아주세요.' }
+    if (!reason.trim()) return { error: '배정 사유를 입력해주세요.' }
+    const r = await run('assign_tasks', { p_change: cid, p_tasks: bag.map(x => ({ department: x.d, title: x.t })), p_reason: reason.trim() }, n => `할 일 ${n}건을 배정했습니다`)
+    if (!r.error) close()
+    return r
+  })
+  return (
+    <>
+      <Top tag={c.group ? `${c.title} · 묶음 ${c.group.title}` : c.short} close={close} />
+      <div className="s-title">할 일 배정</div>
+      <div className="ga">
+        <PickLeft inBag={inBag} add={addNew} cover={cover} />
+        <div className="ga-r form">
+          <label>지금 배정된 할 일 · {rows.length}건 <small>✓ = 처리 끝남</small></label>
+          <CurTasks rows={rows} total={1} add={addNew} inBag={inBag} />
+          <label>배정할 할 일 ({bag.length}건) <small>목록에서 끌어다 놓거나 ＋를 누르면 담깁니다</small></label>
+          <Bag bag={bag} setBag={setBag} add={addNew} setErr={setErr} />
+          <label htmlFor="as-reason">배정 사유 (필수)</label>
+          <input id="as-reason" value={reason} onChange={e => { setReason(e.target.value); setErr('') }} placeholder="예: 번들 띠지에도 구 제품명 표기가 있어 함께 교체 필요" />
+          <p className="note">배정한 사람·부서·사유가 이력에 남고, 결과 보고서에도 들어갑니다. 이미 있는 할 일(같은 부서·같은 내용)은 담을 수 없습니다.</p>
+          {err && <p className="err">{err}</p>}
+          <div className="s-acts">
+            <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '배정 중…' : bag.length ? `할 일 ${bag.length}건 배정` : '할 일을 담아주세요'}</button>
             <button type="button" className="btn ghost" onClick={close}>취소</button>
           </div>
         </div>

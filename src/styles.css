@@ -1958,3 +1958,19 @@ textarea.grow { resize: none; overflow: hidden; line-height: 1.45; display: bloc
 .dl-conf .row { display: flex; gap: 8px; align-items: center; margin-top: 8px } .dl-conf .row.wrap { flex-wrap: wrap }
 .dl-conf .row input { font: inherit; padding: 8px 12px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--late, #e5484d) 55%, var(--line)); background: var(--bg); color: var(--ink); width: 200px }
 @media (max-width: 700px) { .dl-k { flex-wrap: wrap } .dl-k b { min-width: 0 } .dl-r { flex-wrap: wrap } }
+/* 할 일 배정: 지금 배정된 할 일 (부서별 · 한 줄에 여러 개 · 이름 끝까지) */
+.gt-tag.ok { color: var(--mint, #1e9c84); border-color: color-mix(in srgb, var(--mint, #1e9c84) 40%, var(--line)) }
+.ga-cur { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 6px 10px; margin-bottom: 4px }
+.ga-cur-none { color: var(--muted); font-size: 13px; margin: 2px 0 6px }
+.ga-cg { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--line) }
+.ga-cg:last-child { border-bottom: 0 }
+.ga-cg > .dchip { margin-top: 4px; min-width: 46px; text-align: center }
+.ga-cl { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px }
+.ga-ct { display: inline-flex; align-items: flex-start; gap: 7px; max-width: 100%; font-size: 12.5px; line-height: 1.45; padding: 4px 9px; border-radius: 7px; background: var(--surface); border: 1px solid var(--line); color: var(--ink) }
+.ga-ctx { min-width: 0; word-break: keep-all; overflow-wrap: anywhere }
+.ga-cv { flex: none; font-size: 11px; font-weight: 700; color: var(--mint, #1e9c84) }
+.ga-ct.part { border-color: color-mix(in srgb, #d9a21b 55%, var(--line)); background: color-mix(in srgb, #d9a21b 10%, var(--surface)) }
+.ga-ct.part .ga-cv { color: #c98f0a }
+.ga-ct.done { opacity: .62 } .ga-st { flex: none; font-size: 11px; color: var(--mint, #1e9c84) }
+.ga-cadd { flex: none; border: 0; background: none; color: var(--accent); font-weight: 800; font-size: 14px; line-height: 1; padding: 0 2px; cursor: pointer }
+.ga-r > label:not(.ga-keep) { margin-top: 6px }
