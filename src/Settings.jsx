@@ -38,6 +38,45 @@ function MyInfo() {
   )
 }
 
+// 비밀번호 변경: 로그인한 상태에서 바로 (메일 인증 없이)
+function MyPassword() {
+  const { toast } = useApp()
+  const [open, setOpen] = useState(false)
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [show, setShow] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  async function submit(e) {
+    e.preventDefault()
+    setMsg('')
+    if (pw.length < 8) return setMsg('비밀번호는 8자 이상으로 해주세요.')
+    if (pw !== pw2) return setMsg('비밀번호 확인이 일치하지 않습니다.')
+    setBusy(true)
+    const { error } = await supabase.auth.updateUser({ password: pw })
+    setBusy(false)
+    if (error) {
+      const m = String(error.message || '')
+      return setMsg(/different from the old/i.test(m) ? '지금 쓰는 비밀번호와 다른 것으로 정해주세요.' : /reauth|recent/i.test(m) ? '보안을 위해 로그아웃한 뒤 로그인 화면의 [비밀번호 찾기]로 바꿔주세요.' : errText(error))
+    }
+    setPw(''); setPw2(''); setOpen(false)
+    toast('비밀번호를 바꿨습니다 · 다음 로그인부터 새 비밀번호를 씁니다')
+  }
+  if (!open) return <div className="card nf my-info my-pw"><button type="button" className="btn ghost" onClick={() => setOpen(true)}>비밀번호 변경</button></div>
+  return (
+    <form className="card nf my-info my-pw" onSubmit={submit}>
+      <label htmlFor="my-pw">새 비밀번호 (8자 이상)</label>
+      <input id="my-pw" type={show ? 'text' : 'password'} value={pw} onChange={e => { setPw(e.target.value); setMsg('') }} autoComplete="new-password" autoFocus />
+      <label htmlFor="my-pw2">새 비밀번호 확인</label>
+      <input id="my-pw2" type={show ? 'text' : 'password'} value={pw2} onChange={e => { setPw2(e.target.value); setMsg('') }} autoComplete="new-password" />
+      <label className="ck-row"><input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} /> 비밀번호 보기</label>
+      {msg && <p className="nf-err">{msg}</p>}
+      <button className="btn" disabled={busy}>{busy ? '바꾸는 중…' : '비밀번호 바꾸기'}</button>
+      <button type="button" className="btn ghost" onClick={() => { setOpen(false); setPw(''); setPw2(''); setMsg('') }}>취소</button>
+    </form>
+  )
+}
+
 export default function Settings() {
-  return <MyInfo />
+  return <><MyInfo /><MyPassword /></>
 }

@@ -2127,3 +2127,29 @@ html[data-theme="light"] .dock-empty .ch-list > *, html[data-theme="light"] .cha
 html[data-theme="light"] .dg-grid {gap: 8px !important}
 html[data-theme="light"] .dg-grid .dg2.done {border: 1.5px solid color-mix(in srgb, var(--mint, #14b8a6) 45%, transparent) !important; border-radius: 10px !important; padding: 4px 10px 8px !important; background: none !important}
 @media (prefers-color-scheme: light) { html:not([data-theme="dark"]) .chat .msg.me .bub * { color: inherit } }
+
+/* ===== v28: 점검 수정 (새 글 버튼 · 휴대폰 카드 제목 · 새 대화 접기 · 비밀번호 보기 등) ===== */
+.ch-newb { position: relative; height: 0; z-index: 3 }
+.ch-newb button { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); border: 1px solid var(--line); background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; box-shadow: 0 2px 10px rgba(0, 0, 0, .14); cursor: pointer; white-space: nowrap }
+.p-h2:not(.pcv) .p2-top { flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 8px }
+.p-h2:not(.pcv) .p-title { display: contents }
+.p-h2:not(.pcv) .p-tx { order: 9; flex: 0 0 100%; min-width: 0; font-size: 16.5px; font-weight: 700; color: var(--ink); line-height: 1.35; overflow-wrap: anywhere; word-break: keep-all }
+.p-h2:not(.pcv) .dd-big { margin-left: auto }
+.p-h2:not(.pcv) .chev { margin-right: 0 }
+.top .brand { white-space: nowrap }
+.dept-ask { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap }
+.dept-ask b { font-size: 13px; white-space: nowrap }
+.nc-fold .nc-tog { width: 100%; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; padding: 12px 16px; align-items: center; color: inherit }
+.nc-tog .ub { margin-left: 4px }
+.nc-tog .at { margin-left: 6px; font-size: 12px }
+.sum-ord { color: var(--muted); font-weight: 500 }
+.pw-wrap { position: relative; display: block }
+.pw-wrap input { padding-right: 68px !important }
+.pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: auto !important; margin: 0 !important; padding: 6px 10px !important; border: 0 !important; background: none !important; color: var(--accent) !important; font-size: 13px !important; font-weight: 600 !important; cursor: pointer }
+.my-pw { margin-top: 12px }
+.my-pw .ck-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; cursor: pointer }
+.my-pw .ck-row input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent) }
+.nf-rest { background: var(--bg); border-color: var(--line) }
+.p-h2:not(.pcv) .dd-big { flex: 1; text-align: right }
+.p-h2:not(.pcv) .p-title > .g-chip { order: 8 }
+.p-h2:not(.pcv) .p2-top:has(.g-chip)::before { content: ''; order: 7; flex: 0 0 100%; height: 0; margin-top: -6px }

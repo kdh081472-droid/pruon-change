@@ -52,11 +52,27 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
     else supabase.rpc('mark_read', { p_change: cid, p_last: lastId }).then(() => {}, () => {})
   }, [lastId, cid, uid, db.reads, markReadLocal])
 
-  // 새 글이 오면 맨 아래로
+  // 새 글이 오면 맨 아래로 — 단, 위쪽 글을 읽는 중이면 그대로 두고 '새 글' 버튼만 띄움 (내가 쓴 글·방을 처음 열 때는 맨 아래로)
+  const atBottom = useRef(true)
+  const seen = useRef({ cid: null, last: 0 })
+  const [newBelow, setNewBelow] = useState(0)
+  const toBottom = () => { const L = listRef.current; if (L) L.scrollTop = L.scrollHeight; atBottom.current = true; setNewBelow(0) }
   useLayoutEffect(() => {
     const L = listRef.current
-    if (L) L.scrollTop = L.scrollHeight
+    if (!L) return
+    const first = seen.current.cid !== cid
+    const fresh = first ? [] : list.filter(m => m.id > seen.current.last)
+    seen.current = { cid, last: lastId }
+    if (first || atBottom.current || fresh.some(m => m.user_id === uid)) return toBottom()
+    const n = fresh.filter(m => !m.deleted).length
+    if (n) setNewBelow(v => v + n)
   }, [lastId, cid])
+  const onListScroll = () => {
+    const L = listRef.current
+    if (!L) return
+    atBottom.current = L.scrollHeight - L.scrollTop - L.clientHeight < 60
+    if (atBottom.current && newBelow) setNewBelow(0)
+  }
 
   // 검색: 이 방 안에서 검색어가 들어간 글 (▲▼로 넘겨보기)
   // 방 이름에 들어 있는 낱말은 빼고 글 내용에서만 찾음 (예: "원산지 A만두속" → A만두속 방에서 "원산지")
@@ -257,8 +273,8 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
             {onSearchClose && <button type="button" className="link ch-sx" onClick={onSearchClose}>✕ 검색 닫기</button>}
           </div>
         )}
-        <div className="ch-list" ref={listRef}>
-          {!list.length && <div className="empty">아직 대화가 없습니다. 첫 글을 남겨보세요.</div>}
+        <div className="ch-list" ref={listRef} onScroll={onListScroll}>
+          {!list.length && <div className="empty">{closed ? '남긴 대화가 없습니다.' : '아직 대화가 없습니다. 첫 글을 남겨보세요.'}</div>}
           {list.map((m, i) => {
             const prev = list[i - 1]
             const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at)
@@ -303,6 +319,7 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
             )]
           })}
         </div>
+        {newBelow > 0 && <div className="ch-newb"><button type="button" onClick={toBottom}>↓ 새 글 {newBelow}개</button></div>}
         {closed ? (
           <div className="ch-ro">{isG ? '모든 품목이 종결된 묶음이라 대화는 읽기 전용입니다.' : '종결된 변경이라 대화는 읽기 전용입니다. 다시 진행되면 대화도 다시 열립니다.'}</div>
         ) : (

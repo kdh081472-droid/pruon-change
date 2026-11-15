@@ -9,7 +9,7 @@ import Admin from './Admin.jsx'
 import Summary from './Summary.jsx'
 import HelpBot from './HelpBot.jsx'
 import Sidebar, { DockEmpty } from './Sidebar.jsx'
-import Sheet from './Sheets.jsx'
+import Sheet, { sheetGuard } from './Sheets.jsx'
 import NewChange, { emptyForm } from './NewChange.jsx'
 import Chat from './Chat.jsx'
 import Report from './Report.jsx'
@@ -37,7 +37,19 @@ export default function Dashboard({ session }) {
     c.addEventListener('message', on)
     return () => c.removeEventListener('message', on)
   }, [markLocal, uid])
-  const [tab, setTab] = useState(null)
+  // 뒤로 가기·새로고침: 브라우저 기록에 남겨 둔 '보던 화면' (없으면 처음 화면)
+  const hist0 = useMemo(() => {
+    if (isPop || goParam()) return null
+    try {
+      const h = window.history.state
+      const n = h && h.pruon ? JSON.parse(h.nav) : null
+      if (!n) return null
+      const w = window.innerWidth >= WIDE
+      if (!w && (n.tab === 'summary' || n.tab === 'product')) return { tab: 'timeline', v: n.tab === 'summary' ? 'summary' : 'timeline' }
+      return n
+    } catch (_) { return null }
+  }, [])
+  const [tab, setTab] = useState(hist0 ? hist0.tab : null)
   const [sheet, setSheet] = useState(null)       // {kind:'task', tid} | {kind:'target'|'stop'|'resume'|'assign', cid}
   const [chatCid, setChatCid] = useState(null)   // 휴대폰 대화 창: 방(room)
   const [chatJump, setChatJump] = useState(null) // 휴대폰 대화 검색에서 고른 글 { q, mid, t }
@@ -47,12 +59,32 @@ export default function Dashboard({ session }) {
   const toastT = useRef(null)
   const t0 = todayMid()
   const [ui, setUi] = useState({
-    view: 'timeline', q: '', calMonth: iso(new Date(t0.getFullYear(), t0.getMonth(), 1)),
+    view: (hist0 && hist0.v) || 'timeline', q: '', calMonth: iso(new Date(t0.getFullYear(), t0.getMonth(), 1)),
     calMine: true, calSel: iso(t0), open: {}, showClosed: false,
   })
-  const [nf, setNf] = useState(null)
-  const [sel, setSel] = useState(null)          // PC 넓은 화면에서 고른 제품
-  const [selGroup, setSelGroup] = useState(null) // 고른 묶음 (품목별 관리)
+  // 변경 등록에서 쓰던 내용: 이 브라우저에 임시 저장 (새로고침·앱 업데이트에도 남음, 등록하면 지움, 14일 지나면 버림)
+  const draftKey = 'pruon_newdraft_' + uid
+  const [nf, setNf] = useState(() => {
+    if (isPop) return null
+    try {
+      const d = JSON.parse(localStorage.getItem(draftKey) || 'null')
+      if (!d || !d.f || Date.now() - d.at > 14 * 86400000) return null
+      return { ...emptyForm(), ...d.f, restored: true }
+    } catch (_) { return null }
+  })
+  useEffect(() => {
+    if (isPop) return
+    const t = setTimeout(() => {
+      try {
+        const has = nf && (nf.title.trim() || nf.desc.trim() || nf.reason.trim() || nf.target || nf.list || nf.items.some(i => i.name.trim()))
+        if (!has) return localStorage.removeItem(draftKey)
+        localStorage.setItem(draftKey, JSON.stringify({ at: Date.now(), f: { ...nf, ai: null, tab: 'manual', presetMode: null, presetErr: '', err: '', addDept: null, restored: undefined } }))
+      } catch (_) {}
+    }, 400)
+    return () => clearTimeout(t)
+  }, [nf, isPop, draftKey])
+  const [sel, setSel] = useState(hist0 ? hist0.sel || null : null)          // PC 넓은 화면에서 고른 제품
+  const [selGroup, setSelGroup] = useState(hist0 ? hist0.g || null : null) // 고른 묶음 (품목별 관리)
   const wide = useWidth() >= WIDE
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminMode, setAdminMode] = useState(false)
@@ -231,6 +263,48 @@ export default function Dashboard({ session }) {
     try { history.replaceState(null, '', location.pathname) } catch (_) {}
   }, [app, tab, isPop])
 
+  // ---- 뒤로 가기: 화면을 옮길 때마다 브라우저 기록에 남기고, 뒤로 누르면 앞 화면으로 (열린 창이 있으면 창부터 닫음)
+  const navKey = tab ? JSON.stringify({ tab, sel: tab === 'product' ? sel : null, g: tab === 'group' ? selGroup : null, v: !wide && tab === 'timeline' ? ui.view : null }) : null
+  const ovOpen = !!(sheet || (!wide && chatCid) || reportCid || helpOpen || adminMode)
+  const ovRef = useRef(ovOpen); ovRef.current = ovOpen
+  const sheetRef = useRef(sheet); sheetRef.current = sheet
+  const skipPop = useRef(false)
+  useEffect(() => {
+    if (isPop || !navKey) return
+    const cur = { pruon: 1, nav: navKey, ov: ovOpen ? 1 : 0 }
+    try {
+      const hs = window.history.state
+      if (!hs || !hs.pruon) { window.history.replaceState({ ...cur, ov: 0 }, ''); if (ovOpen) window.history.pushState(cur, ''); return }
+      if (hs.nav === cur.nav && hs.ov === cur.ov) return
+      if (hs.ov === 1 && !ovOpen) {
+        if (hs.nav === cur.nav) { skipPop.current = true; window.history.back() }   // 창을 화면에서 닫음 → 기록도 한 칸 되돌림
+        else window.history.replaceState(cur, '')                                    // 창을 닫으면서 다른 화면으로 감
+        return
+      }
+      window.history.pushState(cur, '')
+    } catch (_) {}
+  }, [navKey, ovOpen, isPop])
+  useEffect(() => {
+    if (isPop) return
+    const on = e => {
+      const s = e.state
+      if (skipPop.current) { skipPop.current = false; return }
+      if (!s || !s.pruon) return
+      if (s.ov === 1) { if (!ovRef.current) window.history.back(); return }        // 다시 열 수 없는 창 기록은 건너뜀
+      // 쓰던 글이 있는 창: 한 번은 막고 알림
+      if (sheetRef.current && sheetGuard(toast)) { try { window.history.pushState({ ...s, ov: 1 }, '') } catch (_) {} return }
+      setSheet(null); setChatCid(null); setChatJump(null); setReportCid(null); setHelpOpen(false); setAdminMode(false)
+      let n = null
+      try { n = JSON.parse(s.nav) } catch (_) { return }
+      setTab(n.tab)
+      if (n.sel) setSel(n.sel)
+      if (n.g) setSelGroup(n.g)
+      if (n.v) setUi(u => ({ ...u, view: n.v }))
+    }
+    window.addEventListener('popstate', on)
+    return () => window.removeEventListener('popstate', on)
+  }, [isPop, toast])
+
   if (err && !db) return <Fail msg={'불러오지 못했습니다: ' + err} />
   if (!db) return <div className="auth"><div className="auth-card"><p className="muted">불러오는 중…</p></div></div>
   if (!me) return <Fail msg="프로필이 없습니다. 가입이 제대로 끝나지 않았을 수 있습니다. 로그아웃 후 다시 가입하거나 관리자에게 문의해주세요." />
@@ -269,7 +343,7 @@ export default function Dashboard({ session }) {
 
   const content = (
     <>
-      {!wide && tab === 'mine' && <NewChatBlock />}
+      {!wide && tab === 'mine' && <NewChatBlock fold />}
       {tab === 'mine' && <MineTab />}
       {tab === 'timeline' && (wide ? <Overview /> : <TimelineTab />)}
       {tab === 'summary' && wide && <Summary />}

@@ -377,6 +377,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
   return (
     <>
       {tabsBar}
+      {nf.restored && !test && <div className="ai-filled nf-rest">전에 쓰던 내용을 불러왔습니다. 이어서 쓰면 됩니다. <button type="button" className="link" onClick={() => { setNf(emptyForm()); toast('처음부터 새로 씁니다') }}>지우고 새로 쓰기</button></div>}
       {nf.aiFill && <div className="ai-filled">AI가 채운 내용입니다. 사실과 다른 곳이 없는지 확인한 뒤 등록해주세요. <button type="button" className="link" onClick={() => set({ tab: 'ai' })}>AI 대화로 돌아가기</button></div>}
       <div className="nf-wrap">
       <div className="nf-col">

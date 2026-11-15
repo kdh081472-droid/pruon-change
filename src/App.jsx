@@ -35,6 +35,7 @@ function Login({ go }) {
   const [email, setEmail] = useState(readSaved)
   const [remember, setRemember] = useState(() => !!readSaved())
   const [pw, setPw] = useState('')
+  const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -52,7 +53,10 @@ function Login({ go }) {
         <label>회사 이메일</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={'name@' + EMAIL_DOMAIN} required autoComplete="email" />
         <label>비밀번호</label>
-        <input type="password" value={pw} onChange={e => setPw(e.target.value)} required autoComplete="current-password" autoFocus={!!email} />
+        <span className="pw-wrap">
+          <input type={show ? 'text' : 'password'} value={pw} onChange={e => setPw(e.target.value)} required autoComplete="current-password" autoFocus={!!email} />
+          <button type="button" className="pw-eye" aria-pressed={show} onClick={() => setShow(v => !v)}>{show ? '숨기기' : '보기'}</button>
+        </span>
         <label className="ck-row">
           <input type="checkbox" checked={remember} onChange={e => { setRemember(e.target.checked); if (!e.target.checked) writeSaved('') }} />
           아이디 저장
@@ -141,6 +145,7 @@ function Signup({ go }) {
         <input type="password" value={f.pw2} onChange={set('pw2')} required autoComplete="new-password" />
         <label>가입코드</label>
         <input value={f.code} onChange={set('code')} required inputMode="numeric" />
+        <p className="muted small-text">가입코드는 관리자에게 받은 코드입니다. 모르면 관리자에게 문의하면 됩니다.</p>
         {msg && <p className="err">{msg}</p>}
         <button disabled={busy}>{busy ? '처리 중…' : '가입하기'}</button>
       </form>

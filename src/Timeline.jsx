@@ -134,7 +134,7 @@ export function ProductCard({ c, forceOpen }) {
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggle() } }}>
       <div className="p2-top">
         {pcView && !c.group && <button type="button" className="back-sum" onClick={goSummary}>← 요약으로</button>}
-        <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.group && !pcView && <span className="g-chip g-in" title={'묶음: ' + c.group.title}>{c.group.title.length > 14 ? c.group.title.slice(0, 14) + '…' : c.group.title} {c.kidNo}/{c.group.kids.length}</span>}{c.title}<AiDraftBadge turns={c.ai_turns || (c.group && c.group.ai_turns)} /></span>
+        <span className="p-title">{!pcView && <ChatMini c={c} />}{!forceOpen && <span className="chev">▶</span>}{c.group && !pcView && <span className="g-chip g-in" title={'묶음: ' + c.group.title}>{c.group.title.length > 14 ? c.group.title.slice(0, 14) + '…' : c.group.title} {c.kidNo}/{c.group.kids.length}</span>}<span className="p-tx">{c.title}<AiDraftBadge turns={c.ai_turns || (c.group && c.group.ai_turns)} /></span></span>
         {pcView && acts}
         <span className="dd-big"><DBadge c={c} /></span>
       </div>

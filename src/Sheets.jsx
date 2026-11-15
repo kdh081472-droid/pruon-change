@@ -4,12 +4,26 @@ import { useApp, Person, MsgText } from './ctx.jsx'
 import OrgTree from './Org.jsx'
 import { md, stamp, hasAll } from './util.js'
 
+// 창에 쓰던 글이 있는지 (처음 채워져 있던 글은 빼고)
+let warnedAt = 0
+const initVal = new WeakMap()      // 창이 열릴 때 이미 채워져 있던 글 (내용 수정 창 등)
+export function sheetGuard(toast) {
+  const typed = [...document.querySelectorAll('.sheet textarea')].some(el => el.value.trim() && el.value.trim() !== (initVal.get(el) || '').trim())
+  if (!typed || Date.now() - warnedAt < 6000) { warnedAt = 0; return false }
+  warnedAt = Date.now()
+  toast('쓰던 글이 있습니다 · 닫으려면 한 번 더 누르면 됩니다')
+  return true
+}
+
 export default function Sheet() {
   const app = useApp()
   const { sheet, setSheet } = app
   const close = () => setSheet(null)
+  // Esc·바깥 누르기: 쓰던 글이 있으면 한 번은 막고 알림 (✕ 는 바로 닫힘)
+  const softClose = () => { if (!sheetGuard(app.toast)) close() }
+  useEffect(() => { document.querySelectorAll('.sheet textarea').forEach(el => initVal.set(el, el.value)) }, [])
   useEffect(() => {
-    const on = e => { if (e.key === 'Escape') close() }
+    const on = e => { if (e.key === 'Escape') softClose() }
     document.addEventListener('keydown', on)
     return () => document.removeEventListener('keydown', on)
   })
@@ -31,7 +45,7 @@ export default function Sheet() {
   else if (sheet.kind === 'org') body = <><Top tag={'가입한 사람 ' + app.db.profiles.length + '명'} close={close} /><div className="s-title">조직도</div><OrgTree inSheet /></>
   return (
     <>
-      <div className="scrim" onClick={close} />
+      <div className="scrim" onClick={softClose} />
       <div className={'sheet' + (sheet.kind === 'gassign' || sheet.kind === 'assign' ? ' sheet-xl' : '')} role="dialog" aria-modal="true">
         <div className="grab" />
         {body}

@@ -24,6 +24,8 @@ const COLS = [
   { k: 'closed', label: '종결일', type: 'date', cls: 'subd', w: 90, min: 76 },
 ]
 const colOf = k => COLS.find(c => c.k === k)
+// 필터·정렬에 쓰는 값 (묶음의 품목은 묶음 값)
+const fval = (r, k) => (r.fv && k in r.fv ? r.fv[k] : r[k])
 
 function Hl({ text, words }) {
   const s = String(text || '')
@@ -41,7 +43,7 @@ export default function Summary() {
   })
   const saveWs = a => { try { localStorage.setItem(wKey, JSON.stringify(Object.fromEntries(COLS.map((c, i) => [c.k, a[i]])))) } catch (_) {} }
   const rz = useRef(null)
-  const st = ui.sum || { q: '', sort: { k: 'target', dir: 'asc' }, f: {}, chip: null }
+  const st = ui.sum || { q: '', sort: { k: 'target', dir: 'asc', live: true }, f: {}, chip: null }
   const setSt = patch => setUi(u => ({ ...u, sum: { ...(u.sum || st), ...patch } }))
   const [pop, setPop] = useState(null)        // { k, x, y }
   const tw = useRef(null)
@@ -66,6 +68,8 @@ export default function Summary() {
       gid: g ? g.id : null, kidNo: c.kidNo, extra: g ? g.title + ' ' + (c.description || '') + ' ' + (c.reason || '') : '',
       desc: g ? '' : c.description || '', reason: g ? '' : c.reason || '', items: g ? '' : c.itemsText === '-' ? '' : c.itemsText,
       by: g ? '' : p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''),
+      // 묶음의 품목: 화면에는 비워 두지만 필터·정렬은 묶음 값으로 (등록자·변경내용·변경사유) + 자기 대상품목
+      fv: g ? { by: p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''), desc: g.description || c.description || '', reason: g.reason || c.reason || '', items: c.itemsText === '-' ? '' : c.itemsText } : null,
       bySort: String(di < 0 ? 99 : di).padStart(2, '0') + ' ' + (p ? p.name : ''),
       left: c.status === '종결' ? '' : remList.map(([x, k]) => x + ' ' + k).join(' · '),
       remList: c.status === '종결' ? [] : remList, leftN: c.status === '종결' ? '' : remList.reduce((a, x) => a + x[1], 0),
@@ -103,11 +107,11 @@ export default function Summary() {
       if (st.chip && r.status !== st.chip) return false
       if (st.onlyNew && !r.chat) return false
       if (ws.length) {
-        const hay = norm(COLS.map(c => r[c.k]).join(' ') + ' ' + r.stop + ' ' + (r.extra || ''))
+        const hay = norm(COLS.map(c => fval(r, c.k)).join(' ') + ' ' + r.stop + ' ' + (r.extra || ''))
         if (!ws.every(w => hay.includes(w))) return false        // 단어 순서 상관없이 모두 포함
       }
       for (const [k, f] of Object.entries(st.f)) {
-        const v = r[k]
+        const v = fval(r, k)
         if (f.vals && !f.vals.includes(String(v))) return false
         if (f.text && !norm(v).includes(norm(f.text))) return false
         if (f.from && (!v || v < f.from)) return false
@@ -119,7 +123,9 @@ export default function Summary() {
     const { k, dir } = st.sort
     const sk = (colOf(k) && colOf(k).sortKey) || k
     return out.sort((a, b) => {
-      const va = a[sk], vb = b[sk]
+      // 기본 순서: 진행 중인 것 먼저 (전환일 빠른 순), 종결·중단은 아래로
+      if (st.sort.live) { const fa = a.status === '종결' || a.status === '중단 종결', fb = b.status === '종결' || b.status === '중단 종결'; if (fa !== fb) return fa ? 1 : -1 }
+      const va = fval(a, sk), vb = fval(b, sk)
       const ea = va === '' || va == null, eb = vb === '' || vb == null
       if (ea || eb) return ea === eb ? 0 : ea ? 1 : -1          // 빈 칸은 항상 아래로
       const d = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ko')
@@ -211,7 +217,7 @@ export default function Summary() {
           <input type="search" value={st.q} onChange={e => setSt({ q: e.target.value })} placeholder="검색 (단어 순서 상관없음)" autoComplete="off" aria-label="전체 요약 검색" />
         </label>
         <button type="button" className="btn sm ghost" disabled={!anyFilter} onClick={() => { setSt({ q: '', chip: null, onlyNew: false, f: {} }); setPop(null) }}>필터 모두 지우기</button>
-        <span className="sum-count"><b>{list.length}</b> / {rows.length}건</span>
+        <span className="sum-count"><b>{list.length}</b> / {rows.length}건{st.sort.live && <small className="sum-ord"> · 진행 중 먼저</small>}</span>
         <button type="button" className="btn sm ghost sum-wreset" title="머리글 사이 세로선을 끌면 칸 폭을 바꿀 수 있습니다 (내 화면에만 저장)" onClick={() => { const a = COLS.map(c => c.w); setWs(a); saveWs(a) }}>칸 폭 기본으로</button>
       </div>
       {Object.keys(st.f).length > 0 && (
@@ -260,12 +266,12 @@ function FilterPop({ col, rows, st, setSt, pos, close }) {
   const f = st.f[col.k] || {}
   const counts = useMemo(() => {
     const m = {}
-    rows.forEach(r => { const v = String(r[col.k]); m[v] = (m[v] || 0) + 1 })
+    rows.forEach(r => { const v = String(fval(r, col.k)); m[v] = (m[v] || 0) + 1 })
     return m
   }, [rows, col.k])
   const skey = useMemo(() => {
     const m = {}
-    if (col.catSort) rows.forEach(r => { m[String(r[col.k])] = r[col.catSort] })
+    if (col.catSort) rows.forEach(r => { m[String(fval(r, col.k))] = r[col.catSort] })
     return m
   }, [rows, col.k, col.catSort])
   const all = Object.keys(counts).sort((a, b) => (col.catSort ? String(skey[a]).localeCompare(String(skey[b]), 'ko') : a.localeCompare(b, 'ko')))

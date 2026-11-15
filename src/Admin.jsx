@@ -97,6 +97,7 @@ function UsersTab({ users, err, act }) {
   const [ask, setAsk] = useState(null)       // 퇴사 확인 대상
   const [dq, setDq] = useState([])          // 부서 거르기 (빈 배열 = 전체)
   const [pop, setPop] = useState(null)       // 부서 헤더 창 위치 (null = 닫힘)
+  const [dAsk, setDAsk] = useState(null)     // 부서 바꾸기 확인 { id, to }
   const [sort, setSort] = useState({ k: null, dir: 1 })   // 헤더 눌러 정렬: 오름차순 → 내림차순 → 원래대로
   const { busy, err: aErr, setErr, go } = useBusyAct(act)
   if (err) return <><Head title="가입자" /><div className="card empty">{err}</div></>
@@ -181,9 +182,15 @@ function UsersTab({ users, err, act }) {
                   <td><b className="nm">{u.name}</b>{u.id === me.id && <span className="chip-me">나</span>}</td>
                   <td className="mono">{u.email}</td>
                   <td>
-                    {u.left_at ? u.department : (
+                    {u.left_at ? u.department : dAsk && dAsk.id === u.id ? (
+                      <span className="dept-ask">
+                        <b>{u.department} → {dAsk.to}</b>
+                        <button type="button" className="btn sm" disabled={busy} onClick={async () => { await go('admin_set_dept', { p_user: u.id, p_dept: dAsk.to }, `${u.name}: ${u.department} → ${dAsk.to}`); setDAsk(null) }}>바꾸기</button>
+                        <button type="button" className="btn sm ghost" disabled={busy} onClick={() => setDAsk(null)}>취소</button>
+                      </span>
+                    ) : (
                       <select value={u.department} aria-label={u.name + ' 부서'} disabled={busy}
-                        onChange={e => go('admin_set_dept', { p_user: u.id, p_dept: e.target.value }, `${u.name}: ${u.department} → ${e.target.value}`)}>
+                        onChange={e => { if (e.target.value !== u.department) setDAsk({ id: u.id, to: e.target.value }) }}>
                         {!SIGNUP_DEPTS.includes(u.department) && <option>{u.department}</option>}
                         {SIGNUP_DEPTS.map(d => <option key={d}>{d}</option>)}
                       </select>

@@ -93,18 +93,27 @@ export function MineTab() {
 }
 
 /* ---------- 새 대화 (안 읽은 글이 있는 제품) ---------- */
-export function NewChatBlock({ emptyText }) {
-  const { db, me, unread, mentionsMe, openChat } = useApp()
+// fold = 휴대폰 내 할 일: 한 줄로 접어 두고 누르면 펼침 (할 일이 먼저 보이게)
+export function NewChatBlock({ emptyText, fold }) {
+  const { db, me, unread, mentionsMe, openChat, ui, setUi } = useApp()
   // 묶음 방도 함께 (c.isG)
   const rows = [
     ...db.groups.map(g => ({ c: { id: 'g:' + g.id, title: g.title + ' · 묶음 전체 대화', isG: true }, u: unread('g:' + g.id) })),
     ...db.changes.map(c => ({ c, u: unread(c.id) })),
   ].filter(x => x.u.length).sort((a, b) => b.u[b.u.length - 1].id - a.u[a.u.length - 1].id)
   if (!rows.length) return emptyText ? <div className="empty">{emptyText}</div> : null
+  const open = !fold || !!ui.ncOpen
+  const total = rows.reduce((a, x) => a + x.u.length, 0)
+  const atMe = rows.some(x => x.u.some(mentionsMe))
   return (
-    <div className="card nc">
-      <div className="m-h"><span className="t">새 대화</span><span className="d">안 읽은 글이 있는 제품</span></div>
-      {rows.map(({ c, u }) => {
+    <div className={'card nc' + (fold ? ' nc-fold' : '') + (open ? '' : ' shut')}>
+      {fold
+        ? <button type="button" className="m-h nc-tog" aria-expanded={open} onClick={() => setUi(u => ({ ...u, ncOpen: !u.ncOpen }))}>
+            <span className="t">새 대화 <span className="ub">{total > 999 ? '999+' : total}</span>{atMe && <span className="at me">@나를 부름</span>}</span>
+            <span className="d">방 {rows.length}개 · {open ? '접기 ▴' : '펼치기 ▾'}</span>
+          </button>
+        : <div className="m-h"><span className="t">새 대화</span><span className="d">안 읽은 글이 있는 제품</span></div>}
+      {open && rows.map(({ c, u }) => {
         const last = u[u.length - 1]
         return (
           <button type="button" key={c.id} className="m-i" onClick={() => openChat(c.id)}>
