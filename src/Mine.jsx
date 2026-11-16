@@ -159,7 +159,7 @@ function GroupMine({ gid, ts }) {
       </div>
       {view === 'task' ? titles.map((title, i) => {
         const xs = kidsOf(title)
-        const isOpen = open[title] !== undefined ? open[title] : i === 0
+        const isOpen = open[title] !== undefined ? open[title] : false   // 접힌 게 기본
         const sel = xs.filter(t => pick[t.id] !== false)
         const late = xs.some(t => overdue(C(t.change_id)))
         return (

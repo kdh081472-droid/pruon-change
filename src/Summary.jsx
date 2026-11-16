@@ -156,7 +156,8 @@ export default function Summary() {
   }
   // 화면에 보이는 줄: 묶음의 품목은 묶음 줄 아래로 모음 (펼치기). 거르기·검색 중이면 맞는 품목이 보이게 자동으로 펼침
   const filtering = !!(words.length || st.chip || st.onlyNew || Object.keys(st.f).length)
-  const isOpenG = gid => (st.open && st.open[gid] !== undefined ? st.open[gid] : filtering)
+  // 묶음은 접힌 게 기본 (칩·필터를 골라도 접힘). 검색 칸에 글을 쓴 경우만 찾은 품목이 보이게 펼침
+  const isOpenG = gid => (st.open && st.open[gid] !== undefined ? st.open[gid] : words.length > 0)
   const display = useMemo(() => {
     const out = [], seen = new Set()
     list.forEach(r => {
@@ -168,7 +169,7 @@ export default function Summary() {
       if (isOpenG(r.gid)) kids.forEach(k => out.push({ ...k, kid: true }))
     })
     return out
-  }, [list, gRows, st.open, filtering])
+  }, [list, gRows, st.open, words.length])
   const toggleG = gid => setSt({ open: { ...(st.open || {}), [gid]: !isOpenG(gid) } })
   const cnt = s => rows.filter(r => r.status === s).length
   const anyFilter = st.q || st.chip || st.onlyNew || Object.keys(st.f).length
