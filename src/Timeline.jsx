@@ -87,7 +87,7 @@ export function ChatMini({ c }) {
 
 /* ---------- 제품 카드: 위에 요약, 펼치면 부서별 할 일 목록 ---------- */
 export function ProductCard({ c, forceOpen }) {
-  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, openReport, isAdmin, run, toast, goSummary, goGroup } = useApp()
+  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, startAssign, openReport, isAdmin, run, toast, goSummary, goGroup } = useApp()
   const pcView = !!forceOpen && wide        // PC 제품 화면: 버튼은 제목 줄 오른쪽, 대화 버튼 없음
   const [ord, setOrd] = useState(null)        // 우리 부서 할 일 순서 (저장되기 전 화면에 먼저 반영)
   const [drag, setDrag] = useState(null)
@@ -123,7 +123,7 @@ export function ProductCard({ c, forceOpen }) {
       <span className="p-acts">
         {canEdit && <button type="button" className="pill" onClick={stop(() => openSheet('edit', c.id))}>내용 수정</button>}
         <button type="button" className="pill" onClick={stop(() => openSheet('target', c.id))}>전환일 변경</button>
-        <button type="button" className="pill" onClick={stop(() => openSheet('assign', c.id))}>+ 할 일 배정</button>
+        <button type="button" className="pill" onClick={stop(() => startAssign(c.id))}>+ 할 일 배정</button>
         <button type="button" className="pill stop" onClick={stop(() => openSheet('stop', c.id))}>중단 종결</button>
       </span>
     )

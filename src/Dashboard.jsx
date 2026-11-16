@@ -207,6 +207,13 @@ export default function Dashboard({ session }) {
     }
     return {
       // 할 일 배정을 따로 띄운 창으로 (PC). 막히면 false
+      // '+ 할 일 배정' 버튼: PC는 바로 따로 띄운 창으로, 팝업이 막히면 이 화면 안의 창으로 (휴대폰은 화면 안의 창)
+      startAssign: room => {
+        const g = room.startsWith('g:'), sh = g ? { kind: 'gassign', gid: room.slice(2) } : { kind: 'assign', cid: room }
+        if (!wide) return setSheet(sh)
+        if (openAssignPopup(room)) return setSheet(null)
+        setSheet(sh); toast('팝업이 막혀 있어 이 화면에서 엽니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용하면 다음부터 따로 뜹니다.')
+      },
       openAssignWin: room => { const ok = openAssignPopup(room); if (ok) setSheet(null); else toast('팝업이 막혀 있습니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용해주세요.'); return ok },
       db, me, uid, viewer, wide, ui, setUi, C, tOf, isLate, overdue, unread, isAdmin, setAdminMode, mentionsMe, unreadCnt, run, reload, toast,
       sheet, setSheet,

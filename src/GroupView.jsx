@@ -33,7 +33,7 @@ const SCLS = { '진행 중': 'live', '전환일 지남': 'late', 종결: 'done',
 
 /* ---------- 묶음 화면 ---------- */
 export default function GroupView({ gid }) {
-  const { db, me, viewer, wide, isAdmin, overdue, unread, goChange, goSummary, setSheet, openChat } = useApp()
+  const { db, me, viewer, wide, isAdmin, overdue, unread, goChange, goSummary, setSheet, openChat, startAssign } = useApp()
   const [logOpen, setLogOpen] = useState(false)
   const g = db.groupMap[gid]
   if (!g || !g.kids.length) return <div className="card empty">묶음을 찾을 수 없습니다. 요약에서 다시 골라주세요.</div>
@@ -55,7 +55,7 @@ export default function GroupView({ gid }) {
             <span className="p-acts">
               {canEdit && <button type="button" className="pill" onClick={() => setSheet({ kind: 'gedit', gid })}>내용 수정</button>}
               <button type="button" className="pill" onClick={() => setSheet({ kind: 'gtarget', gid })}>전환일 일괄 변경</button>
-              <button type="button" className="pill" onClick={() => setSheet({ kind: 'gassign', gid })}>+ 할 일 배정</button>
+              <button type="button" className="pill" onClick={() => startAssign('g:' + gid)}>+ 할 일 배정</button>
               <button type="button" className="pill add" onClick={() => setSheet({ kind: 'gadd', gid })}>+ 품목 추가</button>
               <button type="button" className="pill stop" onClick={() => setSheet({ kind: 'gstop', gid })}>묶음 중단 종결</button>
             </span>
