@@ -2153,3 +2153,9 @@ html[data-theme="light"] .dg-grid .dg2.done {border: 1.5px solid color-mix(in sr
 .p-h2:not(.pcv) .dd-big { flex: 1; text-align: right }
 .p-h2:not(.pcv) .p-title > .g-chip { order: 8 }
 .p-h2:not(.pcv) .p2-top:has(.g-chip)::before { content: ''; order: 7; flex: 0 0 100%; height: 0; margin-top: -6px }
+/* v29: 할 일 배정 따로 띄운 창 */
+.s-nw { margin-left: auto; font-size: 12.5px; padding: 5px 11px }
+.pop-assign { overflow: auto; background: var(--surface) }
+.sheet.sheet-pop { position: static; transform: none; left: auto; bottom: auto; width: 100% !important; max-width: none !important; max-height: none; min-height: 100%; border-radius: 0; box-shadow: none; z-index: auto; padding: 14px 22px 22px }
+.sheet.sheet-pop .ga-l { max-height: calc(100vh - 130px) }
+.sheet-pop .ct-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 80px 20px; color: var(--muted) }

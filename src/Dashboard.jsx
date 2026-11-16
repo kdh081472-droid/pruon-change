@@ -16,6 +16,8 @@ import Report from './Report.jsx'
 import Settings from './Settings.jsx'
 import GroupView, { GroupDock } from './GroupView.jsx'
 import ChatTab, { RoomList } from './Rooms.jsx'
+import { popupAssign, openAssignPopup } from './popchat.js'
+import { AssignSheet, GroupAssignSheet } from './Sheets.jsx'
 import { popupRoom, popupList, popupJump, channel, toMain, openPopup, openListPopup, announceWindow, MAIN_NAME, goParam } from './popchat.js'
 
 export default function Dashboard({ session }) {
@@ -23,8 +25,10 @@ export default function Dashboard({ session }) {
   const { db, err, reload, markReadLocal: markLocal } = useAppData(uid)
   const popRoom = useMemo(() => popupRoom(), [])          // 대화 작은 창으로 열린 경우 그 방
   const popList = useMemo(() => !popRoom && popupList(), [popRoom])   // 대화 목록 창
-  const isPop = !!(popRoom || popList)
+  const popAssign = useMemo(() => (!popRoom && !popList ? popupAssign() : null), [popRoom, popList])   // 할 일 배정 창
+  const isPop = !!(popRoom || popList || popAssign)
   useEffect(() => (popRoom ? announceWindow(popRoom) : undefined), [popRoom])
+  const isPopRef = useRef(isPop); isPopRef.current = isPop
   const [popJump, setPopJump] = useState(() => (popRoom ? popupJump() : null))
   // 읽음 표시: 내 화면에 먼저 반영 + 다른 창(대화 작은 창 ↔ 앱 창)에도 바로 알림
   const markReadLocal = useCallback((room, lastId) => {
@@ -33,7 +37,12 @@ export default function Dashboard({ session }) {
   }, [markLocal, uid])
   useEffect(() => {
     const c = channel(); if (!c) return
-    const on = e => { const d = e.data || {}; if (d.type === 'read' && d.uid === uid) markLocal(d.room, d.id) }
+    const on = e => {
+      const d = e.data || {}
+      if (d.type === 'read' && d.uid === uid) markLocal(d.room, d.id)
+      // 할 일 배정 창에서 저장 → 앱 창에 알림 띄우고 새로 불러옴 (배정 창은 저장 후 바로 닫힘)
+      if (d.type === 'assigned' && d.uid === uid && !isPopRef.current) { reloadRef.current && reloadRef.current(); toastRef.current && toastRef.current(d.msg) }
+    }
     c.addEventListener('message', on)
     return () => c.removeEventListener('message', on)
   }, [markLocal, uid])
@@ -144,6 +153,11 @@ export default function Dashboard({ session }) {
   const baseTitle = useRef(document.title || '푸르온 변경점 관리')
   useEffect(() => {
     if (!db || !uid) return
+    if (popAssign) {
+      const isG = popAssign.startsWith('g:'), x = isG ? db.groupMap[popAssign.slice(2)] : db.changeMap[popAssign]
+      document.title = (isG ? '할 일 일괄 배정' : '할 일 배정') + (x ? ' · ' + x.title : '')
+      return
+    }
     if (popRoom) {
       const isG = popRoom.startsWith('g:'), x = isG ? db.groupMap[popRoom.slice(2)] : db.changeMap[popRoom]
       const n = db.messages.filter(m => m.room === popRoom && m.user_id !== uid && !m.deleted && m.id > (db.reads[uid + '|' + popRoom] || 0)).length
@@ -192,6 +206,8 @@ export default function Dashboard({ session }) {
       setTimeout(() => { const el = document.getElementById('p' + cid); el && el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 80)
     }
     return {
+      // 할 일 배정을 따로 띄운 창으로 (PC). 막히면 false
+      openAssignWin: room => { const ok = openAssignPopup(room); if (ok) setSheet(null); else toast('팝업이 막혀 있습니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용해주세요.'); return ok },
       db, me, uid, viewer, wide, ui, setUi, C, tOf, isLate, overdue, unread, isAdmin, setAdminMode, mentionsMe, unreadCnt, run, reload, toast,
       sheet, setSheet,
       openTask: tid => setSheet({ kind: 'task', tid }),
@@ -220,14 +236,22 @@ export default function Dashboard({ session }) {
   }, [db, me, uid, viewer, wide, ui, sheet, reload, toast, markReadLocal, isAdmin])
 
   // 대화 작은 창: 제품·묶음·할 일 열기는 원래 앱 창에서
+  const reloadRef = useRef(null); reloadRef.current = reload
+  const toastRef = useRef(null); toastRef.current = toast
   const popApp = useMemo(() => app && isPop ? {
     ...app,
+    // 배정 창: 저장 알림은 앱 창으로 넘김
+    run: popAssign ? (async (fn, args, okMsg) => {
+      const r = await app.run(fn, args, null)
+      if (!r.error && okMsg) { const m = typeof okMsg === 'function' ? okMsg(r.data) : okMsg; const c = channel(); if (c) c.postMessage({ type: 'assigned', uid, msg: m }); toast(m) }
+      return r
+    }) : app.run,
     goChange: id => toMain({ kind: 'change', id }),
     selectProduct: id => toMain({ kind: 'change', id }),
     goGroup: id => toMain({ kind: 'group', id }),
     openTask: id => toMain({ kind: 'task', id }),
     openChat: room => openPopup(room), goChat: room => openPopup(room),
-  } : null, [app, isPop])
+  } : null, [app, isPop, popAssign])
   const appRef = useRef(app); appRef.current = app
   useEffect(() => {
     const on = e => {
@@ -317,6 +341,23 @@ export default function Dashboard({ session }) {
         <div className="pop-wrap">
           {ok ? <Chat cid={popRoom} tab popup onClose={() => window.close()} searchQ={popJump && popJump.q} jumpTo={popJump && popJump.mid ? popJump : null} onSearchClose={() => setPopJump(null)} />
             : <div className="ct-empty"><b>대화방을 찾을 수 없습니다</b><span>지워졌거나 볼 수 없는 대화입니다.</span></div>}
+        </div>
+        {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
+        {err && <div className="netbar">연결이 불안정합니다. 잠시 후 자동으로 다시 시도합니다.</div>}
+      </Ctx.Provider>
+    )
+  }
+  if (popAssign) {
+    const isG = popAssign.startsWith('g:'), id = isG ? popAssign.slice(2) : popAssign
+    const x = isG ? db.groupMap[id] : db.changeMap[id]
+    const live = x && (isG ? (x.kids || []).some(k => k.status === '진행중') : x.status === '진행중')
+    return (
+      <Ctx.Provider value={popApp}>
+        <div className="pop-wrap pop-assign">
+          <div className="sheet sheet-xl sheet-pop" role="main">
+            {live ? (isG ? <GroupAssignSheet gid={id} close={() => window.close()} inPop /> : <AssignSheet cid={id} close={() => window.close()} inPop />)
+              : <div className="ct-empty"><b>{x ? '진행 중인 변경이 아닙니다' : '변경을 찾을 수 없습니다'}</b><span>{x ? '종결된 변경에는 할 일을 배정할 수 없습니다.' : '지워졌거나 볼 수 없는 변경입니다.'}</span><button type="button" className="btn ghost" onClick={() => window.close()}>창 닫기</button></div>}
+          </div>
         </div>
         {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
         {err && <div className="netbar">연결이 불안정합니다. 잠시 후 자동으로 다시 시도합니다.</div>}

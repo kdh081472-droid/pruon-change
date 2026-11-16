@@ -54,10 +54,11 @@ export default function Sheet() {
   )
 }
 
-function Top({ tag, close }) {
+function Top({ tag, close, pop }) {
   return (
     <div className="s-top">
       <span className="s-tag">{tag}</span>
+      {pop && <button type="button" className="pill s-nw" title="이 창을 따로 띄워, 제품 화면·대화를 보면서 배정합니다" onClick={pop}>↗ 새 창</button>}
       <button type="button" className="s-x" onClick={close} aria-label="닫기">✕</button>
     </div>
   )
@@ -644,8 +645,8 @@ function useBag(setErr) {
 }
 
 /* ---------- 묶음 할 일 일괄 배정 ---------- */
-function GroupAssignSheet({ gid, close }) {
-  const { db, run } = useApp()
+export function GroupAssignSheet({ gid, close, inPop }) {
+  const { db, run, wide, openAssignWin } = useApp()
   const g = db.groupMap[gid]
   const kids = g.kids
   const open = kids.filter(k => k.status === '진행중')
@@ -677,7 +678,7 @@ function GroupAssignSheet({ gid, close }) {
 
   return (
     <>
-      <Top tag={'묶음 · ' + g.title} close={close} />
+      <Top tag={'묶음 · ' + g.title} close={close} pop={!inPop && wide && openAssignWin ? () => openAssignWin('g:' + gid) : null} />
       <div className="s-title">할 일 일괄 배정</div>
       <div className="ga">
         <PickLeft inBag={inBag} add={add} cover={cover} />
@@ -715,8 +716,8 @@ function GroupAssignSheet({ gid, close }) {
 }
 
 /* ---------- 품목 하나(변경 1건) 할 일 배정: 묶음과 같은 방식 ---------- */
-function AssignSheet({ cid, close }) {
-  const { C, tOf, run } = useApp()
+export function AssignSheet({ cid, close, inPop }) {
+  const { C, tOf, run, wide, openAssignWin } = useApp()
   const c = C(cid)
   const ts = tOf(cid)
   const [reason, setReason] = useState('')
@@ -736,7 +737,7 @@ function AssignSheet({ cid, close }) {
   })
   return (
     <>
-      <Top tag={c.group ? `${c.title} · 묶음 ${c.group.title}` : c.short} close={close} />
+      <Top tag={c.group ? `${c.title} · 묶음 ${c.group.title}` : c.short} close={close} pop={!inPop && wide && openAssignWin ? () => openAssignWin(cid) : null} />
       <div className="s-title">할 일 배정</div>
       <div className="ga">
         <PickLeft inBag={inBag} add={addNew} cover={cover} />

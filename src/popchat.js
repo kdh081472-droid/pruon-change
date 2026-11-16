@@ -6,6 +6,28 @@ import { useEffect, useState } from 'react'
 export function popupRoom() {
   try { return new URLSearchParams(location.search).get('chat') } catch (_) { return null }
 }
+// 할 일 배정 창 (앱주소?assign=<변경 id 또는 'g:'+묶음 id>)
+export function popupAssign() {
+  try { return new URLSearchParams(location.search).get('assign') } catch (_) { return null }
+}
+const assignWins = {}
+// 할 일 배정 창 띄우기. 이미 열려 있으면 그 창을 앞으로. 팝업이 막히면 false
+export function openAssignPopup(room) {
+  let w = assignWins[room]
+  if (!w || w.closed) {
+    const W = Math.min(1040, (screen.availWidth || 1200) - 40), H = Math.min(780, (screen.availHeight || 860) - 40)
+    const left = Math.max(0, (window.screenX || 0) + Math.round(((window.outerWidth || 1200) - W) / 2))
+    const top = Math.max(0, (window.screenY || 0) + 50)
+    w = window.open('', 'pruon_assign_' + String(room).replace(/[^\w]/g, '_'), `popup=yes,width=${W},height=${H},left=${left},top=${top}`)
+    if (!w) return false
+    let blank = true
+    try { blank = !w.location.href || w.location.href === 'about:blank' } catch (_) { blank = true }
+    if (blank) w.location.href = base() + '?assign=' + encodeURIComponent(room)
+    assignWins[room] = w
+  }
+  try { w.focus() } catch (_) {}
+  return true
+}
 // 대화 목록 창 (앱주소?chats=1)
 export function popupList() {
   try { return new URLSearchParams(location.search).get('chats') === '1' } catch (_) { return false }
