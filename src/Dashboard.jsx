@@ -283,6 +283,8 @@ export default function Dashboard({ session }) {
     if (d.kind === 'change' && a.db.changeMap[d.id]) a.goChange(d.id)
     if (d.kind === 'group' && a.db.groupMap[d.id]) a.goGroup(d.id)
     if (d.kind === 'task') { const t = a.db.tasks.find(x => String(x.id) === String(d.id)); if (t) a.openTask(t.id) }
+    // 메일의 [대화 열기]: 그 방으로 (PC는 제품·묶음 화면의 대화, 휴대폰은 대화 창)
+    if (d.kind === 'chat') { const r = String(d.id); if (r.startsWith('g:') ? a.db.groupMap[r.slice(2)] : a.db.changeMap[r]) a.openChat(r) }
   }
   // ?go=종류:id 로 열린 경우 (앱 창이 없을 때 대화 창이 새로 연 것) — 한 번만 이동하고 주소 정리
   const goDone = useRef(false)

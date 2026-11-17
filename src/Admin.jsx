@@ -4,12 +4,13 @@ import { useApp, ICON, useWidth, WIDE } from './ctx.jsx'
 import { errText, md, stampFull, iso, add, parse, todayMid, hasAll } from './util.js'
 import Report from './Report.jsx'
 import AiAdmin from './AiAdmin.jsx'
+import MailAdmin from './MailAdmin.jsx'
 
 // 마지막 접속 = 앱을 쓴 시각 (없으면 마지막 로그인 시각)
 const seenOf = u => u.last_seen_at || u.last_sign_in_at || null
 
 // 관리자 모드: 관리 기능만 (업무 화면은 모두 꺼짐). 관리자 여부는 서버가 매번 다시 검사함
-const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일·목록', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat'], ['help', '도우미 설정', 'help'], ['ai', 'AI 초안 설정', 'spark']]
+const TABS = [['users', '가입자', 'users'], ['dept', '부서', 'org'], ['tpl', '기본 할 일·목록', 'list'], ['del', '변경 삭제', 'trash'], ['stat', '사용 현황', 'stat'], ['help', '도우미 설정', 'help'], ['ai', 'AI 초안 설정', 'spark'], ['mail', '메일 알림', 'mail']]
 
 export default function Admin({ onExit }) {
   const app = useApp()
@@ -41,6 +42,7 @@ export default function Admin({ onExit }) {
     del: <DeleteTab act={act} openReport={setReportCid} />,
     help: <HelpTab />,
     ai: <AiAdmin />,
+    mail: <MailAdmin />,
     stat: <StatTab users={users} onGoUsers={() => { setTab('users'); window.scrollTo(0, 0) }} />,
   }[tab]
 
