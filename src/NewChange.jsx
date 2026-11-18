@@ -21,7 +21,7 @@ export function emptyForm() {
     title: '', desc: '', reason: '', target: '',
     items: [{ type: '단품', name: '' }],
     list: null,                 // 할 일 목록 (부서별 순서 그대로) — null이면 기본 목록
-    mode: 'one',                // 'one' 하나로 관리 | 'items' 품목별로 관리 (묶음)
+    mode: 'items',              // 품목 2개 이상이면 항상 품목별로 관리 (묶음) · '하나로 관리'는 없앰
     presetSel: 'base', presetUsed: 'base', presetMode: null, presetErr: '',
     addDept: null, err: '',
     tab: 'manual',              // 'manual' 직접 작성 | 'ai' AI로 작성 (둘 사이를 오가도 내용 그대로)
@@ -195,7 +195,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
       // 고르지 않은 기본 할 일은 숨김 → 부서마다 '기본 할 일 다시 넣기'로 꺼냄
       tpls.filter(x => x.department === dp && !used.has(x.id)).forEach(x => list.push({ ...fromTpl(x, false), hidden: true }))
     })
-    const byI = d.mode === 'items' && d.items.length >= 2
+    const byI = d.items.length >= 2   // 품목 2개 이상 = 품목별로 관리
     const vals = {
       title: d.title || '', desc: d.description || '', reason: d.reason || '', target: d.target_date || '',
       mode: byI ? 'items' : 'one',
@@ -205,7 +205,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
     const aiVals = { ...vals }                   // AI가 낸 값 그대로 (사람이 고친 칸 통계용)
     const cur = { title: nf.title, desc: nf.desc, reason: nf.reason, target: nf.target, mode: nf.mode, items: nf.items, list: nf.list }
     const snap = nf.aiFill && nf.aiFill.snap
-    const empty = { title: !nf.title.trim(), desc: !nf.desc.trim(), reason: !nf.reason.trim(), target: !nf.target, mode: !snap && nf.mode === 'one', items: nf.items.every(i => !i.name.trim()), list: !nf.list }
+    const empty = { title: !nf.title.trim(), desc: !nf.desc.trim(), reason: !nf.reason.trim(), target: !nf.target, mode: false, items: nf.items.every(i => !i.name.trim()), list: !nf.list }
     const kept = []
     Object.keys(vals).forEach(f => {
       if (empty[f]) return
@@ -303,7 +303,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
   }
 
   const namedN = nf.items.filter(i => i.name.trim()).length
-  const byItem = nf.mode === 'items' && namedN >= 2
+  const byItem = namedN >= 2      // 품목 2개 이상이면 항상 품목별로 관리 (묶음)
   const opt = p => <option key={p.id} value={p.id}>{p.name}{p.fixed ? '' : ' · ' + p.items.length + '건'}</option>
   const sc0 = curP.source_change_id ? C(curP.source_change_id) : null
 
@@ -356,7 +356,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
             <h3>시험 등록 결과 <span className="ai-tsave">저장하지 않았습니다</span></h3>
             <dl className="tg-dl">
               <dt>제목</dt><dd>{testDone.title}</dd>
-              <dt>대상 품목</dt><dd>{testDone.items.length}개 · {testDone.byItem ? '품목별로 관리 (묶음)' : '하나로 관리'}</dd>
+              <dt>대상 품목</dt><dd>{testDone.items.length}개 · {testDone.byItem ? '품목별로 관리 (묶음)' : '단일 품목'}</dd>
               <dt>할 일</dt><dd>{testDone.byItem ? `${testDone.tasks}건 × 품목 ${testDone.items.length}개 = ${testDone.tasks * testDone.items.length}건` : testDone.tasks + '건'}</dd>
               {testDone.ai && <><dt>AI 표시</dt><dd>제품·묶음 화면 <span className="ai-badge">AI 초안</span> · 이력 <span className="ai-badge">AI 초안으로 작성 · 대화 {testDone.turns}회</span></dd></>}
               {testDone.ai && <><dt>고친 칸</dt><dd>{testDone.edited.length ? testDone.edited.join(', ') : '없음'} <small className="muted">(사용 현황 '사람이 자주 고친 칸'에 들어감 · 시험은 빼고 셈)</small></dd></>}
@@ -412,14 +412,8 @@ export default function NewChange({ nf, setNf, onDone, test }) {
         <button type="button" className="pill" onClick={() => set({ items: [...nf.items, { type: nf.items.length ? nf.items[nf.items.length - 1].type : '단품', name: '' }] })}>+ 품목 추가</button>
         {namedN >= 2 && (
           <div className="nf-mode">
-            <div className="nm-h">관리 방식</div>
-            <div className="nm-seg" role="radiogroup" aria-label="관리 방식">
-              <button type="button" role="radio" aria-checked={!byItem} className={!byItem ? 'on' : ''} onClick={() => set({ mode: 'one', err: '' })}><b>하나로 관리</b><small>할 일·대화 1세트</small></button>
-              <button type="button" role="radio" aria-checked={byItem} className={byItem ? 'on' : ''} onClick={() => set({ mode: 'items', err: '' })}><b>품목별로 관리</b><small>품목마다 할 일·대화·상태 따로</small></button>
-            </div>
-            {byItem
-              ? <p className="nm-note">아래 할 일 <b>{pickedN}건</b>이 품목 <b>{namedN}개</b>에 똑같이 배정됩니다 → 모두 <b>{pickedN * namedN}건</b>. 품목마다 전환일이 다르면 품목 옆 날짜를 바꾸세요. 등록 후 품목 추가·빼기, 품목별 할 일 추가 배정도 됩니다.</p>
-              : <p className="nm-note">품목 {namedN}개를 변경 1건으로 묶어 할 일 {pickedN}건만 배정합니다.</p>}
+            <div className="nm-h">품목별로 관리 (묶음)</div>
+            <p className="nm-note">품목이 2개 이상이면 품목마다 할 일·대화·상태가 따로 관리됩니다. 아래 할 일 <b>{pickedN}건</b>이 품목 <b>{namedN}개</b>에 똑같이 배정됩니다 → 모두 <b>{pickedN * namedN}건</b>. 품목마다 전환일이 다르면 품목 옆 날짜를 바꾸세요. 등록 후 품목 추가·빼기, 품목별 할 일 추가 배정도 됩니다.</p>
           </div>
         )}
       </div>

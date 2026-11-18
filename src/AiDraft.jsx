@@ -47,7 +47,7 @@ const EXAMPLE = '풀무원 내수용 만두 3종(메밀김치지짐속, 탱글�
 export function mergeDraft(prev, next, locked, edits) {
   const d = { ...next, items: (next.items || []).map(i => ({ ...i })), questions: next.questions || [], refs: next.refs || [] }
   if (prev) FIELDS.forEach(f => { if (locked && locked[f]) d[f] = prev[f] })
-  if (d.mode === 'items' && d.items.length < 2) d.mode = 'one'
+  d.mode = d.items.length >= 2 ? 'items' : 'one'   // 품목 2개 이상이면 항상 품목별로 관리
   let tasks = (next.tasks || []).map(t => ({ ...t, on: true }))
   Object.entries(edits || {}).forEach(([k, e]) => {
     const i = tasks.findIndex(t => tkey(t) === k)
@@ -189,7 +189,7 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
   const lk = ai.locked || {}
   const cls = (f, base = '') => base + (ch.has(f) ? ' chg' : '') + (lk[f] ? ' mine' : '')
   const Lbl = ({ f, children }) => <label className="ai-l">{children}{lk[f] && <span className="ai-mine" title="직접 고친 칸은 AI가 다시 바꾸지 않습니다">직접 고침</span>}</label>
-  const byItem = d && d.mode === 'items' && d.items.length >= 2
+  const byItem = d && d.items.length >= 2
 
   const chat = (
     <div className="card ai-chat">
@@ -269,13 +269,7 @@ export default function AiDraft({ nf, upd, conf, test, onFill }) {
       )}
       <div className="ai-itf">
         <button type="button" className="link" onClick={addItem}>+ 품목 추가</button>
-        {d.items.length >= 2 && (
-          <div className="ai-seg2" role="radiogroup" aria-label="관리 방식 (미리보기)">
-            <button type="button" role="radio" aria-checked={!byItem} className={!byItem ? 'on' : ''} onClick={() => editField('mode', 'one')}>하나로 관리</button>
-            <button type="button" role="radio" aria-checked={byItem} className={byItem ? 'on' : ''} onClick={() => editField('mode', 'items')}>품목별로 관리</button>
-          </div>
-        )}
-        {lk.mode && <span className="ai-mine">직접 고침</span>}
+        {d.items.length >= 2 && <span className="ai-mine">품목 {d.items.length}개 · 품목별로 관리</span>}
       </div>
       <Lbl f="target_date">{byItem ? '공통 전환일' : '전환일'}</Lbl>
       <input type="date" className={cls('target_date', 'ai-f mono ai-date') + (d.target_date ? '' : ' empty')} value={d.target_date || ''} aria-label="전환일 (미리보기)" onChange={e => editField('target_date', e.target.value)} />

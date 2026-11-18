@@ -2183,3 +2183,14 @@ html[data-theme="light"] .dg-grid .dg2.done {border: 1.5px solid color-mix(in sr
 .ml-fail .e { color: #d4380d; overflow-wrap: anywhere }
 @media (max-width: 640px) { .ml-fail { grid-template-columns: 1fr 1fr } .ml-fail .e { grid-column: 1 / -1 } }
 .ml-card .btn.ghost { border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 8px; font-weight: 600 }
+/* v33: 기본 할 일을 배정 목록처럼 */
+.pe-chip.tp { font-weight: 700 }
+.pe-sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px }
+.pe-new { display: flex; gap: 6px; margin: 8px 0 4px }
+.pe-new select { flex: 0 0 auto; max-width: 110px; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text) }
+.pe-new input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text) }
+.pe-th { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px }
+.pe-th b { font-size: 15px } .pe-th small { color: var(--muted); font-size: 12.5px }
+.pe-pen { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 4px; opacity: .55 }
+.ga-bk:hover .pe-pen, .pe-pen:focus { opacity: 1 }
+.pe-ed { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); color: var(--text) }

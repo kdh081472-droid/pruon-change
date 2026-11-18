@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { supabase, ORDER, SIGNUP_DEPTS } from './supabase.js'
 import { useApp, ICON, useWidth, WIDE } from './ctx.jsx'
 import { errText, md, stampFull, iso, add, parse, todayMid, hasAll } from './util.js'
@@ -38,7 +38,7 @@ export default function Admin({ onExit }) {
   const body = {
     users: <UsersTab users={users} err={uErr} act={act} />,
     dept: <DeptTab users={users} act={act} />,
-    tpl: <TplTab act={act} />,
+    tpl: <TplTab />,
     del: <DeleteTab act={act} openReport={setReportCid} />,
     help: <HelpTab />,
     ai: <AiAdmin />,
@@ -333,72 +333,12 @@ function DeptTab({ users, act }) {
   )
 }
 
-/* ---------- 기본 할 일 ---------- */
-function TplTab({ act }) {
-  const { db } = useApp()
-  const [sub, setSub] = useState('tpl')
-  const total = db.templates.filter(t => ORDER.includes(t.department)).length
+/* ---------- 기본 할 일 · 배정 목록 (한 화면: 위쪽에서 '기본 할 일' 또는 배정 목록을 고름) ---------- */
+function TplTab() {
   return (
     <>
-      <Head title="기본 할 일 · 배정 목록" sub="변경을 등록할 때 쓰는 할 일 묶음">
-        <div className="seg sm">
-          <button type="button" className={sub === 'tpl' ? 'on' : ''} onClick={() => setSub('tpl')}>기본 할 일 {total}</button>
-          <button type="button" className={sub === 'preset' ? 'on' : ''} onClick={() => setSub('preset')}>배정 목록 {db.presets.length}</button>
-        </div>
-      </Head>
-      {sub === 'tpl' ? <TplList act={act} /> : <PresetEdit />}
-    </>
-  )
-}
-
-function TplList({ act }) {
-  const { db } = useApp()
-  const [add, setAdd] = useState({})       // 부서별 추가 입력 { 부서: 글 }
-  const [edit, setEdit] = useState({})
-  const { busy, err, go } = useBusyAct(act)
-  const total = db.templates.filter(t => ORDER.includes(t.department)).length
-  const addOne = async d => {
-    const v = (add[d] || '').trim()
-    if (!v) return
-    const r = await go('admin_tpl_save', { p_id: null, p_dept: d, p_title: v }, `${d}에 기본 할 일을 추가했습니다`)
-    if (!r.error) setAdd(x => ({ ...x, [d]: '' }))
-  }
-  return (
-    <>
-      {err && <p className="err">{err}</p>}
-      <div className="tpl-grid">
-        {ORDER.map(d => {
-          const rows = db.templates.filter(t => t.department === d)
-          return (
-            <section className="card tpl-d" key={d}>
-              <h3><span className="dchip">{d}</span><small>{rows.length}건</small></h3>
-              <div className="tpl-l">
-                {rows.map((t, i) => {
-                  const v = edit[t.id] !== undefined ? edit[t.id] : t.title
-                  const changed = v.trim() !== t.title
-                  const save = async () => { const r = await go('admin_tpl_save', { p_id: t.id, p_dept: d, p_title: v.trim() }, '기본 할 일을 고쳤습니다'); if (!r.error) setEdit(x => { const y = { ...x }; delete y[t.id]; return y }) }
-                  return (
-                    <div className={'tpl-r' + (changed ? ' ch' : '')} key={t.id}>
-                      <span className="tpl-no">{i + 1}</span>
-                      <textarea rows={1} value={v} aria-label={d + ' 할 일 내용'} onChange={e => setEdit({ ...edit, [t.id]: e.target.value })}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (changed && v.trim()) save() } if (e.key === 'Escape') setEdit(x => { const y = { ...x }; delete y[t.id]; return y }) }} />
-                      {changed
-                        ? <button type="button" className="btn sm" disabled={busy || !v.trim()} onClick={save}>저장</button>
-                        : <button type="button" className="tpl-x" disabled={busy} title="삭제" aria-label={t.title + ' 삭제'} onClick={() => go('admin_tpl_delete', { p_id: t.id }, '기본 할 일을 삭제했습니다')}>✕</button>}
-                    </div>
-                  )
-                })}
-                {!rows.length && <p className="muted tpl-empty">아직 없습니다.</p>}
-              </div>
-              <form className="tpl-add" onSubmit={e => { e.preventDefault(); addOne(d) }}>
-                <input value={add[d] || ''} onChange={e => setAdd({ ...add, [d]: e.target.value })} placeholder={`+ ${d} 할 일 추가 (Enter)`} aria-label={d + ' 할 일 추가'} />
-                {(add[d] || '').trim() && <button type="submit" className="btn sm" disabled={busy}>추가</button>}
-              </form>
-            </section>
-          )
-        })}
-      </div>
-      <p className="note">글을 고치면 '저장' 버튼이 나옵니다(Enter로도 저장, Esc는 취소). 마감일은 없습니다. 고친 내용은 앞으로 등록하는 변경부터 적용되고, 진행 중인 변경은 바뀌지 않습니다. 포장지가 아닌 변경(원료 등)은 변경 등록 화면에서 할 일을 고른 뒤 배정 목록으로 저장해 쓰세요.</p>
+      <Head title="기본 할 일 · 배정 목록" sub="변경을 등록할 때 쓰는 할 일 묶음 · 왼쪽 부서별 할 일에서 골라 오른쪽에 담기" />
+      <PresetEdit />
     </>
   )
 }
@@ -406,11 +346,19 @@ function TplList({ act }) {
 /* ---------- 배정 목록 만들기·고치기 (왼쪽 부서별 할 일에서 골라 담기) ---------- */
 const nrm2 = x => (x || '').replace(/\s+/g, ' ').trim()
 const k2 = (d, t) => d + '|' + nrm2(t)
+// 지금 기본 할 일 (부서 순서 → 부서 안 순서)
+const tplRowsOf = db => db.templates.filter(t => ORDER.includes(t.department) && t.active !== false)
+  .map((t, i) => ({ t, i })).sort((a, b) => ORDER.indexOf(a.t.department) - ORDER.indexOf(b.t.department) || (a.t.sort_order ?? 0) - (b.t.sort_order ?? 0) || a.i - b.i).map(x => x.t)
+const tplItemsOf = db => tplRowsOf(db).map(t => ({ d: t.department, t: nrm2(t.title), id: t.id }))
+
 function PresetEdit() {
   const { db, uid, reload, toast } = useApp()
-  const [sel, setSel] = useState('new')
+  const [sel, setSel] = useState('tpl')         // 'tpl' 기본 할 일 · 'new' 새 목록 · 배정 목록 id
   const [name, setName] = useState('')
-  const [items, setItems] = useState([])      // [{ d, t }]
+  const [items, setItems] = useState(() => tplItemsOf(db))      // [{ d, t, id? }] id = 기본 할 일 id (이름 고쳐도 이어짐)
+  const [ed, setEd] = useState(null)            // 담은 칸에서 이름 고치는 중 { i, v }
+  const [nw, setNw] = useState({ d: ORDER[0] || '', t: '' })   // 새 할 일 직접 쓰기
+  const tplPending = useRef(false)
   const [q, setQ] = useState('')
   const [showAuto, setShowAuto] = useState(false)
   const [over, setOver] = useState(false)
@@ -422,12 +370,19 @@ function PresetEdit() {
   const saved = db.presets.filter(p => !p.source_change_id)
   const when = p => p.closed_at || p.updated_at || p.created_at || ''
   const auto = db.presets.filter(p => p.source_change_id).sort((x, y) => String(when(y)).localeCompare(String(when(x))))
-  const P = sel === 'new' ? null : db.presets.find(p => p.id === sel)
+  const isT = sel === 'tpl'
+  const P = sel === 'new' || isT ? null : db.presets.find(p => p.id === sel)
+  const tplRows = tplRowsOf(db)
   const load = p => {
-    setSel(p ? p.id : 'new'); setName(p ? p.name : ''); setErr(''); setAskDel(false)
+    setErr(''); setAskDel(false); setEd(null)
+    if (p === 'tpl') { setSel('tpl'); setName(''); setItems(tplItemsOf(db)); return }
+    setSel(p ? p.id : 'new'); setName(p ? p.name : '')
     setItems(p ? (p.items || []).filter(x => x && x.department && x.title).map(x => ({ d: x.department, t: nrm2(x.title) })) : [])
   }
-  useEffect(() => { if (sel !== 'new' && !db.presets.some(p => p.id === sel)) load(null) }, [db.presets])   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (sel !== 'new' && sel !== 'tpl' && !db.presets.some(p => p.id === sel)) load(null) }, [db.presets])   // eslint-disable-line react-hooks/exhaustive-deps
+  // 기본 할 일 저장 뒤: 새로 받은 기본 할 일(새 id 포함)로 다시 채움
+  const tplSig = JSON.stringify(tplRows.map(t => [t.id, t.department, t.title]))
+  useEffect(() => { if (tplPending.current && sel === 'tpl') { tplPending.current = false; setItems(tplItemsOf(db)) } }, [tplSig])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 왼쪽: 부서별 할 일 = 기본 할 일 + 지금까지 실제로 배정된 할 일 (많이 쓴 순)
   const pool = {}
@@ -445,6 +400,17 @@ function PresetEdit() {
   const tplId = x => { const t = db.templates.find(y => y.department === x.d && nrm2(y.title) === x.t); return t ? t.id : null }
 
   const save = async () => {
+    if (isT) {
+      if (!items.length) return setErr('기본 할 일을 하나 이상 담아주세요.')
+      setBusy(true); setErr('')
+      const { data, error } = await supabase.rpc('admin_tpl_set', { p_items: ordered.map(x => ({ id: x.id || null, department: x.d, title: x.t })) })
+      setBusy(false)
+      if (error) return setErr(errText(error) + (/admin_tpl_set|function/i.test(error.message || '') ? ' (upgrade21.sql을 실행했는지 확인해주세요)' : ''))
+      tplPending.current = true
+      await reload()
+      toast(`기본 할 일 ${data ?? ordered.length}건을 저장했습니다 · 앞으로 등록하는 변경부터 적용됩니다`)
+      return
+    }
     const nm = name.trim()
     if (!nm) return setErr('목록 이름을 입력해주세요.')
     if (db.presets.some(p => p.name === nm && p.id !== sel)) return setErr('같은 이름의 목록이 이미 있습니다.')
@@ -469,7 +435,25 @@ function PresetEdit() {
     if (res.error || !res.data || !res.data.length) return setErr(res.error ? errText(res.error) : '삭제할 권한이 없습니다.')
     await reload(); load(null); toast('배정 목록을 삭제했습니다')
   }
-  const dirty = P ? (name.trim() !== P.name || JSON.stringify(ordered.map(x => k2(x.d, x.t))) !== JSON.stringify((P.items || []).map(x => k2(x.department, x.title)))) : (name.trim() || items.length)
+  const dirty = isT ? JSON.stringify(ordered.map(x => k2(x.d, x.t))) !== JSON.stringify(tplRows.map(t => k2(t.department, t.title)))
+    : P ? (name.trim() !== P.name || JSON.stringify(ordered.map(x => k2(x.d, x.t))) !== JSON.stringify((P.items || []).map(x => k2(x.department, x.title)))) : (name.trim() || items.length)
+
+  // 담은 칸에서 이름 고치기 (기본 할 일은 id가 이어져 '기본' 표시가 끊기지 않음)
+  const commitEd = () => {
+    if (!ed) return
+    const v = nrm2(ed.v), x = items[ed.i]
+    if (!x || !v || v === x.t) return setEd(null)
+    if (items.some((y, j) => j !== ed.i && k2(y.d, y.t) === k2(x.d, v))) return setErr(`${x.d}에 같은 할 일이 이미 있습니다.`)
+    setItems(items.map((y, j) => (j === ed.i ? { ...y, t: v } : y))); setEd(null); setErr('')
+  }
+  // 왼쪽에 없는 새 할 일 직접 쓰기
+  const addNew = e => {
+    e.preventDefault()
+    const v = nrm2(nw.t)
+    if (!v || !nw.d) return
+    if (inBag.has(k2(nw.d, v))) return setErr(`${nw.d}에 같은 할 일이 이미 담겨 있습니다.`)
+    add([{ d: nw.d, t: v }]); setNw({ ...nw, t: '' })
+  }
 
   const onDropBag = e => {
     e.preventDefault(); setOver(false)
@@ -485,6 +469,8 @@ function PresetEdit() {
   return (
     <div className="pe">
       <div className="pe-list">
+        <button type="button" className={'pe-chip tp' + (isT ? ' on' : '')} onClick={() => load('tpl')}>기본 할 일 · {tplRows.length}건</button>
+        <span className="pe-sep" aria-hidden />
         <button type="button" className={'pe-chip nw' + (sel === 'new' ? ' on' : '')} onClick={() => load(null)}>＋ 새 목록</button>
         {saved.map(p => <button type="button" key={p.id} className={'pe-chip' + (sel === p.id ? ' on' : '')} onClick={() => load(p)}>{p.name} · {(p.items || []).length}건</button>)}
         {auto.length > 0 && <button type="button" className="pe-chip mu" onClick={() => setShowAuto(!showAuto)}>종결 자동 추가 {auto.length}개 {showAuto ? '▾' : '▸'}</button>}
@@ -493,14 +479,19 @@ function PresetEdit() {
       <div className="pe-two">
         <section className="card pe-l">
           <input className="ga-q" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="할 일 찾기" aria-label="할 일 찾기" />
-          <p className="pe-cap">부서별 할 일 · 기본 할 일 + 지금까지 배정된 할 일 (많이 쓴 순)</p>
+          <form className="pe-new" onSubmit={addNew}>
+            <select value={nw.d} onChange={e => setNw({ ...nw, d: e.target.value })} aria-label="새 할 일 부서">{ORDER.map(d => <option key={d} value={d}>{d}</option>)}</select>
+            <input value={nw.t} onChange={e => setNw({ ...nw, t: e.target.value })} placeholder="목록에 없는 새 할 일 직접 쓰기" aria-label="새 할 일" maxLength={100} />
+            <button type="submit" className="btn sm" disabled={!nrm2(nw.t)}>담기</button>
+          </form>
+          <p className="pe-cap">부서별 할 일 · 기본 할 일 + 지금까지 배정된 할 일 (많이 쓴 순){isT ? ' · 기본 = 지금 저장된 기본 할 일' : ''}</p>
           <div className="pe-pool">
             {ORDER.map(d => {
               const list = [...pool[d].values()].filter(x => hasAll(d + ' ' + x.t, q)).sort((x, y) => y.n - x.n || (y.tpl ? 1 : 0) - (x.tpl ? 1 : 0) || x.t.localeCompare(y.t, 'ko'))
               if (!list.length) return null
               return (
                 <div key={d}>
-                  <div className="ga-sub"><span className="dchip">{d}</span><button type="button" className="ga-all sm" onClick={() => add(list.filter(x => x.tpl).length ? list.filter(x => x.tpl) : list)} title="이 부서의 기본 할 일을 모두 담기">기본 전부 담기</button></div>
+                  <div className="ga-sub"><span className="dchip">{d}</span><button type="button" className="ga-all sm" onClick={() => add(isT || !list.filter(x => x.tpl).length ? list : list.filter(x => x.tpl))} title="이 부서의 기본 할 일을 모두 담기">기본 전부 담기</button></div>
                   {list.map(x => {
                     const on = inBag.has(k2(x.d, x.t))
                     return (
@@ -517,8 +508,12 @@ function PresetEdit() {
           </div>
         </section>
         <section className="card pe-r form">
-          <label htmlFor="pe-name">목록 이름{P && P.source_change_id && <small> · 종결된 변경에서 자동 추가된 목록</small>}</label>
-          <input id="pe-name" className="pe-name" value={name} onChange={e => { setName(e.target.value); setErr('') }} placeholder="예: 원료 변경용" maxLength={60} />
+          {isT ? (
+            <div className="pe-th"><b>기본 할 일</b><small>변경 등록 때 미리 체크되어 나오는 부서별 할 일 · {items.length}건</small></div>
+          ) : (<>
+            <label htmlFor="pe-name">목록 이름{P && P.source_change_id && <small> · 종결된 변경에서 자동 추가된 목록</small>}</label>
+            <input id="pe-name" className="pe-name" value={name} onChange={e => { setName(e.target.value); setErr('') }} placeholder="예: 원료 변경용" maxLength={60} />
+          </>)}
           <div className={'ga-bag pe-bag' + (over ? ' over' : '')} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDropBag}>
             {ORDER.map(d => {
               const rows = ordered.filter(x => x.d === d)
@@ -532,8 +527,13 @@ function PresetEdit() {
                       onDragEnd={() => setDrag(null)}
                       onDragOver={e => { if (drag != null && items[drag] && items[drag].d === d) { e.preventDefault(); e.stopPropagation() } }}
                       onDrop={e => { if (drag != null) { e.preventDefault(); e.stopPropagation(); moveTo(drag, x.i); setDrag(null) } }}>
-                      <span className="ga-h" title="끌어서 순서 바꾸기">⋮⋮</span><span className="ga-n">{x.t}</span>
-                      <button type="button" className="ga-del" aria-label="빼기" onClick={() => setItems(items.filter((_, j) => j !== x.i))}>✕</button>
+                      <span className="ga-h" title="끌어서 순서 바꾸기">⋮⋮</span>
+                      {ed && ed.i === x.i ? (
+                        <input className="pe-ed" autoFocus value={ed.v} maxLength={100} aria-label="할 일 이름 고치기" onChange={e => setEd({ ...ed, v: e.target.value })}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEd() } if (e.key === 'Escape') { e.stopPropagation(); setEd(null) } }} onBlur={commitEd} />
+                      ) : <span className="ga-n" onDoubleClick={() => setEd({ i: x.i, v: x.t })}>{x.t}</span>}
+                      {!(ed && ed.i === x.i) && <button type="button" className="pe-pen" aria-label="이름 고치기" title="이름 고치기" onClick={() => setEd({ i: x.i, v: x.t })}>✎</button>}
+                      <button type="button" className="ga-del" aria-label="빼기" onClick={() => { setItems(items.filter((_, j) => j !== x.i)); setEd(null) }}>✕</button>
                     </div>
                   ))}
                 </div>
@@ -550,11 +550,13 @@ function PresetEdit() {
             </div>
           ) : (
             <div className="s-acts">
-              <button type="button" className="btn" disabled={busy || !dirty} onClick={save}>{busy ? '저장 중…' : `${name.trim() ? '「' + (name.trim().length > 18 ? name.trim().slice(0, 18) + '…' : name.trim()) + '」 ' : ''}${P ? '저장' : '새 목록 저장'} · ${items.length}건`}</button>
+              <button type="button" className="btn" disabled={busy || !dirty} onClick={save}>{busy ? '저장 중…' : isT ? '기본 할 일 저장' : `${name.trim() ? '「' + (name.trim().length > 18 ? name.trim().slice(0, 18) + '…' : name.trim()) + '」 ' : ''}${P ? '저장' : '목록 만들기'}`}</button>
               {P && <button type="button" className="btn ghost warn-t" onClick={() => setAskDel(true)}>이 목록 삭제</button>}
             </div>
           )}
-          <p className="note">이름 고치기·할 일 빼고 넣기·순서 바꾸기 모두 여기서 합니다. 저장하면 업무 모드 변경 등록·묶음 할 일 배정의 '배정 목록'에 바로 보입니다.</p>
+          {isT
+            ? <p className="note">담기·빼기·순서 바꾸기(⋮⋮ 끌기)·이름 고치기(✎) 뒤 [기본 할 일 저장]을 눌러야 반영됩니다. 앞으로 등록하는 변경부터 적용되고, 이미 등록된 변경의 할 일은 그대로입니다. 마감일은 없습니다.</p>
+            : <p className="note">이름 고치기·할 일 빼고 넣기·순서 바꾸기 모두 여기서 합니다. 저장하면 업무 모드 변경 등록·묶음 할 일 배정의 '배정 목록'에 바로 보입니다.</p>}
         </section>
       </div>
     </div>
