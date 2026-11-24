@@ -25,7 +25,7 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
   const isN = String(cid).startsWith('n:')
   const np = isN ? db.npMap[cid.slice(2)] : null
   const g = isG ? db.groupMap[cid.slice(2)] : null
-  const c = isG ? null : isN ? (np && { id: np.id, title: np.name, status: '진행중', group: null, tasks: [...np.steps, ...np.checks].map(t => ({ ...t, department: '개발팀' })) }) : C(cid)
+  const c = isG ? null : isN ? (np && { id: np.id, title: np.name, status: '진행중', group: null, tasks: [...np.steps, ...np.checks].map(t => ({ ...t, department: '개발' })) }) : C(cid)
   const gOf = c ? c.group : g
   const closed = isG ? !g.kids.some(k => k.status === '진행중') : c.status === '종결'
   const title = isG ? g.title : c.title

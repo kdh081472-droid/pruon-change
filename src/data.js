@@ -77,7 +77,7 @@ export function buildDb(raw) {
 }
 
 // ---------- 신제품 (upgrade22 이후 · 없으면 빈 목록) ----------
-export const NP_DEPT = '개발팀'
+export const NP_DEPT = '개발'   // 신제품 등록·수정·처리 권한 부서 (앱의 부서 이름)
 function buildNp(raw, reads) {
   const tasksBy = {}
   ;(raw.npTasks || []).forEach(t => { (tasksBy[t.product_id] = tasksBy[t.product_id] || []).push(t) })
