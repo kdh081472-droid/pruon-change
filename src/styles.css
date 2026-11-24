@@ -2194,3 +2194,150 @@ html[data-theme="light"] .dg-grid .dg2.done {border: 1.5px solid color-mix(in sr
 .pe-pen { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 4px; opacity: .55 }
 .ga-bk:hover .pe-pen, .pe-pen:focus { opacity: 1 }
 .pe-ed { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); color: var(--text) }
+
+/* ===== v34: 신제품 모드 ===== */
+:root { --np: #0f7b6c; --np-soft: #e6f4f1; --np-ink: #0b5c51; --np-warn: #b26a00; --np-t1: #2f5fd0; --np-t1s: #e9f0fd; --np-t2: #b45a14; --np-t2s: #fdf0e6; --np-pl: #6a3fd6; --np-pls: #efe9fb }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --np: #3fbfa8; --np-soft: #143630; --np-ink: #7fe0cf; --np-warn: #f0b860; --np-t1: #8fb0ff; --np-t1s: #1f2b4d; --np-t2: #f3b07a; --np-t2s: #3a2616; --np-pl: #b9a0ff; --np-pls: #2a2145 } }
+:root[data-theme="dark"] { --np: #3fbfa8; --np-soft: #143630; --np-ink: #7fe0cf; --np-warn: #f0b860; --np-t1: #8fb0ff; --np-t1s: #1f2b4d; --np-t2: #f3b07a; --np-t2s: #3a2616; --np-pl: #b9a0ff; --np-pls: #2a2145 }
+.np-mode { --accent: var(--np); --accent-soft: var(--np-soft) }
+.sn.sn-np { color: var(--np) } .sn.sn-np svg { color: var(--np) }
+.np-modebar { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 9px; background: var(--np); color: #fff; font-weight: 800; font-size: 13.5px; margin: 2px 0 10px }
+.np-modebar small { margin-left: auto; font-weight: 500; font-size: 11.5px; opacity: .9 }
+.np-me { display: flex; align-items: center; gap: 6px; padding: 2px 4px 6px; font-size: 14px }
+.np-side .sn.on { background: var(--np-soft); color: var(--np-ink) }
+.np-back-w { padding: 10px 12px 14px }
+.np-back { width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--np); font: inherit; font-weight: 700; font-size: 13.5px; padding: 10px; border-radius: 9px; cursor: pointer }
+.np-back.sm { width: auto; padding: 6px 10px; font-size: 12.5px }
+.np-h1tag { font-size: 12px; font-weight: 700; color: var(--np); background: var(--np-soft); padding: 3px 8px; border-radius: 5px; vertical-align: middle; margin-left: 6px }
+.np-m { font-size: 11px; font-weight: 800; color: #fff; background: var(--np); padding: 2px 7px; border-radius: 5px; margin-right: 6px }
+.np-ro { font-size: 12.5px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 0 0 10px }
+.np-team { white-space: nowrap; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--bg); color: var(--muted) }
+.np-team.nt1 { background: var(--np-t1s); color: var(--np-t1) } .np-team.nt2 { background: var(--np-t2s); color: var(--np-t2) } .np-team.npl { background: var(--np-pls); color: var(--np-pl) }
+.np-prog { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap }
+.np-bar { width: 64px; height: 6px; border-radius: 9px; background: var(--rail); overflow: hidden } .np-bar i { display: block; height: 100%; background: var(--np) }
+.np-stt { font-size: 11.5px; font-weight: 800; padding: 2px 8px; border-radius: 5px; white-space: nowrap }
+.np-stt.go { background: var(--np-soft); color: var(--np) } .np-stt.pcs { background: var(--np-t1s); color: var(--np-t1) } .np-stt.dn { background: var(--bg); color: var(--muted) } .np-stt.stp { background: var(--late-soft); color: var(--late) }
+.np-stale { font-size: 11.5px; font-weight: 700; color: var(--np-warn); margin-left: 6px; white-space: nowrap }
+.np-viewbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px }
+.np-alert { padding: 11px 14px; border-radius: 9px; background: var(--late-soft); color: var(--late); font-weight: 700; margin: 0 0 10px; font-size: 14px; line-height: 1.5 }
+.np-card { cursor: pointer; padding: 0 0 2px; margin: 0 0 12px }
+.np-card:hover { border-color: var(--np) }
+.np-ch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 16px 8px }
+.np-ch .t { font-size: 15.5px; color: var(--ink) }
+.np-who { font-size: 12.5px; color: var(--muted) }
+.np-meta { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.np-next { margin: 0 12px 8px; padding: 10px 12px; border-radius: 9px; background: var(--np-soft); display: flex; align-items: center; gap: 10px; cursor: default }
+.np-next .k { font-size: 11.5px; font-weight: 800; color: var(--np) } .np-next .np-no { font-size: 12px; color: var(--np); font-weight: 700; font-family: ui-monospace, monospace }
+.np-next .s { font-weight: 700; color: var(--ink); font-size: 15px; min-width: 0 }
+.btn.np-btn, .np-sheet .btn.np-btn { background: var(--np); color: #fff; margin-left: auto; white-space: nowrap }
+.np-pc .btn.np-btn.ghost, .btn.ghost.np-btn { background: var(--bg); color: var(--text) }
+.np-rest { padding: 0 16px 10px; display: flex; flex-wrap: wrap; gap: 6px }
+.np-rest span { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 3px 9px }
+.np-rest span.dn { color: var(--faint); text-decoration: line-through }
+.np-pc { margin: 0 12px 12px; border-top: 1px dashed var(--line); padding-top: 9px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; cursor: default }
+.np-pc .lb { font-size: 12px; font-weight: 700; color: var(--muted); margin-right: 2px }
+.np-pc-new { border-top: 0; margin: 0 0 12px; padding: 0 }
+.np-pill { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); white-space: nowrap }
+.np-pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, transparent); background: var(--ok-soft) }
+.np-pill.today { color: #fff; background: var(--late); border-color: var(--late); font-weight: 700 }
+.np-pill.late { color: var(--late); border-color: color-mix(in srgb, var(--late) 35%, transparent); background: var(--late-soft); font-weight: 700 }
+.np-pill.tbd { border-style: dashed } .np-pill.na { color: var(--faint) }
+.np-pill.sch { color: var(--np-ink); border-color: color-mix(in srgb, var(--np) 30%, transparent); background: var(--np-soft) }
+.np-line { padding: 0 16px 8px; font-size: 13px; color: var(--muted) }
+/* 요약 */
+.np-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0 0 12px }
+.np-chip { font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); background: var(--surface); cursor: pointer }
+.np-chip.on { border-color: var(--np); color: var(--np); background: var(--np-soft) }
+.np-sp { flex: 1 }
+.np-q { font: inherit; font-size: 13px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); width: 220px; max-width: 100% }
+table.np-sum { width: 100%; border-collapse: collapse; font-size: 13.5px }
+table.np-sum th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line) }
+.np-th { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 2px 0 }
+table.np-sum td { padding: 11px 8px; border-bottom: 1px solid var(--line); vertical-align: middle }
+table.np-sum tbody tr { cursor: pointer } table.np-sum tbody tr:hover { background: var(--bg) }
+table.np-sum td.t { font-weight: 700; color: var(--ink) } table.np-sum .nw { white-space: nowrap; min-width: 92px }
+table.np-sum tr.fin td { color: var(--muted) } table.np-sum tr.fin td.t { color: var(--muted) }
+.np-pcs { display: flex; gap: 4px; flex-wrap: wrap }
+/* 달력 */
+.np-calh { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 8px }
+.np-calh b { font-size: 20px; color: var(--ink) }
+.np-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 0 0 10px }
+.np-legend span { display: inline-flex; align-items: center; gap: 5px }
+.np-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; border: 1px solid }
+.np-legend i.chk { background: var(--np-t1s); border-color: var(--np-t1) } .np-legend i.late { background: var(--late-soft); border-color: var(--late) } .np-legend i.sm { background: var(--np-soft); border-color: var(--np) } .np-legend i.dn { background: var(--bg); border-color: var(--line) }
+.np-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface) }
+.np-cal .dw { font-size: 12px; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--bg) }
+.np-cal .c { min-height: 112px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); padding: 5px 6px; display: flex; flex-direction: column; gap: 3px; min-width: 0 }
+.np-cal .c:nth-child(7n+1) { border-left: 0 } .np-cal .c:nth-child(-n+14) { border-top: 0 }
+.np-cal .c .d { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; align-self: flex-start }
+.np-cal .c.o .d { color: var(--faint) } .np-cal .c.td { background: color-mix(in srgb, var(--np-soft) 60%, transparent) } .np-cal .c.td .d { color: #fff; background: var(--np); border-radius: 99px; padding: 0 6px }
+.np-ev { font: inherit; text-align: left; border: 0; display: block; width: 100%; padding: 2px 6px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer }
+.np-ev.sm { background: var(--np-soft); color: var(--np-ink) } .np-ev.dn { background: var(--bg); color: var(--muted) }
+.np-ev.chk { background: var(--np-t1s); color: var(--np-t1); font-weight: 600 } .np-ev.chk.ok, .np-ev.chk.na { background: var(--bg); color: var(--muted); text-decoration: line-through; font-weight: 400 }
+.np-ev.chk.late { background: var(--late-soft); color: var(--late) } .np-ev.chk.today { background: var(--late); color: #fff }
+.np-agenda { padding: 10px 12px; margin: 0 0 8px; display: flex; flex-direction: column; gap: 5px } .np-agenda.td { border-color: var(--np) }
+.np-ad { font-size: 12.5px; color: var(--muted); font-weight: 700 } .np-ad b { color: var(--np) }
+.np-agenda .np-ev { font-size: 13.5px; padding: 6px 9px; white-space: normal }
+/* 등록 */
+.np-new { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; align-items: start }
+.np-form { display: flex; flex-direction: column; gap: 4px }
+.np-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px } .np-g2 > div { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.req { color: var(--late); font-size: 11.5px; margin-left: 3px; font-weight: 600 }
+.np-fl { font-size: 12.5px; font-weight: 700; color: var(--muted); margin: 4px 0 6px } .np-fl span { font-weight: 500 }
+.np-tl { border: 1px solid var(--line); border-radius: 10px; padding: 4px 0; margin-bottom: 14px; background: var(--surface) }
+.np-tr { display: flex; align-items: center; gap: 9px; padding: 6px 12px; font-size: 14px }
+.np-tr .h { color: var(--faint); cursor: grab; letter-spacing: -2px } .np-tr .np-no { font-family: ui-monospace, monospace; font-size: 12px; color: var(--faint); width: 18px; text-align: right }
+.np-tr input[type=checkbox] { accent-color: var(--np); width: 16px; height: 16px; margin: 0 }
+.np-tr .tt { flex: 1; min-width: 0 } .np-tr.off .tt { color: var(--faint); text-decoration: line-through }
+.np-tr .mv { display: inline-flex; gap: 2px; margin-left: auto } .np-tr .mv button { border: 0; background: none; color: var(--faint); cursor: pointer; font-size: 13px; padding: 3px 5px; border-radius: 5px } .np-tr .mv button:hover:not(:disabled) { background: var(--bg); color: var(--text) } .np-tr .mv button:disabled { opacity: .3 }
+.np-tr > input:not([type]) { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--text) }
+.np-add { padding: 4px 12px 6px } .np-add input { width: 100%; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; color: var(--text) }
+.btn.np-go { width: 100%; background: var(--np); padding: 13px; font-size: 15px }
+/* 상세 */
+.np-dh { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin: 0 0 6px }
+.np-dht { flex: 1; min-width: 260px } .np-dt { font-size: 23px; margin: 0 0 6px; color: var(--ink) }
+.np-kv { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--muted) } .np-kv b { color: var(--ink); font-weight: 600; margin-left: 6px }
+.np-memo { font-size: 13.5px; color: var(--text); background: var(--bg); border-radius: 8px; padding: 8px 11px; margin: 8px 0 0; white-space: pre-wrap }
+.np-stopped { color: var(--late); font-weight: 700; font-size: 13.5px; margin: 8px 0 0 }
+.np-dha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.np-more-w { position: relative } .np-more { position: absolute; right: 0; top: 110%; z-index: 20; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-width: 120px; padding: 4px }
+.np-more button { border: 0; background: none; font: inherit; font-size: 13.5px; text-align: left; padding: 8px 10px; border-radius: 6px; cursor: pointer; color: var(--text) } .np-more button:hover { background: var(--bg) } .np-more button.warn { color: var(--late) }
+.np-sec { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: var(--muted); margin: 20px 0 8px; border: 0; background: none; font-family: inherit; padding: 0 }
+.np-sec span { font-weight: 500 } .np-sec-r { margin-left: auto } .np-logt { cursor: pointer }
+.np-steps { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface) }
+.np-st { display: grid; grid-template-columns: 30px minmax(0, 1fr) 150px 110px 86px; align-items: center; gap: 4px 8px; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 14px }
+.np-st:first-child { border-top: 0 } .np-st .np-no { font-family: ui-monospace, monospace; color: var(--faint); font-size: 12px }
+.np-st.dn .nm { color: var(--muted) } .np-st.cur { background: var(--np-soft) } .np-st.cur .nm { font-weight: 800; color: var(--ink) }
+.np-st .by, .np-st .as { font-size: 12.5px; color: var(--muted) } .np-st .ac { text-align: right }
+.np-st .np-mm { grid-column: 2 / -1; font-size: 12.5px; color: var(--muted); line-height: 1.4 }
+.np-undo { border: 0; background: none; font: inherit; font-size: 12px; color: var(--faint); cursor: pointer; padding: 2px 0 } .np-undo:hover { color: var(--late) }
+html .np-mode .btn:not(.ghost):not(.warn), html .np-sheet .btn:not(.ghost):not(.warn) { background: var(--np) !important; color: #fff }
+.np-mode .link { color: var(--np) }
+.np-nexttag { font-size: 10.5px; font-weight: 800; background: var(--np); color: #fff; border-radius: 4px; padding: 1px 6px; margin-left: 6px }
+.np-na { font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 4px; padding: 1px 6px; margin-left: 6px }
+.np-chk { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+.np-cb { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 5px }
+.np-cb .h { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--ink) } .np-cb .d { font-size: 13px; color: var(--muted); font-family: ui-monospace, monospace }
+.np-cb .sub { font-size: 12.5px; color: var(--muted) } .np-cb .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; justify-content: flex-start; align-items: center } .np-cb .acts .btn.np-btn { margin-left: 0 }
+.np-cb.today, .np-cb.late { border-color: var(--late); box-shadow: 0 0 0 2px var(--late-soft) }
+.np-tag { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 5px; background: var(--bg); color: var(--muted) }
+.np-tag.ok { background: var(--ok-soft); color: var(--ok) } .np-tag.today { background: var(--late); color: #fff } .np-tag.late { background: var(--late-soft); color: var(--late) } .np-tag.sch { background: var(--np-soft); color: var(--np) }
+.np-logs { border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px; font-size: 12.5px; background: var(--surface) }
+.np-log { display: grid; grid-template-columns: 90px 70px 1fr; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line) } .np-log:first-child { border-top: 0 } .np-log span:first-child { color: var(--muted); font-family: ui-monospace, monospace }
+/* 대화 목록 · 처리 창 · 관리자 */
+.np-room { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; width: 100%; text-align: left; padding: 12px 14px; margin: 0 0 8px; font: inherit; cursor: pointer }
+.np-room small { flex: 0 0 100%; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.np-sf { display: flex; flex-direction: column; gap: 6px } .np-sf .s-acts { margin-top: 8px }
+.np-ck { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text) !important; margin: 4px 0 } .np-ck input { width: 18px; height: 18px; accent-color: var(--np); margin: 0 } .np-ck small { color: var(--muted); font-weight: 400 }
+.np-adm-seg { display: inline-flex; margin: 0 0 12px }
+.np-tpl .np-tr { padding: 5px 0 } .np-tpl .np-add { padding: 6px 0 } .np-tpl-acts { display: flex; gap: 8px; align-items: center; margin-top: 10px } .np-dirty { color: var(--np-warn); font-size: 12.5px }
+table.np-mem td, table.np-mem th { padding: 9px 10px }
+@media (max-width: 1099px) {
+  .np-new { grid-template-columns: 1fr; gap: 16px }
+  .np-st { grid-template-columns: 26px minmax(0, 1fr) auto; padding: 10px 12px }
+  .np-st .by { grid-column: 2; font-size: 12px } .np-st .as { grid-column: 2; font-size: 12px } .np-st .ac { grid-column: 3; grid-row: 1 / span 3 }
+  .np-chk { grid-template-columns: 1fr }
+  .np-next { flex-wrap: wrap } .np-meta { margin-left: 0; width: 100% }
+  .np-q { width: 100% }
+  .np-mode main { padding-bottom: 90px }
+}

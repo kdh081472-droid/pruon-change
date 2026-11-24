@@ -19,14 +19,18 @@ const dayTxt = ts => { const d = new Date(ts); return `${d.getFullYear()}년 ${d
 // docked = PC 오른쪽 칸 · tab = PC 대화 탭(넓게) · 그 외 = 휴대폰 전체 화면
 // popup = 대화 작은 창(따로 띄운 브라우저 창)
 export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo, onSearchClose }) {
-  const { db, me, uid, C, isLate, unreadCnt, mentionsMe, reload, toast, markReadLocal, openTask, goChange, goGroup } = useApp()
+  const { db, me, uid, C, isLate, unreadCnt, mentionsMe, reload, toast, markReadLocal, openTask, goChange, goGroup, openNpTask } = useApp()
   const isG = String(cid).startsWith('g:')
+  // 신제품 대화방 'n:'+신제품 id · 할 일 연결(/)은 신제품 할 일
+  const isN = String(cid).startsWith('n:')
+  const np = isN ? db.npMap[cid.slice(2)] : null
   const g = isG ? db.groupMap[cid.slice(2)] : null
-  const c = isG ? null : C(cid)
+  const c = isG ? null : isN ? (np && { id: np.id, title: np.name, status: '진행중', group: null, tasks: [...np.steps, ...np.checks].map(t => ({ ...t, department: '개발팀' })) }) : C(cid)
   const gOf = c ? c.group : g
   const closed = isG ? !g.kids.some(k => k.status === '진행중') : c.status === '종결'
   const title = isG ? g.title : c.title
-  const list = db.messages.filter(m => m.room === cid).sort((a, b) => a.id - b.id)
+  const MT = isN ? 'np_messages' : 'messages'
+  const list = (isN ? db.npMessages : db.messages).filter(m => m.room === cid).sort((a, b) => a.id - b.id)
   const [draft, setDraft] = useState('')
   const [tid, setTid] = useState(null)
   const [link, setLink] = useState(null)        // 묶음 대화에서 / 로 연결한 품목
@@ -48,7 +52,8 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
     if ((db.reads[uid + '|' + cid] || 0) >= lastId) return
     markReadLocal(cid, lastId)
     // .then()을 붙여야 실제로 서버에 보내짐 (안 붙이면 화면에서만 읽음 처리되고 다시 켜면 안 읽음으로 돌아감)
-    if (isG) supabase.rpc('mark_group_read', { p_group: g.id, p_last: lastId }).then(() => {}, () => {})
+    if (isN) supabase.rpc('np_mark_read', { p_np: np.id, p_last: lastId }).then(() => {}, () => {})
+    else if (isG) supabase.rpc('mark_group_read', { p_group: g.id, p_last: lastId }).then(() => {}, () => {})
     else supabase.rpc('mark_read', { p_change: cid, p_last: lastId }).then(() => {}, () => {})
   }, [lastId, cid, uid, db.reads, markReadLocal])
 
@@ -128,7 +133,7 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
         .sort((a, b) => ORDER.indexOf(a.department) - ORDER.indexOf(b.department) || String(a.created_at).localeCompare(String(b.created_at)))
         .map(t => ({
           kind: 'task', v: t.id,
-          node: <><span className="pd-d">{SHORT[t.department]}</span><span className="pd-t">{t.title}</span><span className={'pd-s' + (isLate(t) ? ' late' : '')}>{t.status === '대기' ? (isLate(t) ? '전환일 지남' : '대기') : t.status}</span></>,
+          node: <><span className="pd-d">{SHORT[t.department] || t.department}</span><span className="pd-t">{t.title}</span><span className={'pd-s' + (isLate(t) ? ' late' : '')}>{t.status === '대기' ? (isLate(t) ? '전환일 지남' : '대기') : t.status}</span></>,
         }))
     } else {
       items = [
@@ -182,10 +187,10 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
     if (busy) return
     setBusy(true)
     const mn = mentions(body)
-    const room = isG ? { group_id: g.id, link_change: link } : { change_id: cid, task_id: tid }
+    const room = isN ? { np_id: np.id, task_id: tid } : isG ? { group_id: g.id, link_change: link } : { change_id: cid, task_id: tid }
     const res = editId
-      ? await supabase.from('messages').update(isG ? { body, link_change: link, ...mn } : { body, task_id: tid, ...mn }).eq('id', editId).select('id')
-      : await supabase.from('messages').insert({ ...room, user_id: uid, body, reply_to: replyTo, ...mn }).select('id')
+      ? await supabase.from(MT).update(isG ? { body, link_change: link, ...mn } : { body, task_id: tid, ...mn }).eq('id', editId).select('id')
+      : await supabase.from(MT).insert({ ...room, user_id: uid, body, reply_to: replyTo, ...mn }).select('id')
     setBusy(false)
     if (res.error) return toast(errText(res.error))
     if (editId) toast('메시지를 수정했습니다')
@@ -195,7 +200,7 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
   }
 
   async function del(id) {
-    const res = await supabase.from('messages').update({ deleted: true }).eq('id', id).select('id')
+    const res = await supabase.from(MT).update({ deleted: true }).eq('id', id).select('id')
     setDelId(null)
     if (res.error) return toast(errText(res.error))
     toast('삭제했습니다 · "삭제된 메시지" 표시는 남습니다')
@@ -250,18 +255,18 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
       <div className={'chat' + (docked || tab ? ' docked' : '') + (tab ? ' ch-tab' : '') + (isG ? ' ch-grp' : '') + (popup ? ' ch-win' : '')} role={docked || tab ? 'complementary' : 'dialog'} aria-modal={docked || tab ? undefined : true} aria-label={isG ? '묶음 대화' : '제품 대화'}>
         <div className="ch-h">
           <div className="ch-hl">
-            <span className="s-tag">{isG ? '묶음 전체 대화' : gOf ? '품목 대화' : '제품 대화'} · {list.filter(m => !m.deleted).length}개</span>
+            <span className="s-tag">{isN ? '신제품 대화' : isG ? '묶음 전체 대화' : gOf ? '품목 대화' : '제품 대화'} · {list.filter(m => !m.deleted).length}개</span>
             <b>{isG && <span className="g-chip g-in">묶음</span>}{title}{closed && <span className="ch-fin">종결</span>}</b>{!isG && gOf && <small className="ch-g">묶음 · {gOf.title}</small>}
             {isG && <small className="ch-g">품목 {g.kids.length}개 · 모든 품목 공통 공지·일정</small>}
             {!closed && tip && <span className="ch-tip">메시지를 누르면 답글·복사 (내 글은 수정·삭제도) · 말풍선 옆 숫자는 그 글을 아직 안 읽은 사람 수{isG ? ' · / 를 누르면 품목 연결' : ''}</span>}
           </div>
           {tab && (
             <span className="ch-open">
-              {!isG && <button type="button" className="pill" onClick={() => goChange(cid)}>제품 열기</button>}
+              {!isG && !isN && <button type="button" className="pill" onClick={() => goChange(cid)}>제품 열기</button>}
               {gOf && <button type="button" className="pill g-open-b" onClick={() => goGroup(gOf.id)}>묶음 열기</button>}
             </span>
           )}
-          {docked && !tab && <button type="button" className="pill ch-nw" title="이 대화를 작은 창으로 따로 띄웁니다" onClick={() => { if (!openPopup(cid)) toast('팝업이 막혀 있습니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용해주세요.') }}>↗ 새 창</button>}
+          {docked && !tab && !isN && <button type="button" className="pill ch-nw" title="이 대화를 작은 창으로 따로 띄웁니다" onClick={() => { if (!openPopup(cid)) toast('팝업이 막혀 있습니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용해주세요.') }}>↗ 새 창</button>}
           {!closed && <button type="button" className={'ch-q' + (tip ? ' on' : '')} aria-label="대화 사용법" aria-expanded={tip} onClick={() => setTip(v => !v)}>?</button>}
           {!docked && !tab && <button type="button" className="s-x" onClick={onClose} aria-label="닫기">✕</button>}
         </div>
@@ -301,7 +306,7 @@ export default function Chat({ cid, onClose, docked, tab, popup, searchQ, jumpTo
                         <span className="rq-t">{o.deleted ? '삭제된 메시지입니다' : snip(o.body, 40)}</span>
                       </button>
                     )}
-                    {t && <button type="button" className="ch-task" onClick={() => { if (!docked && !tab) onClose(); openTask(t.id) }}><b>/</b> [{t.department}] {t.title}</button>}
+                    {t && <button type="button" className="ch-task" onClick={() => { if (!docked && !tab) onClose(); isN ? openNpTask && openNpTask(t.id) : openTask(t.id) }}><b>/</b> [{t.department}] {t.title}</button>}
                     {lk && <button type="button" className="ch-task ch-item" onClick={() => { if (!docked && !tab) onClose(); goChange(lk.id) }}><b>/</b> {lk.title}</button>}
                     <MsgText m={m} q={q} />
                   </div>

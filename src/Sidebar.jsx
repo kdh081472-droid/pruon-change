@@ -6,7 +6,7 @@ import { NewChatBlock } from './Mine.jsx'
 // PC 넓은 화면의 왼쪽: 계정 · 조직도 · 메뉴 (제품은 요약·달력·내 할 일에서 고름)
 export const PLAY = <svg className="play-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor" /><path d="M10 8l6 4-6 4z" fill="#fff" /></svg>
 
-export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, chatN, isAdmin, onAdmin, helpOpen, onHelp }) {
+export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, chatN, isAdmin, onAdmin, helpOpen, onHelp, npN }) {
   const { db, me, viewer } = useApp()
   const [orgOpen, setOrgOpen] = useState(false)
   // 메뉴: 내 할 일 / 전체 일정(달력·요약) / 변경 등록  — 휴대폰 '전체 일정' 탭과 같은 이름
@@ -35,6 +35,10 @@ export default function Sidebar({ tab, setTab, sel, onSelect, myOpenN, chatN, is
             {x[0] === 'chat' && chatN > 0 && <span className="n">{chatN > 999 ? '999+' : chatN}</span>}
           </button>
         ))}
+        <div className="sn-g">신제품</div>
+        <button type="button" className="sn sn-np" onClick={() => setTab('np')}>
+          {ICON.np}<span>신제품</span>{npN > 0 && <span className="n">{npN > 999 ? '999+' : npN}</span>}
+        </button>
       </nav>
       <div className="sd-help">
         <button type="button" className={'sn' + (helpOpen ? ' on' : '')} onClick={onHelp} aria-expanded={!!helpOpen}>{ICON.help}<span>사용법 물어보기</span></button>

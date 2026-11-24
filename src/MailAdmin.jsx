@@ -5,7 +5,7 @@ import { errText } from './util.js'
 
 // 관리자 모드 › 메일 알림: 켜기 · 변경 등록 메일 받는 부서 · 테스트 메일 · 발송 현황
 const FN = 'notify-mail'
-const KIND = { change: '변경 등록', group: '변경 등록(묶음)', mention: '부르기', test: '테스트' }
+const KIND = { change: '변경 등록', group: '변경 등록(묶음)', mention: '부르기', test: '테스트', np: '신제품 등록', np_mention: '신제품 대화 부르기' }
 const md = d => { const [, m, dd] = String(d).split('-'); return `${Number(m)}/${Number(dd)}` }
 
 function Sw({ on, onChange, label }) {
@@ -19,11 +19,12 @@ export default function MailAdmin() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
   const [test, setTest] = useState(null)   // { ok, msg }
+  const [npD, setNpD] = useState(null)      // 신제품 등록 메일 받는 부서 (upgrade22 이후)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_mail_get')
     if (error) return setErr(errText(error) + ' (upgrade20.sql을 실행했는지 확인해주세요)')
-    setErr(''); setCfg(data); setF({ enabled: !!data.enabled, off: data.off_depts || [] })
+    setErr(''); setCfg(data); setF({ enabled: !!data.enabled, off: data.off_depts || [] }); setNpD(data.np_depts || null)
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -43,6 +44,17 @@ export default function MailAdmin() {
     setBusy('')
     if (error) return setErr(errText(error))
     toast(f.enabled ? '메일 알림 설정을 저장했습니다 · 지금부터 메일이 나갑니다' : '메일 알림을 껐습니다')
+    load()
+  }
+
+  const npDirty = !!(cfg && npD && [...npD].sort().join('|') !== [...(cfg.np_depts || [])].sort().join('|'))
+  async function saveNp() {
+    if (busy) return
+    setBusy('np')
+    const { error } = await supabase.rpc('admin_mail_np', { p_depts: npD })
+    setBusy('')
+    if (error) return toast(errText(error))
+    toast('신제품 등록 메일 받는 부서를 저장했습니다')
     load()
   }
 
@@ -82,7 +94,7 @@ export default function MailAdmin() {
   const depts = db.depts.map(d => d.name)
   const offOld = f.off.filter(d => !depts.includes(d))
   const days = cfg.days || []
-  const tot = days.reduce((a, d) => ({ change: a.change + d.change, mention: a.mention + d.mention, fail: a.fail + d.fail }), { change: 0, mention: 0, fail: 0 })
+  const tot = days.reduce((a, d) => ({ change: a.change + d.change, np: a.np + (d.np || 0), mention: a.mention + d.mention, fail: a.fail + d.fail }), { change: 0, np: 0, mention: 0, fail: 0 })
 
   return (
     <>
@@ -120,6 +132,28 @@ export default function MailAdmin() {
         </div>
       </div>
 
+      {npD && (
+        <div className="card adm-card ml-card">
+          <h2>신제품 등록 메일 받는 부서</h2>
+          <p className="ml-sub">체크한 부서의 가입자 전원이 신제품 등록 메일을 받습니다(퇴사 처리된 사람·등록한 본인 제외). 신제품 대화에서 @이름·@부서로 불린 메일은 이 체크와 상관없이 갑니다.</p>
+          <div className="ml-depts">
+            {depts.map(d => {
+              const on = npD.includes(d)
+              return (
+                <label key={d} className={'ml-dept' + (on ? ' on' : '')}>
+                  <input type="checkbox" checked={on} onChange={() => setNpD(on ? npD.filter(x => x !== d) : [...npD, d])} />
+                  {d}
+                </label>
+              )
+            })}
+          </div>
+          <div className="ml-acts">
+            <button type="button" className="btn" disabled={!!busy || !npDirty} onClick={saveNp}>{busy === 'np' ? '저장하는 중…' : '저장'}</button>
+            {npDirty && <button type="button" className="btn ghost" onClick={() => setNpD(cfg.np_depts || [])}>되돌리기</button>}
+          </div>
+        </div>
+      )}
+
       <div className="card adm-card ml-card">
         <h2>테스트 메일</h2>
         <p className="ml-sub">내 메일({me.email})로 테스트 메일을 보냅니다. 켜기와 상관없이 보낼 수 있습니다.</p>
@@ -133,6 +167,7 @@ export default function MailAdmin() {
         <h2>발송 현황 <small>최근 14일</small></h2>
         <div className="ml-sum">
           <span>변경 등록 <b>{tot.change}</b>통</span>
+          {npD && <span>신제품 등록 <b>{tot.np}</b>통</span>}
           <span>부르기 <b>{tot.mention}</b>통</span>
           <span className={tot.fail ? 'bad' : ''}>실패 <b>{tot.fail}</b>통</span>
           <span>대기 <b>{cfg.waiting}</b>통</span>
@@ -141,10 +176,10 @@ export default function MailAdmin() {
         </div>
         {days.length === 0 ? <p className="ml-sub">아직 보낸 메일이 없습니다.</p> : (
           <table className="adm-t ml-t">
-            <thead><tr><th>날짜</th><th>변경 등록</th><th>부르기</th><th>테스트</th><th>실패</th></tr></thead>
+            <thead><tr><th>날짜</th><th>변경 등록</th>{npD && <th>신제품 등록</th>}<th>부르기</th><th>테스트</th><th>실패</th></tr></thead>
             <tbody>
               {days.map(d => (
-                <tr key={d.day}><td>{md(d.day)}</td><td>{d.change}</td><td>{d.mention}</td><td>{d.test}</td><td className={d.fail ? 'bad' : ''}>{d.fail}</td></tr>
+                <tr key={d.day}><td>{md(d.day)}</td><td>{d.change}</td>{npD && <td>{d.np || 0}</td>}<td>{d.mention}</td><td>{d.test}</td><td className={d.fail ? 'bad' : ''}>{d.fail}</td></tr>
               ))}
             </tbody>
           </table>

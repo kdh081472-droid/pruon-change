@@ -72,7 +72,37 @@ export function buildDb(raw) {
     templates: raw.templates,
     messages: raw.messages,
     reads,
+    ...buildNp(raw, reads),
   }
+}
+
+// ---------- 신제품 (upgrade22 이후 · 없으면 빈 목록) ----------
+export const NP_DEPT = '개발팀'
+function buildNp(raw, reads) {
+  const tasksBy = {}
+  ;(raw.npTasks || []).forEach(t => { (tasksBy[t.product_id] = tasksBy[t.product_id] || []).push(t) })
+  const logsBy = {}
+  ;(raw.npLogs || []).forEach(l => { (logsBy[l.product_id] = logsBy[l.product_id] || []).push(l) })
+  const npMembers = {}
+  ;(raw.npMembers || []).forEach(m => { npMembers[m.user_id] = m.team })
+  const np = (raw.npProducts || []).map(p => {
+    const ts = tasksBy[p.id] || []
+    const steps = ts.filter(t => t.kind === 'step').sort((a, b) => a.pos - b.pos || String(a.created_at).localeCompare(String(b.created_at)))
+    const checks = ts.filter(t => t.kind === 'check').sort((a, b) => a.round - b.round)
+    const stepsDone = steps.filter(t => t.status !== '대기').length
+    const next = steps.find(t => t.status === '대기') || null
+    const stage = p.status === '중단' ? '중단' : p.status === '완료' ? '완료' : stepsDone === steps.length ? '생산 점검 중' : '진행 중'
+    // 마지막으로 움직인 날 (멈춤 표시용)
+    const acts = [p.created_at, ...ts.map(t => t.done_at).filter(Boolean)].sort()
+    return { ...p, steps, checks, stepsDone, next, stage, team: npMembers[p.owner] || '', lastAct: acts[acts.length - 1], logs: logsBy[p.id] || [] }
+  }).sort((a, b) => String(b.sample_date).localeCompare(String(a.sample_date)) || String(b.created_at).localeCompare(String(a.created_at)))
+  const npMap = {}
+  np.forEach(p => { npMap[p.id] = p })
+  const npMessages = (raw.npMessages || []).filter(m => npMap[m.np_id])
+  npMessages.forEach(m => { m.room = 'n:' + m.np_id })
+  ;(raw.npReads || []).forEach(r => { reads[r.user_id + '|n:' + r.np_id] = r.last_read_id })
+  const npTemplates = (raw.npTemplates || []).filter(t => t.active !== false).sort((a, b) => a.sort_order - b.sort_order)
+  return { np, npMap, npMessages, npMembers, npTemplates, npReady: !!raw.npReady }
 }
 
 export async function loadRaw() {
@@ -94,7 +124,21 @@ export async function loadRaw() {
     soft(fetchAll('group_logs', ['id'])),
     soft(fetchAll('group_reads', ['user_id', 'group_id'])),
   ])
-  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs, greads }
+  // 신제품 (upgrade22): 표가 없으면 빈 목록 + npReady=false
+  let np = {}
+  try {
+    const [npProducts, npTasks, npLogs, npMessages, npReads, npMembers, npTemplates] = await Promise.all([
+      fetchAll('np_products', ['created_at', 'id']),
+      fetchAll('np_tasks', ['created_at', 'id']),
+      fetchAll('np_logs', ['id']),
+      fetchAll('np_messages', ['id']),
+      fetchAll('np_reads', ['user_id', 'np_id']),
+      fetchAll('np_members', ['user_id']),
+      fetchAll('np_templates', ['sort_order', 'id']),
+    ])
+    np = { npProducts, npTasks, npLogs, npMessages, npReads, npMembers, npTemplates, npReady: true }
+  } catch (_) { np = { npReady: false } }
+  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs, greads, ...np }
 }
 
 // 앱 전체 데이터: 처음에 한 번 모두 불러오고, 누가 무엇을 바꾸면 실시간으로 다시 불러옴
@@ -135,6 +179,12 @@ export function useAppData(userId) {
       ch.on('postgres_changes', { event: '*', schema: 'public', table }, soon)
     })
     ch.subscribe()
+    // 신제품 표는 따로 (아직 SQL을 안 돌린 경우에도 기존 실시간 반영이 막히지 않게)
+    const ch2 = supabase.channel('pruon-np')
+    ;['np_products', 'np_tasks', 'np_messages', 'np_reads', 'np_members', 'np_templates'].forEach(table => {
+      ch2.on('postgres_changes', { event: '*', schema: 'public', table }, soon)
+    })
+    ch2.subscribe()
     // 화면으로 다시 돌아오면 최신으로
     const onVis = async () => {
       if (document.visibilityState !== 'visible') return
@@ -148,7 +198,7 @@ export function useAppData(userId) {
     return () => {
       alive.current = false
       clearTimeout(timer.current)
-      supabase.removeChannel(ch)
+      supabase.removeChannel(ch); supabase.removeChannel(ch2)
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', onVis)
       window.removeEventListener('online', onVis)

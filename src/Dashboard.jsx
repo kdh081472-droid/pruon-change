@@ -9,6 +9,7 @@ import Admin from './Admin.jsx'
 import Summary from './Summary.jsx'
 import HelpBot from './HelpBot.jsx'
 import Sidebar, { DockEmpty } from './Sidebar.jsx'
+import NpApp, { npBadge } from './Np.jsx'
 import Sheet, { sheetGuard } from './Sheets.jsx'
 import NewChange, { emptyForm } from './NewChange.jsx'
 import Chat from './Chat.jsx'
@@ -64,12 +65,15 @@ export default function Dashboard({ session }) {
   const [chatJump, setChatJump] = useState(null) // 휴대폰 대화 검색에서 고른 글 { q, mid, t }
   const [reportCid, setReportCid] = useState(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [npOv, setNpOv] = useState(false)          // 신제품 모드: 처리 창·대화 창 열림
+  const npCloseRef = useRef(null)
   const [toastMsg, setToastMsg] = useState('')
   const toastT = useRef(null)
   const t0 = todayMid()
   const [ui, setUi] = useState({
     view: (hist0 && hist0.v) || 'timeline', q: '', calMonth: iso(new Date(t0.getFullYear(), t0.getMonth(), 1)),
     calMine: true, calSel: iso(t0), open: {}, showClosed: false,
+    ...(hist0 && hist0.np ? { npTab: hist0.np.split('|')[0] || undefined, npSel: hist0.np.split('|')[1] || null } : {}),
   })
   // 변경 등록에서 쓰던 내용: 이 브라우저에 임시 저장 (새로고침·앱 업데이트에도 남음, 등록하면 지움, 14일 지나면 버림)
   const draftKey = 'pruon_newdraft_' + uid
@@ -230,6 +234,8 @@ export default function Dashboard({ session }) {
       selectProduct,
       openReport: cid => setReportCid(cid),
       goChange, markReadLocal,
+      // 신제품 상세로 (메일 링크 등)
+      goNp: id => { setSheet(null); setChatCid(null); setTab('np'); setUi(u => ({ ...u, npTab: id ? 'detail' : undefined, npSel: id || null })) },
       goSummary: () => {
         setSheet(null)
         if (wide) setTab('summary'); else { setTab('timeline'); setUi(u => ({ ...u, view: 'summary' })) }
@@ -284,6 +290,7 @@ export default function Dashboard({ session }) {
     if (d.kind === 'group' && a.db.groupMap[d.id]) a.goGroup(d.id)
     if (d.kind === 'task') { const t = a.db.tasks.find(x => String(x.id) === String(d.id)); if (t) a.openTask(t.id) }
     // 메일의 [대화 열기]: 그 방으로 (PC는 제품·묶음 화면의 대화, 휴대폰은 대화 창)
+    if (d.kind === 'np') a.goNp(d.id)
     if (d.kind === 'chat') { const r = String(d.id); if (r.startsWith('g:') ? a.db.groupMap[r.slice(2)] : a.db.changeMap[r]) a.openChat(r) }
   }
   // ?go=종류:id 로 열린 경우 (앱 창이 없을 때 대화 창이 새로 연 것) — 한 번만 이동하고 주소 정리
@@ -297,8 +304,8 @@ export default function Dashboard({ session }) {
   }, [app, tab, isPop])
 
   // ---- 뒤로 가기: 화면을 옮길 때마다 브라우저 기록에 남기고, 뒤로 누르면 앞 화면으로 (열린 창이 있으면 창부터 닫음)
-  const navKey = tab ? JSON.stringify({ tab, sel: tab === 'product' ? sel : null, g: tab === 'group' ? selGroup : null, v: !wide && tab === 'timeline' ? ui.view : null }) : null
-  const ovOpen = !!(sheet || (!wide && chatCid) || reportCid || helpOpen || adminMode)
+  const navKey = tab ? JSON.stringify({ tab, sel: tab === 'product' ? sel : null, g: tab === 'group' ? selGroup : null, v: !wide && tab === 'timeline' ? ui.view : null, np: tab === 'np' ? (ui.npTab || '') + '|' + (ui.npSel || '') : null }) : null
+  const ovOpen = !!(sheet || (!wide && chatCid) || reportCid || helpOpen || adminMode || (tab === 'np' && npOv))
   const ovRef = useRef(ovOpen); ovRef.current = ovOpen
   const sheetRef = useRef(sheet); sheetRef.current = sheet
   const skipPop = useRef(false)
@@ -327,12 +334,14 @@ export default function Dashboard({ session }) {
       // 쓰던 글이 있는 창: 한 번은 막고 알림
       if (sheetRef.current && sheetGuard(toast)) { try { window.history.pushState({ ...s, ov: 1 }, '') } catch (_) {} return }
       setSheet(null); setChatCid(null); setChatJump(null); setReportCid(null); setHelpOpen(false); setAdminMode(false)
+      if (npCloseRef.current) npCloseRef.current()
       let n = null
       try { n = JSON.parse(s.nav) } catch (_) { return }
       setTab(n.tab)
       if (n.sel) setSel(n.sel)
       if (n.g) setSelGroup(n.g)
       if (n.v) setUi(u => ({ ...u, view: n.v }))
+      if (n.np) { const [a, b] = n.np.split('|'); setUi(u => ({ ...u, npTab: a || undefined, npSel: b || null })) }
     }
     window.addEventListener('popstate', on)
     return () => window.removeEventListener('popstate', on)
@@ -382,13 +391,24 @@ export default function Dashboard({ session }) {
       </Ctx.Provider>
     )
   }
+  if (tab === 'np') {
+    return (
+      <Ctx.Provider value={app}>
+        <NpApp onOverlay={setNpOv} closeRef={npCloseRef} onExit={() => { setTab(viewer ? (wide ? 'summary' : 'timeline') : 'mine'); window.scrollTo(0, 0) }} />
+        {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
+        {err && <div className="netbar">연결이 불안정합니다. 잠시 후 자동으로 다시 시도합니다.</div>}
+        {helpOpen && <HelpBot full={!wide} onClose={() => setHelpOpen(false)} />}
+      </Ctx.Provider>
+    )
+  }
   if (adminMode && isAdmin) return <Ctx.Provider value={app}><Admin onExit={() => setAdminMode(false)} />{toastMsg && <div className="toast" role="status">{toastMsg}</div>}</Ctx.Provider>
 
   const myOpenN = db.tasks.filter(t => t.department === me.department && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length
   const unreadAll = db.changes.reduce((n, c) => n + app.unread(c.id).length, 0) + db.groups.reduce((n, g) => n + app.unread('g:' + g.id).length, 0)
+  const npN = npBadge(db, uid, me)
   const tabs = viewer
-    ? [['timeline', '전체 일정'], ['chat', '대화']]
-    : [['mine', '내 할 일'], ['timeline', '전체 일정'], ['chat', '대화'], ['new', '변경 등록']]
+    ? [['timeline', '전체 일정'], ['chat', '대화'], ['np', '신제품']]
+    : [['mine', '내 할 일'], ['timeline', '전체 일정'], ['chat', '대화'], ['new', '변경 등록'], ['np', '신제품']]
   const title = { chat: wide ? '' : '대화', mine: '내 할 일', timeline: wide ? '달력' : '전체 일정', summary: '요약', new: '변경 등록', settings: '내 정보', product: '', group: wide ? '' : '전체 일정' }[tab]
 
   const content = (
@@ -432,7 +452,7 @@ export default function Dashboard({ session }) {
               toast('팝업이 막혀 있어 앱 안에서 보여드립니다. 주소창 오른쪽 팝업 차단 표시에서 허용하면 따로 창으로 뜹니다.')
             }
             setTab(k); setSheet(null)
-          }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} chatN={unreadAll} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} />
+          }} sel={sel} onSelect={app.selectProduct} myOpenN={myOpenN} chatN={unreadAll} isAdmin={isAdmin} onAdmin={() => { setSheet(null); setAdminMode(true) }} helpOpen={helpOpen} onHelp={() => setHelpOpen(v => !v)} npN={npN} />
           <div className="wide-main">
             <div className={'wide-in' + (tab === 'timeline' || tab === 'summary' || tab === 'new' ? ' full' : '') + (tab === 'chat' ? ' full chat-in' : '') + (tab === 'product' || tab === 'group' ? ' edge' : '')}>
               {tab !== 'product' && tab !== 'timeline' && tab !== 'group' && tab !== 'chat' && <h1 className="page-t wide-t">{title}</h1>}
@@ -471,6 +491,7 @@ export default function Dashboard({ session }) {
                 {ICON[k]}<span>{label}</span>
                 {k === 'mine' && myOpenN > 0 && <span className="n">{myOpenN}</span>}
                 {k === 'chat' && unreadAll > 0 && <span className="n">{unreadAll}</span>}
+                {k === 'np' && npN > 0 && <span className="n">{npN}</span>}
               </button>
             ))}
           </div>
