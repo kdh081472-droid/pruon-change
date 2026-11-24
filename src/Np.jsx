@@ -17,11 +17,14 @@ const teamCls = t => (t === '1팀' ? 'nt1' : t === '2팀' ? 'nt2' : t === '파�
 const nameOf = (db, id) => (id && db.people[id] ? db.people[id].name : '-')
 const staleDays = p => (p.stage === '진행 중' && p.lastAct ? Math.floor((Date.now() - new Date(p.lastAct)) / DAY) : 0)
 
-// 신제품 탭 빨간 숫자: 오늘·지난 생산 점검(개발팀: 내 담당) + 안 읽은 신제품 대화
+// 남은 사후업무가 있는 진행 중 신제품 / 그중 내 담당(담당자이거나 남은 업무를 맡음)
+const hasLeft = p => p.status === '진행중' && p.steps.some(t => t.status === '대기')
+const isMineNp = (p, uid) => p.owner === uid || p.steps.some(t => t.status === '대기' && t.assignee === uid)
+// 신제품 탭 빨간 숫자: 내 할 일(내 담당 · 남은 사후업무 있는 신제품) + 안 읽은 신제품 대화
 export function npBadge(db, uid, me) {
   if (!db || !db.np) return 0
   const editor = me && me.department === NP_DEPT && !me.left_at
-  const due = editor ? db.np.filter(p => p.status === '진행중').reduce((n, p) => n + p.checks.filter(c => c.status === '대기' && c.prod_date && dd(c.prod_date) <= 0 && c.assignee === uid).length, 0) : 0
+  const due = editor ? db.np.filter(p => hasLeft(p) && isMineNp(p, uid)).length : 0
   const rd = room => db.reads[uid + '|' + room] || 0
   const unread = db.npMessages.filter(m => m.user_id !== uid && !m.deleted && m.id > rd(m.room)).length
   return due + unread
@@ -116,7 +119,9 @@ export default function NpApp({ onExit, onOverlay, closeRef }) {
     if (error) return toast(errText(error))
     await reload(); toast('되돌렸습니다 · 다시 대기로 돌아갔습니다')
   }
-  const npApp = { ...app, openNpTask, npRun: run, npOpen: open, npGo: go, npEditor: editor, setNpSheet: setSheet, npDo: doTask }
+  // 확인 취소: 사유 없이 바로 대기로 (취소 전 메모는 서버 기록에 남음)
+  const cancelTask = t => run('np_task_cancel', { p_task: t.id, p_reason: null }, '확인을 취소했습니다 · 다시 대기로 돌아갔습니다')
+  const npApp = { ...app, openNpTask, npRun: run, npOpen: open, npGo: go, npEditor: editor, setNpSheet: setSheet, npDo: doTask, npCancel: cancelTask }
   const rd = room => db.reads[uid + '|' + room] || 0
   const unreadOf = id => db.npMessages.filter(m => m.np_id === id && m.user_id !== uid && !m.deleted && m.id > rd('n:' + id)).length
   const unreadAll = db.npMessages.filter(m => m.user_id !== uid && !m.deleted && m.id > rd(m.room)).length
@@ -259,14 +264,11 @@ function NpMine() {
   const { db, uid, ui, setUi } = useApp()
   const myTeam = db.npMembers[uid] || ''
   const view = ui.npView || (myTeam === '파트장' ? 'all' : 'me')
-  const live = db.np.filter(p => p.status === '진행중')
-  const isMine = p => p.owner === uid || [...p.steps, ...p.checks].some(t => t.status === '대기' && t.assignee === uid)
+  const live = db.np.filter(hasLeft)     // 남은 사후업무가 있는 신제품만 (생산 점검은 요약·달력에서)
+  const isMine = p => isMineNp(p, uid)
   const inTeam = p => (myTeam === '1팀' || myTeam === '2팀' ? p.team === myTeam || !p.team : true)
   const lists = { me: live.filter(isMine), team: live.filter(inTeam), all: live }
-  const due = c => c.status === '대기' && c.prod_date && dd(c.prod_date) <= 0
-  const list = [...lists[view]].sort((a, b) => (b.checks.some(due) - a.checks.some(due)) || (staleDays(b) >= STALE) - (staleDays(a) >= STALE) || String(b.sample_date).localeCompare(String(a.sample_date)))
-  const alerts = list.flatMap(p => p.checks.filter(due).map(c => ({ p, c })))
-  const today = alerts.filter(x => dd(x.c.prod_date) === 0), late = alerts.filter(x => dd(x.c.prod_date) < 0)
+  const list = [...lists[view]].sort((a, b) => (staleDays(b) >= STALE) - (staleDays(a) >= STALE) || String(b.sample_date).localeCompare(String(a.sample_date)))
   const teamLbl = myTeam === '1팀' || myTeam === '2팀' ? `우리 팀(${myTeam})` : '우리 팀'
   const open = ui.npOpen || {}
   const allOpen = list.length > 0 && list.every(p => open[p.id])
@@ -279,21 +281,18 @@ function NpMine() {
         {list.length > 0 && <button type="button" className="link np-allt" onClick={() => setUi(u => ({ ...u, npOpen: Object.fromEntries(list.map(p => [p.id, !allOpen])) }))}>{allOpen ? '모두 접기' : '모두 펼치기'}</button>}
         {!myTeam && <small className="muted">팀이 아직 지정되지 않았습니다 (관리자 모드 › 신제품 설정)</small>}
       </div>
-      {late.length > 0 && <div className="np-alert">● 점검 지남 {late.length}건 · {late.map(x => `${x.p.name} ${x.c.round}차 (${md(x.c.prod_date)})`).join(', ')}</div>}
-      {today.length > 0 && <div className="np-alert">● 오늘 생산 점검 {today.length}건 · {today.map(x => `${x.p.name} ${x.c.round}차`).join(', ')}</div>}
       <div className="np-rows">{list.map(p => <NpRow key={p.id} p={p} />)}</div>
-      {!list.length && <div className="card empty">{view === 'me' ? '내가 담당하는 진행 중 신제품이 없습니다.' : '진행 중인 신제품이 없습니다.'}</div>}
+      {!list.length && <div className="card empty">{view === 'me' ? '내가 담당하는 신제품 중 남은 사후업무가 없습니다.' : '남은 사후업무가 있는 신제품이 없습니다.'} <small className="muted">생산 점검은 요약·달력에서 봅니다</small></div>}
     </>
   )
 }
 
 function NpRow({ p }) {
-  const { db, ui, setUi, npOpen, npDo, setNpSheet, npEditor, wide } = useApp()
+  const { db, ui, setUi, npOpen } = useApp()
   const isOpen = !!(ui.npOpen || {})[p.id]
   const toggle = () => setUi(u => ({ ...u, npOpen: { ...(u.npOpen || {}), [p.id]: !isOpen } }))
   const st = staleDays(p)
-  const dueC = p.checks.find(c => c.status === '대기' && c.prod_date && dd(c.prod_date) <= 0)
-  const stop = e => e.stopPropagation()
+  const left = p.steps.filter(t => t.status === '대기').length
   return (
     <div className={'card np-row' + (isOpen ? ' open' : '')}>
       <div className="np-rh" role="button" tabIndex={0} aria-expanded={isOpen} onClick={toggle} onKeyDown={e => { if (e.key === 'Enter') toggle() }}>
@@ -303,32 +302,14 @@ function NpRow({ p }) {
           <small>{[p.customer, nameOf(db, p.owner)].filter(Boolean).join(' · ')} <ProdTeam p={p} />{p.launch && <> · 출시 {md(p.launch)}</>}</small>
         </span>
         <span className="np-rm">
-          <Prog p={p} />
           {st >= STALE && <span className="np-stale">{st}일째 그대로</span>}
+          <Prog p={p} />
+          <span className="np-left">남은 <b>{left}</b>건</span>
         </span>
-        <span className="np-rn" onClick={stop}>
-          {p.next ? (
-            <>
-              <span className="k">다음</span><span className="s">{p.steps.indexOf(p.next) + 1} {p.next.title}{p.next.need_memo && <i className="np-mi" title="메모 필요">✎</i>}</span>
-              {npEditor && <button type="button" className="btn sm np-btn" onClick={() => npDo(p.next, p)}>{p.next.need_memo ? '처리' : '완료'}</button>}
-            </>
-          ) : dueC ? (
-            <>
-              <span className="k">생산 점검</span><span className="s">{dueC.round}차 점검 · {md(dueC.prod_date)}</span>
-              {npEditor && <button type="button" className="btn sm np-btn" onClick={() => npDo(dueC, p)}>점검 처리</button>}
-            </>
-          ) : <span className="np-who">사후업무 끝 · 생산 점검 중</span>}
-        </span>
-        {wide && <span className="np-rpc" onClick={stop}>{p.checks.map(c => <CheckPill key={c.id} c={c} short />)}</span>}
       </div>
       {isOpen && (
         <div className="np-rb">
-          <NpSteps p={p} compact />
-          <div className="np-pc">
-            <span className="lb">생산 점검</span>
-            {p.checks.map(c => <CheckPill key={c.id} c={c} onClick={npEditor && c.status === '대기' ? () => npDo(c, p) : null} />)}
-            {npEditor && <span className="np-who">· 칸을 누르면 생산일 넣기 / 점검 처리</span>}
-          </div>
+          <NpSteps p={p} compact hideDone />
           <div className="np-rbf"><button type="button" className="link" onClick={() => npOpen(p.id)}>상세·대화 열기 ›</button></div>
         </div>
       )}
@@ -337,12 +318,16 @@ function NpRow({ p }) {
 }
 
 // 사후업무 목록 (상세 · 내 할 일 펼침 공용) — 줄 간격 좁게, 메모는 처리자 옆 한 줄
-function NpSteps({ p, compact }) {
-  const { db, npEditor, npDo, setNpSheet } = useApp()
+function NpSteps({ p, compact, hideDone }) {
+  const { db, npEditor, npDo, npCancel, setNpSheet } = useApp()
+  const [showDone, setShowDone] = useState(false)
   const live = p.status === '진행중'
+  const doneN = p.steps.filter(t => t.status !== '대기').length
+  const hide = hideDone && !showDone
   return (
     <div className={'np-steps' + (compact ? ' compact' : '')}>
       {p.steps.map((t, i) => {
+        if (hide && t.status !== '대기') return null
         const cur = p.next && p.next.id === t.id
         return (
           <div key={t.id} className={'np-st' + (t.status !== '대기' ? ' dn' : '') + (cur ? ' cur' : '')}>
@@ -366,23 +351,23 @@ function NpSteps({ p, compact }) {
                   <button type="button" className={'btn sm' + (cur ? ' np-btn' : ' ghost')} onClick={() => npDo(t, p)}>{t.need_memo ? '처리' : '완료'}</button>
                 </>
               )}
-              {npEditor && live && t.status !== '대기' && <button type="button" className="np-undo" onClick={() => setNpSheet({ kind: 'cancel', tid: t.id })}>확인 취소</button>}
+              {npEditor && live && t.status !== '대기' && <button type="button" className="np-undo" onClick={() => npCancel(t)}>확인 취소</button>}
             </span>
           </div>
         )
       })}
       {!p.steps.length && <div className="empty">사후업무가 없습니다.</div>}
+      {hideDone && doneN > 0 && <button type="button" className="np-donet" onClick={() => setShowDone(v => !v)}>{showDone ? '처리한 업무 숨기기 ▴' : `처리한 업무 ${doneN}건 보기 ▾`}</button>}
     </div>
   )
 }
 
 // =============================================================
-// 요약 — [표] 노션 표처럼 사후업무 칸을 눌러 바로 처리 / [목록]
+// 요약 — 노션 표처럼 사후업무 칸을 눌러 바로 처리
 function NpSummary() {
-  const { db, ui, setUi, npOpen, wide } = useApp()
-  const st = ui.npSum || { chips: ['진행 중', '생산 점검 중'], team: '', q: '', sort: { k: 'reg', dir: 'desc' }, mode: 'table' }
+  const { db, ui, setUi } = useApp()
+  const st = ui.npSum || { chips: ['진행 중', '생산 점검 중'], team: '', q: '', sort: { k: 'reg', dir: 'desc' } }
   const set = o => setUi(u => ({ ...u, npSum: { ...st, ...o } }))
-  const mode = wide ? (st.mode || 'table') : 'list'
   const cnt = s => db.np.filter(p => p.stage === s).length
   const toggle = s => set({ chips: st.chips.includes(s) ? st.chips.filter(x => x !== s) : [...st.chips, s] })
   let list = db.np.filter(p => (!st.chips.length || st.chips.includes(p.stage)) && (!st.team || p.team === st.team))
@@ -394,41 +379,13 @@ function NpSummary() {
   )
   return (
     <>
-      {wide && <div className="seg sm np-mode-seg"><button type="button" className={mode === 'table' ? 'on' : ''} onClick={() => set({ mode: 'table' })}>표</button><button type="button" className={mode === 'list' ? 'on' : ''} onClick={() => set({ mode: 'list' })}>목록</button></div>}
       <div className="np-chips">
         {STAGES.map(s => <button key={s} type="button" className={'np-chip' + (st.chips.includes(s) ? ' on' : '')} onClick={() => toggle(s)}>{s} {cnt(s)}</button>)}
         <span className="np-sp" />
         <div className="seg sm">{[['', '전체'], ['1팀', '1팀'], ['2팀', '2팀']].map(([k, l]) => <button key={l} type="button" className={st.team === k ? 'on' : ''} onClick={() => set({ team: k })}>{l}</button>)}</div>
         <input className="np-q" value={st.q} onChange={e => set({ q: e.target.value })} placeholder="검색 (제품·고객사·담당)" aria-label="신제품 검색" />
       </div>
-      {mode === 'table' ? <NpTable list={list} H={H} /> : wide ? (
-        <table className="np-sum">
-          <thead><tr><H k="name">제품</H><H k="customer">고객사</H><H k="owner">담당</H><H k="prog">사후업무</H><th>다음 할 일</th><th>생산 점검</th><H k="reg">등록일</H><H k="launch">출시일</H><H k="stage">상태</H></tr></thead>
-          <tbody>
-            {list.map(p => {
-              const s = staleDays(p)
-              return (
-                <tr key={p.id} className={p.stage === '완료' || p.stage === '중단' ? 'fin' : ''} onClick={() => npOpen(p.id)}>
-                  <td className="t">{p.name}</td><td>{p.customer || '-'}</td>
-                  <td className="nw">{nameOf(db, p.owner)} <ProdTeam p={p} /></td>
-                  <td><Prog p={p} /></td>
-                  <td>{p.next ? <><b>{p.steps.indexOf(p.next) + 1} {p.next.title}</b>{s >= STALE && <span className="np-stale">{s}일째</span>}</> : <span className="muted">—</span>}</td>
-                  <td className="np-pcs">{p.checks.map(c => <CheckPill key={c.id} c={c} short />)}</td>
-                  <td className="nw">{md(p.sample_date)}</td>
-                  <td className="nw">{p.launch ? md(p.launch) : <span className="muted">미정</span>}</td>
-                  <td><StageTag p={p} /></td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      ) : list.map(p => (
-        <div key={p.id} className="card np-card" role="button" tabIndex={0} onClick={() => npOpen(p.id)}>
-          <div className="np-ch"><b className="t">{p.name}</b><span className="np-meta"><span className="np-who">{nameOf(db, p.owner)} <ProdTeam p={p} /></span><StageTag p={p} /></span></div>
-          <div className="np-line">사후업무 {p.stepsDone}/{p.steps.length}{p.next ? ' · 다음: ' + p.next.title : ''}{p.customer ? ' · ' + p.customer : ''} · 등록 {md(p.sample_date)}{p.launch ? ' · 출시 ' + md(p.launch) : ''}</div>
-          <div className="np-pc">{p.checks.map(c => <CheckPill key={c.id} c={c} short />)}</div>
-        </div>
-      ))}
+      {list.length > 0 && <NpTable list={list} H={H} />}
       {!list.length && <div className="card empty">{db.np.length ? '조건에 맞는 신제품이 없습니다.' : '아직 등록된 신제품이 없습니다.'}</div>}
     </>
   )
@@ -436,7 +393,7 @@ function NpSummary() {
 
 // 표: 행 = 신제품, 열 = 기본 사후업무 + (추가 업무) + 생산 점검 1~3차
 function NpTable({ list, H }) {
-  const { db, npOpen, npDo, npEditor, npRun, setNpSheet } = useApp()
+  const { db, npOpen, npDo, npEditor, npRun, npCancel } = useApp()
   const [pop, setPop] = useState(null)       // { tid, x, y }
   const [memo, setMemo] = useState('')
   const [report, setReport] = useState(false)
@@ -505,7 +462,7 @@ function NpTable({ list, H }) {
         <>
           {head}
           <div className="np-popi">{t.status === '완료' ? '✓' : '–'} {nameOf(db, t.done_by)} · {md(new Date(t.done_at))} {t.status === '해당없음' ? '해당없음' : '처리'}{isC && t.prod_date ? ` · 생산일 ${md(t.prod_date)}` : ''}{t.memo ? <><br />“{t.memo}”</> : null}</div>
-          {npEditor && live && <div className="np-popa"><button type="button" className="btn sm ghost" onClick={() => { setPop(null); setNpSheet({ kind: 'cancel', tid: t.id }) }}>확인 취소</button>{!isC && <button type="button" className="link" onClick={() => npOpen(p.id)}>상세 ›</button>}</div>}
+          {npEditor && live && <div className="np-popa"><button type="button" className="btn sm ghost" onClick={() => { setPop(null); npCancel(t) }}>확인 취소</button>{!isC && <button type="button" className="link" onClick={() => npOpen(p.id)}>상세 ›</button>}</div>}
         </>
       )
     } else if (!npEditor || !live) {
@@ -823,7 +780,7 @@ function NpDetail({ p, onChat, unread }) {
                 <div className="acts">
                   {c.status === '대기' && <button type="button" className="btn sm ghost" onClick={() => setNpSheet({ kind: 'date', tid: c.id })}>{c.prod_date ? '생산일 바꾸기' : '생산일 넣기'}</button>}
                   {c.status === '대기' && c.prod_date && <button type="button" className={'btn sm' + (s === 'today' || s === 'late' ? ' np-btn' : ' ghost')} onClick={() => npDo(c, p)}>점검 처리</button>}
-                  {c.status !== '대기' && <button type="button" className="np-undo" onClick={() => setNpSheet({ kind: 'cancel', tid: c.id })}>확인 취소</button>}
+                  {c.status !== '대기' && <button type="button" className="np-undo" onClick={() => npCancel(c)}>확인 취소</button>}
                 </div>
               )}
             </div>
@@ -1057,6 +1014,7 @@ export function NpAdmin() {
   const [sub, setSub] = useState('team')
   const [busy, setBusy] = useState(false)
   const [rows, setRows] = useState(() => db.npTemplates.map(t => ({ id: t.id, t: t.title, m: !!t.need_memo })))
+  const [ask, setAsk] = useState(false)
   const [nt, setNt] = useState('')
   const [err, setErr] = useState('')
   const base = db.npTemplates.map(t => ({ id: t.id, t: t.title, m: !!t.need_memo }))
@@ -1074,15 +1032,20 @@ export function NpAdmin() {
     await reload(); toast('팀을 저장했습니다')
   }
   const move = (i, d) => { const a = [...rows]; const j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; setRows(a) }
-  const saveTpl = async () => {
+  // 삭제한 업무가 진행 중 신제품에서 함께 빠지는 규모 (저장 전에 한 번 더 확인)
+  const goneIds = base.filter(b => !rows.some(r => r.id === b.id)).map(b => b.id)
+  const goneTasks = db.np.filter(p => p.status === '진행중').flatMap(p => p.steps.filter(t => goneIds.includes(t.tpl_id)).map(t => ({ ...t, pname: p.name })))
+  const gone = { tasks: goneTasks, prods: new Set(goneTasks.map(t => t.product_id)).size, done: goneTasks.filter(t => t.status !== '대기').length, names: base.filter(b => goneIds.includes(b.id)).map(b => b.t) }
+  const saveTpl = async sure => {
     const list = rows.map(r => ({ id: r.id || null, title: r.t.trim(), need_memo: r.m })).filter(r => r.title)
     if (!list.length) return setErr('하나 이상 넣어주세요.')
     if (new Set(list.map(r => r.title)).size !== list.length) return setErr('같은 이름이 두 번 들어 있습니다.')
-    setBusy(true); setErr('')
+    if (!sure && gone.tasks.length) return setAsk(true)
+    setBusy(true); setErr(''); setAsk(false)
     const { error } = await supabase.rpc('np_tpl_set3', { p_items: list })
     setBusy(false)
-    if (error) return setErr(errText(error) + (/np_tpl_set3|function/i.test(errText(error)) ? ' (upgrade24.sql을 실행했는지 확인해주세요)' : ''))
-    await reload(); toast('기본 사후업무를 저장했습니다 · 이름·순서·메모 필요는 진행 중인 신제품에 바로 반영됩니다')
+    if (error) return setErr(errText(error) + (/np_tpl_set3|function/i.test(errText(error)) ? ' (upgrade25.sql을 실행했는지 확인해주세요)' : ''))
+    await reload(); toast('기본 사후업무를 저장했습니다 · 진행 중인 신제품에 바로 반영됐습니다')
   }
   return (
     <>
@@ -1111,7 +1074,7 @@ export function NpAdmin() {
         </div>
       ) : (
         <div className="card adm-card np-tpl">
-          <p className="note" style={{ marginTop: 0 }}>순서대로 신제품 등록 화면에 미리 체크되어 나옵니다 · <b>✎ 메모 필요</b>를 켠 업무는 처리할 때 메모를 꼭 쓰고, 끈 업무는 [완료]를 누르는 즉시 완료됩니다(5초 안에 되돌리기 가능) · 해당없음과 생산 점검은 항상 메모를 씁니다 · 저장하면 <b>이름 수정·순서 변경</b>은 진행 중인 신제품에 바로 반영되고(메모 필요는 남은 업무에), <b>추가·삭제</b>는 새로 등록하는 신제품부터 적용됩니다 · 완료·중단된 신제품은 그대로</p>
+          <p className="note" style={{ marginTop: 0 }}>순서대로 신제품 등록 화면에 미리 체크되어 나옵니다 · <b>✎ 메모 필요</b>를 켠 업무는 처리할 때 메모를 꼭 쓰고, 끈 업무는 [완료]를 누르는 즉시 완료됩니다(5초 안에 되돌리기 가능) · 해당없음과 생산 점검은 항상 메모를 씁니다 · 저장하면 진행 중인 신제품에 바로 반영됩니다: <b>추가</b>는 순서 자리에 대기로 들어가고, <b>삭제</b>는 처리 여부와 상관없이 기록까지 빠지고, 이름·순서·메모 필요(남은 업무)도 맞춰집니다 · 완료·중단된 신제품은 그대로</p>
           {rows.map((r, i) => (
             <div key={i} className="np-tr">
               <span className="np-no">{i + 1}</span>
@@ -1128,8 +1091,15 @@ export function NpAdmin() {
             <input value={nt} onChange={e => setNt(e.target.value)} placeholder="+ 사후업무 추가 (Enter)" maxLength={100} aria-label="사후업무 추가" />
           </form>
           {err && <p className="nf-err">{err}</p>}
+          {ask && dirty && gone.tasks.length > 0 && (
+            <div className="np-ask">
+              <b>진행 중 신제품 {gone.prods}개에서 {gone.names.map(n => `'${n}'`).join(', ')}이(가) 빠집니다{gone.done ? ` (처리한 기록 ${gone.done}건 포함)` : ''}</b>
+              <span>빠진 업무와 그 기록은 되살릴 수 없습니다 · 완료·중단된 신제품은 그대로입니다</span>
+              <div className="np-popa"><button type="button" className="btn warn" disabled={busy} onClick={() => saveTpl(true)}>그래도 저장</button><button type="button" className="btn ghost" onClick={() => setAsk(false)}>취소</button></div>
+            </div>
+          )}
           <div className="np-tpl-acts">
-            <button type="button" className="btn" disabled={busy || !dirty} onClick={saveTpl}>{busy ? '저장 중…' : '기본 사후업무 저장'}</button>
+            <button type="button" className="btn" disabled={busy || !dirty} onClick={() => saveTpl(false)}>{busy ? '저장 중…' : '기본 사후업무 저장'}</button>
             {dirty && <button type="button" className="btn ghost" onClick={() => { setRows(base); setErr('') }}>되돌리기</button>}
             {dirty && <span className="np-dirty">저장하지 않은 변경이 있습니다</span>}
           </div>

@@ -2346,7 +2346,7 @@ table.np-mem td, table.np-mem th { padding: 9px 10px }
 .np-allt { font-size: 12.5px } .np-mi { font-style: normal; font-size: 10.5px; color: var(--np-warn); margin-left: 3px }
 .np-rows { display: flex; flex-direction: column; gap: 8px }
 .np-row { margin: 0; padding: 0; overflow: hidden }
-.np-rh { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto; grid-template-areas: "c t m p" ". n n n"; align-items: center; gap: 8px 12px; padding: 10px 14px; cursor: pointer }
+.np-rh { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; grid-template-areas: "c t m"; align-items: center; gap: 8px 12px; padding: 10px 14px; cursor: pointer }
 .np-car { grid-area: c } .np-rt { grid-area: t } .np-rm { grid-area: m } .np-rpc { grid-area: p }
 .np-rh .np-rn { grid-area: n; justify-self: start; max-width: 100%; min-width: 0 }
 .np-rh:hover { background: var(--bg) }
@@ -2418,7 +2418,7 @@ table.np-mx tr.fin td { opacity: .55 } table.np-mx tr.fin td.pn { opacity: .75 }
 .np-dayr { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) auto auto; gap: 10px; align-items: center; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; text-align: left; padding: 10px 14px; cursor: pointer; color: inherit }
 .np-dayr:hover { background: var(--bg) } .np-dayr b { color: var(--ink) } .np-dayr .np-go { color: var(--np); font-size: 12.5px; font-weight: 700 }
 @media (max-width: 1099px) {
-  .np-rh { grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: "c t m" "n n n"; row-gap: 8px }
+  .np-rh { grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: "c t m"; row-gap: 8px }
   .np-rh .np-rn { justify-self: stretch }
   .np-st { grid-template-columns: 24px minmax(0, 1fr) auto; padding: 6px 10px }
   .np-st .by, .np-st .as { grid-column: 2 } .np-st .ac { grid-column: 3; grid-row: 1 / span 3 }
@@ -2433,3 +2433,19 @@ table.np-mx tr.fin td { opacity: .55 } table.np-mx tr.fin td.pn { opacity: .75 }
 .np-tpb.on.nt1 { border-color: var(--np-t1); background: var(--np-t1s); color: var(--np-t1) }
 .np-tpb.on.nt2 { border-color: var(--np-t2); background: var(--np-t2s); color: var(--np-t2) }
 .np-tlink { font-size: 12.5px; margin-left: 6px }
+
+/* ===== v37: 내 할 일 남은 업무만 · 요약 표만 · 관리자 삭제 확인 ===== */
+.np-left { font-size: 12.5px; color: var(--muted); white-space: nowrap } .np-left b { color: var(--np); font-size: 14px }
+.np-donet { display: block; width: 100%; border: 0; border-top: 1px dashed var(--line); background: none; font: inherit; font-size: 12.5px; color: var(--muted); padding: 7px 10px; cursor: pointer; text-align: left }
+.np-donet:hover { color: var(--text) }
+.np-ask { border: 1px solid color-mix(in srgb, var(--late) 40%, transparent); background: var(--late-soft); border-radius: 10px; padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px }
+.np-ask b { color: var(--late) } .np-ask span { color: var(--muted); font-size: 12.5px }
+@media (max-width: 1099px) {
+  table.np-mx { min-width: 0; width: max-content }
+  table.np-mx .pn { width: 132px; min-width: 132px; padding-left: 8px }
+  .np-pnb b { font-size: 12.5px; white-space: normal; word-break: keep-all } .np-pnb span { font-size: 10.5px; white-space: normal; line-height: 1.5 }
+  table.np-mx .pn { max-width: 132px } table.np-mx .dt { width: 44px; font-size: 11px }
+  table.np-mx th.sh { width: 54px; min-width: 54px } table.np-mx th.ck { min-width: 60px }
+  .np-pop { width: min(340px, calc(100% - 8px)) }
+  .np-rm .np-prog { display: none }
+}
