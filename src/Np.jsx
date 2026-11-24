@@ -365,12 +365,12 @@ function NpSteps({ p, compact, hideDone }) {
 // =============================================================
 // 요약 — 노션 표처럼 사후업무 칸을 눌러 바로 처리
 function NpSummary() {
-  const { db, ui, setUi } = useApp()
+  const { db, ui, setUi, uid, npEditor } = useApp()
   const st = ui.npSum || { chips: ['진행 중', '생산 점검 중'], team: '', q: '', sort: { k: 'reg', dir: 'desc' } }
   const set = o => setUi(u => ({ ...u, npSum: { ...st, ...o } }))
   const cnt = s => db.np.filter(p => p.stage === s).length
   const toggle = s => set({ chips: st.chips.includes(s) ? st.chips.filter(x => x !== s) : [...st.chips, s] })
-  let list = db.np.filter(p => (!st.chips.length || st.chips.includes(p.stage)) && (!st.team || p.team === st.team))
+  let list = db.np.filter(p => (!st.chips.length || st.chips.includes(p.stage)) && (!st.team || (st.team === 'me' ? isMineNp(p, uid) : p.team === st.team)))
   if (st.q.trim()) list = list.filter(p => hasAll([p.name, p.customer, p.spec, nameOf(db, p.owner), p.team, p.next && p.next.title].join(' '), st.q))
   const val = (p, k) => ({ name: p.name, customer: p.customer || '', owner: nameOf(db, p.owner), prog: p.stepsDone / (p.steps.length || 1), reg: p.sample_date, launch: p.launch || '9999', stage: STAGES.indexOf(p.stage) }[k])
   list = [...list].sort((a, b) => { const x = val(a, st.sort.k), y = val(b, st.sort.k); return (x > y ? 1 : x < y ? -1 : 0) * (st.sort.dir === 'asc' ? 1 : -1) })
@@ -381,8 +381,8 @@ function NpSummary() {
     <>
       <div className="np-chips">
         {STAGES.map(s => <button key={s} type="button" className={'np-chip' + (st.chips.includes(s) ? ' on' : '')} onClick={() => toggle(s)}>{s} {cnt(s)}</button>)}
-        <span className="np-sp" />
-        <div className="seg sm">{[['', '전체'], ['1팀', '1팀'], ['2팀', '2팀']].map(([k, l]) => <button key={l} type="button" className={st.team === k ? 'on' : ''} onClick={() => set({ team: k })}>{l}</button>)}</div>
+        <span className="np-div" aria-hidden="true" />
+        <div className="seg sm">{[...(npEditor ? [['me', '내 담당']] : []), ['', '전체'], ['1팀', '1팀'], ['2팀', '2팀']].map(([k, l]) => <button key={l} type="button" className={st.team === k ? 'on' : ''} onClick={() => set({ team: k })}>{l}</button>)}</div>
         <input className="np-q" value={st.q} onChange={e => set({ q: e.target.value })} placeholder="검색 (제품·고객사·담당)" aria-label="신제품 검색" />
       </div>
       {list.length > 0 && <NpTable list={list} H={H} />}
