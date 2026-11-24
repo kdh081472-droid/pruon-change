@@ -94,7 +94,7 @@ function buildNp(raw, reads) {
     const stage = p.status === '중단' ? '중단' : p.status === '완료' ? '완료' : stepsDone === steps.length ? '생산 점검 중' : '진행 중'
     // 마지막으로 움직인 날 (멈춤 표시용)
     const acts = [p.created_at, ...ts.map(t => t.done_at).filter(Boolean)].sort()
-    return { ...p, steps, checks, stepsDone, next, stage, team: npMembers[p.owner] || '', lastAct: acts[acts.length - 1], logs: logsBy[p.id] || [] }
+    return { ...p, steps, checks, stepsDone, next, stage, launch: (checks[0] && checks[0].prod_date) || null, team: p.team || (['1팀', '2팀'].includes(npMembers[p.owner]) ? npMembers[p.owner] : ''), byLead: npMembers[p.owner] === '파트장', lastAct: acts[acts.length - 1], logs: logsBy[p.id] || [] }
   }).sort((a, b) => String(b.sample_date).localeCompare(String(a.sample_date)) || String(b.created_at).localeCompare(String(a.created_at)))
   const npMap = {}
   np.forEach(p => { npMap[p.id] = p })

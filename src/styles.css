@@ -2305,15 +2305,15 @@ table.np-sum tr.fin td { color: var(--muted) } table.np-sum tr.fin td.t { color:
 .np-sec { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: var(--muted); margin: 20px 0 8px; border: 0; background: none; font-family: inherit; padding: 0 }
 .np-sec span { font-weight: 500 } .np-sec-r { margin-left: auto } .np-logt { cursor: pointer }
 .np-steps { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface) }
-.np-st { display: grid; grid-template-columns: 30px minmax(0, 1fr) 150px 110px 86px; align-items: center; gap: 4px 8px; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 14px }
+.np-st { display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(0, 230px) 96px 150px; align-items: center; gap: 2px 8px; padding: 5px 12px; border-top: 1px solid var(--line); font-size: 13.5px; min-height: 38px }
 .np-st:first-child { border-top: 0 } .np-st .np-no { font-family: ui-monospace, monospace; color: var(--faint); font-size: 12px }
 .np-st.dn .nm { color: var(--muted) } .np-st.cur { background: var(--np-soft) } .np-st.cur .nm { font-weight: 800; color: var(--ink) }
 .np-st .by, .np-st .as { font-size: 12.5px; color: var(--muted) } .np-st .ac { text-align: right }
-.np-st .np-mm { grid-column: 2 / -1; font-size: 12.5px; color: var(--muted); line-height: 1.4 }
+.np-st .by { white-space: nowrap; overflow: hidden; text-overflow: ellipsis } .np-st .np-mm { color: var(--faint) }
 .np-undo { border: 0; background: none; font: inherit; font-size: 12px; color: var(--faint); cursor: pointer; padding: 2px 0 } .np-undo:hover { color: var(--late) }
 html .np-mode .btn:not(.ghost):not(.warn), html .np-sheet .btn:not(.ghost):not(.warn) { background: var(--np) !important; color: #fff }
 .np-mode .link { color: var(--np) }
-.np-nexttag { font-size: 10.5px; font-weight: 800; background: var(--np); color: #fff; border-radius: 4px; padding: 1px 6px; margin-left: 6px }
+.np-nexttag { white-space: nowrap; display: inline-block; font-size: 10.5px; font-weight: 800; background: var(--np); color: #fff; border-radius: 4px; padding: 1px 6px; margin-left: 6px }
 .np-na { font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 4px; padding: 1px 6px; margin-left: 6px }
 .np-chk { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
 .np-cb { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 5px }
@@ -2341,3 +2341,95 @@ table.np-mem td, table.np-mem th { padding: 9px 10px }
   .np-q { width: 100% }
   .np-mode main { padding-bottom: 90px }
 }
+
+/* ===== v35: 신제품 — 내 할 일 접기 · 요약 표 · 두 달 달력 · 바로 완료 ===== */
+.np-allt { font-size: 12.5px } .np-mi { font-style: normal; font-size: 10.5px; color: var(--np-warn); margin-left: 3px }
+.np-rows { display: flex; flex-direction: column; gap: 8px }
+.np-row { margin: 0; padding: 0; overflow: hidden }
+.np-rh { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto; grid-template-areas: "c t m p" ". n n n"; align-items: center; gap: 8px 12px; padding: 10px 14px; cursor: pointer }
+.np-car { grid-area: c } .np-rt { grid-area: t } .np-rm { grid-area: m } .np-rpc { grid-area: p }
+.np-rh .np-rn { grid-area: n; justify-self: start; max-width: 100%; min-width: 0 }
+.np-rh:hover { background: var(--bg) }
+.np-car { color: var(--muted); font-size: 12px }
+.np-rt { display: flex; flex-direction: column; min-width: 0 } .np-rt b { font-size: 14.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .np-rt small { font-size: 12px; color: var(--muted) }
+.np-rm { display: flex; align-items: center; gap: 6px; white-space: nowrap }
+.np-rn { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: default; background: var(--np-soft); border-radius: 8px; padding: 6px 6px 6px 10px }
+.np-rn .k { font-size: 11px; font-weight: 800; color: var(--np); white-space: nowrap } .np-rn .s { font-size: 13.5px; font-weight: 700; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 }
+.np-rn .btn { margin-left: auto }
+.np-rpc { display: flex; gap: 4px; cursor: default } .np-rpc .np-pill { padding: 3px 8px; font-size: 11.5px }
+.np-rb { border-top: 1px solid var(--line); padding: 10px 14px 6px; background: color-mix(in srgb, var(--bg) 55%, transparent) }
+.np-rb .np-pc { margin: 10px 0 4px; padding-top: 8px }
+.np-rb .np-pill { cursor: pointer } .np-rb .np-pill:disabled { cursor: default }
+.np-rbf { text-align: right; padding: 2px 0 4px } .np-rbf .link { font-size: 13px }
+.np-steps.compact .np-st { min-height: 34px; padding: 3px 10px }
+.np-nalink { border: 0; background: none; font: inherit; font-size: 12px; color: var(--faint); cursor: pointer; padding: 2px 4px; margin-right: 4px } .np-nalink:hover { color: var(--text) }
+.np-st .ac { display: flex; justify-content: flex-end; align-items: center }
+.np-opt { font-weight: 500; color: var(--faint); font-size: 11.5px; margin-left: 4px }
+.np-mt { border: 1px solid transparent; background: none; color: var(--faint); cursor: pointer; font-size: 12px; border-radius: 5px; padding: 1px 5px; opacity: .45 }
+.np-mt.on { color: var(--np-warn); opacity: 1; border-color: color-mix(in srgb, var(--np-warn) 35%, transparent) }
+.np-mck { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--faint); white-space: nowrap; cursor: pointer; padding: 0 4px } .np-mck.on { color: var(--np-warn); font-weight: 700 } .np-mck input { margin: 0; accent-color: var(--np-warn) }
+.np-undo-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 90; background: #2f2f2f; color: #fff; border-radius: 99px; padding: 10px 10px 10px 18px; font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); max-width: calc(100vw - 32px) }
+.np-undo-toast button { border: 0; background: #ffffff1f; color: #7fe0cf; font: inherit; font-weight: 800; border-radius: 99px; padding: 6px 12px; cursor: pointer }
+@media (max-width: 1099px) { .np-undo-toast { bottom: 84px } }
+/* 요약 표 */
+.np-mode-seg { display: inline-flex; margin: 0 0 10px }
+.np-tw { position: relative }
+.np-tsc { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface) }
+table.np-mx { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 980px }
+table.np-mx th { font-weight: 600; color: var(--muted); font-size: 11.5px; border-bottom: 1px solid var(--line); padding: 8px 3px; vertical-align: bottom; background: var(--bg); text-align: center }
+table.np-mx td { border-bottom: 1px solid var(--line); padding: 0; height: 50px; vertical-align: middle }
+table.np-mx tr:last-child td { border-bottom: 0 }
+table.np-mx .pn { width: 220px; min-width: 200px; text-align: left; padding-left: 12px; position: sticky; left: 0; background: var(--surface); z-index: 1; border-right: 1px solid var(--line) }
+table.np-mx th.pn { background: var(--bg) }
+.np-pnb { border: 0; background: none; font: inherit; text-align: left; cursor: pointer; padding: 4px 0; display: flex; flex-direction: column; color: inherit; width: 100% }
+.np-pnb b { color: var(--ink); font-size: 13.5px } .np-pnb:hover b { color: var(--np); text-decoration: underline } .np-pnb span { font-size: 11.5px; color: var(--muted) }
+table.np-mx .dt { width: 56px; text-align: center; font-size: 12px; color: var(--muted); white-space: nowrap } table.np-mx td.dt.tbd { color: var(--faint) }
+table.np-mx th.sh { width: 58px; line-height: 1.25; position: relative }
+.sn2 { display: block; font-family: ui-monospace, monospace; color: var(--faint); font-size: 10.5px } .st2 { display: block; font-size: 11px; color: var(--ink); word-break: keep-all }
+table.np-mx th.sh .np-mi { position: absolute; top: 3px; left: 50%; transform: translateX(-50%); margin: 0 }
+table.np-mx th.ck { width: 66px; background: color-mix(in srgb, var(--np-t1s) 60%, var(--bg)) } table.np-mx th.ck .st2 { color: var(--np-t1) }
+td.np-c { text-align: center; border-left: 1px solid color-mix(in srgb, var(--line) 50%, transparent) }
+td.np-c.on, td.np-c:hover { background: var(--np-soft) }
+.np-cell { border: 0; background: none; width: 100%; height: 100%; min-height: 48px; cursor: pointer; font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; color: inherit; padding: 0 }
+.np-box { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--line); align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #fff; background: var(--surface); vertical-align: middle }
+td.ok .np-box, .np-box.ok { background: var(--np); border-color: var(--np) }
+td.na .np-box, .np-box.na { background: var(--bg); border-color: var(--line); color: var(--muted) }
+td.nx .np-box, .np-box.nx { border-color: var(--np); box-shadow: 0 0 0 3px var(--np-soft) }
+td.pend .np-box { border-color: color-mix(in srgb, var(--muted) 45%, transparent) }
+.np-dot { color: var(--faint); font-size: 18px }
+td.pk { font-size: 11.5px } td.pk .dd { font-weight: 700; padding: 1px 6px; border-radius: 5px } td.pk small { font-size: 10px; color: var(--ok) }
+td.pk.ok .dd { color: var(--ok) } td.pk.today .dd { color: #fff; background: var(--late) } td.pk.late .dd { color: var(--late); background: var(--late-soft) } td.pk.tbd .dd { color: var(--faint); font-weight: 500 } td.pk.sch .dd { color: var(--np-ink) } td.pk.na .dd { color: var(--faint); font-weight: 500 }
+.np-exb { font-size: 12px; color: var(--muted); font-weight: 700 }
+table.np-mx tr.fin td { opacity: .55 } table.np-mx tr.fin td.pn { opacity: .75 }
+.np-pop { position: absolute; z-index: 30; width: 340px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.16); padding: 12px 14px; display: flex; flex-direction: column; gap: 7px }
+.np-poph { font-weight: 800; font-size: 13.5px; color: var(--ink); display: flex; gap: 6px; align-items: center; flex-wrap: wrap }
+.np-mtag { font-size: 10.5px; font-weight: 800; color: var(--np-warn); background: color-mix(in srgb, var(--np-warn) 14%, transparent); padding: 1px 6px; border-radius: 4px }
+.np-popi { font-size: 13px; color: var(--muted); line-height: 1.6 }
+.np-pop textarea, .np-pop input[type=date] { width: 100%; font: inherit; font-size: 13.5px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); color: var(--text); resize: vertical }
+.np-popl { font-size: 12px; color: var(--muted); font-weight: 600 }
+.np-popa { display: flex; gap: 6px; align-items: center; flex-wrap: wrap } .np-popa .btn.np-btn { margin-left: 0 }
+.np-poph2 { margin-left: auto; font-size: 11.5px; color: var(--faint) }
+.np-pop .nf-err { margin: 0 }
+.np-lg { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 10px 2px 0; align-items: center }
+.np-lg .np-box { width: 16px; height: 16px; font-size: 10px; margin-right: 4px; border-radius: 4px } .np-lgr { margin-left: auto }
+/* 달력 */
+.ev2.np-reg { background: var(--np-t1s); color: var(--np-t1) }
+.np-dayc { margin-top: 12px }
+.np-dayr { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) auto auto; gap: 10px; align-items: center; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; text-align: left; padding: 10px 14px; cursor: pointer; color: inherit }
+.np-dayr:hover { background: var(--bg) } .np-dayr b { color: var(--ink) } .np-dayr .np-go { color: var(--np); font-size: 12.5px; font-weight: 700 }
+@media (max-width: 1099px) {
+  .np-rh { grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: "c t m" "n n n"; row-gap: 8px }
+  .np-rh .np-rn { justify-self: stretch }
+  .np-st { grid-template-columns: 24px minmax(0, 1fr) auto; padding: 6px 10px }
+  .np-st .by, .np-st .as { grid-column: 2 } .np-st .ac { grid-column: 3; grid-row: 1 / span 3 }
+  .np-dayr { grid-template-columns: 1fr auto }
+}
+
+/* ===== v36: 신제품 담당 팀 ===== */
+.np-team.none { background: var(--bg); color: var(--faint); border: 1px dashed var(--line) }
+.np-team + .np-team { margin-left: 3px }
+.np-tpick { display: flex; gap: 8px }
+.np-tpb { flex: 1; max-width: 160px; border: 1.5px solid var(--line); background: var(--surface); color: var(--muted); font: inherit; font-weight: 700; font-size: 14px; border-radius: 9px; padding: 9px 0; cursor: pointer }
+.np-tpb.on.nt1 { border-color: var(--np-t1); background: var(--np-t1s); color: var(--np-t1) }
+.np-tpb.on.nt2 { border-color: var(--np-t2); background: var(--np-t2s); color: var(--np-t2) }
+.np-tlink { font-size: 12.5px; margin-left: 6px }
