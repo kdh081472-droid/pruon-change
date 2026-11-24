@@ -393,7 +393,7 @@ function NpSummary() {
 
 // 표: 행 = 신제품, 열 = 기본 사후업무 + (추가 업무) + 생산 점검 1~3차
 function NpTable({ list, H }) {
-  const { db, npOpen, npDo, npEditor, npRun, npCancel } = useApp()
+  const { db, npOpen, npEditor, npRun, npCancel, setNpSheet, toast } = useApp()
   const [pop, setPop] = useState(null)       // { tid, x, y }
   const [memo, setMemo] = useState('')
   const [report, setReport] = useState(false)
@@ -415,10 +415,25 @@ function NpTable({ list, H }) {
   const openPop = (e, t, p) => {
     const r = e.currentTarget.getBoundingClientRect(), w = wrap.current.getBoundingClientRect()
     const x = Math.max(0, Math.min(r.left - w.left - 120, w.width - 350)), y = r.bottom - w.top + 4
-    // 메모 필요 없는 대기 업무는 바로 완료
-    if (npEditor && t.status === '대기' && t.kind === 'step' && !t.need_memo && p.status === '진행중') { setPop(null); return npDo(t, p) }
     setMemo(''); setReport(false); setErr(''); setDate(t.prod_date ? String(t.prod_date).slice(0, 10) : '')
+    // ✎ 없는 사후업무: 누를 때마다 대기 → 완료 → 해당없음(사유 입력) → 대기
+    if (quick(t, p)) {
+      if (t.status === '완료') return setPop({ tid: t.id, x, y, na: true })
+      setPop(null)
+      return cycle(t)
+    }
     setPop({ tid: t.id, x, y })
+  }
+  const quick = (t, p) => npEditor && t.kind === 'step' && !t.need_memo && p.status === '진행중'
+  const [cBusy, setCBusy] = useState(null)
+  const cycle = async t => {
+    if (cBusy) return
+    setCBusy(t.id)
+    const r = t.status === '대기'
+      ? await npRun('np_task_done', { p_task: t.id, p_status: '완료', p_memo: null, p_report: false })
+      : await npRun('np_task_cancel', { p_task: t.id, p_reason: null })
+    setCBusy(null)
+    if (r.error) toast(r.error)
   }
   const save = async (fn, args, ok) => {
     if (busy) return
@@ -433,8 +448,8 @@ function NpTable({ list, H }) {
     const cur = p.next && p.next.id === t.id
     const cls = t.status === '완료' ? 'ok' : t.status === '해당없음' ? 'na' : cur ? 'pend nx' : 'pend'
     return (
-      <td className={'np-c ' + cls + (pop && pop.tid === t.id ? ' on' : '')}>
-        <button type="button" className="np-cell" title={`${t.title} · ${t.status}${t.status !== '대기' ? ' · ' + nameOf(db, t.done_by) : ' · ' + nameOf(db, t.assignee)}`} onClick={e => openPop(e, t, p)}>
+      <td className={'np-c ' + cls + (pop && pop.tid === t.id ? ' on' : '') + (cBusy === t.id ? ' busy' : '')}>
+        <button type="button" className="np-cell" disabled={cBusy === t.id} title={`${t.title} · ${t.status}${t.status !== '대기' ? ` · ${nameOf(db, t.done_by)} ${t.done_at ? md(new Date(t.done_at)) : ''}${t.memo ? ' · ' + t.memo : ''}` : ' · 담당 ' + nameOf(db, t.assignee)}${quick(t, p) ? '\n누르면 → ' + { 대기: '완료', 완료: '해당없음 (사유 입력)', 해당없음: '대기' }[t.status] : ''}`} onClick={e => openPop(e, t, p)}>
           <span className="np-box">{t.status === '완료' ? '✓' : t.status === '해당없음' ? '–' : ''}</span>
         </button>
       </td>
@@ -457,7 +472,21 @@ function NpTable({ list, H }) {
     const live = p.status === '진행중'
     const isC = t.kind === 'check'
     const head = <div className="np-poph">{isC ? `${t.round}차 생산 점검` : `${p.steps.indexOf(t) + 1} ${t.title}`} · {p.name}{(t.need_memo && !isC) && <span className="np-mtag">✎ 메모 필요</span>}</div>
-    if (t.status !== '대기') {
+    if (pop.na && t.status === '완료') {
+      const na = () => { if (!memo.trim()) return setErr('해당없음 사유를 입력해주세요.'); save('np_task_na', { p_task: t.id, p_memo: memo }, '해당없음으로 바꿨습니다') }
+      popBody = (
+        <>
+          {head}
+          <label className="np-popl" htmlFor="np-na">해당없음 사유 (필수)</label>
+          <textarea id="np-na" rows={2} autoFocus value={memo} placeholder="예: 고객사에서 진행" onChange={e => { setMemo(e.target.value); setErr('') }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); na() } }} />
+          {err && <p className="nf-err">{err}</p>}
+          <div className="np-popa">
+            <button type="button" className="btn sm np-btn" disabled={busy} onClick={na}>해당없음으로 저장</button>
+            <span className="np-poph2">Enter 저장 · Esc 취소 (완료로 남음)</span>
+          </div>
+        </>
+      )
+    } else if (t.status !== '대기') {
       popBody = (
         <>
           {head}
@@ -536,7 +565,7 @@ function NpTable({ list, H }) {
       <div className="np-lg">
         <span><span className="np-box ok">✓</span>완료</span><span><span className="np-box na">–</span>해당없음</span><span><span className="np-box nx" />다음 할 일</span><span><span className="np-box" />대기</span>
         <span><span className="np-dot">·</span>이 제품엔 없는 업무</span><span><i className="np-mi">✎</i>메모 필요 (관리자 설정)</span>
-        <span className="np-lgr">{npEditor ? '빈 칸 누르기 = 처리 (✎ 없는 업무는 바로 완료) · ✓ 칸 누르기 = 처리 내용 보기' : '칸을 누르면 처리 내용을 볼 수 있습니다'}</span>
+        <span className="np-lgr">{npEditor ? '누를 때마다 □ → ✓ 완료 → – 해당없음(사유 입력) → □ · ✎ 업무·생산 점검은 입력창' : '칸을 누르면 처리 내용을 볼 수 있습니다'}</span>
       </div>
     </div>
   )
@@ -556,7 +585,6 @@ function NpCalendar() {
   const evs = {}
   const push = (d, e) => { (evs[d] = evs[d] || []).push(e) }
   db.np.filter(p => !team || p.team === team).forEach(p => {
-    push(String(p.sample_date).slice(0, 10), { p, cls: 'np-reg', t: `${p.name} 등록`, k: '등록' })
     p.checks.forEach(c => {
       if (!c.prod_date) return
       const s = checkState(c)
@@ -601,7 +629,6 @@ function NpCalendar() {
         <span className="g-foot cal2-legend">
           <span><i style={{ background: 'var(--accent)' }} />생산 점검 예정</span>
           <span><i style={{ background: 'var(--late)' }} />오늘·점검 지남</span>
-          <span><i style={{ background: 'var(--np-t1)' }} />등록</span>
           <span><i style={{ background: 'var(--done)' }} />완료</span>
         </span>
         <span className="np-sp" />

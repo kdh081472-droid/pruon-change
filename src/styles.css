@@ -2454,3 +2454,9 @@ table.np-mx tr.fin td { opacity: .55 } table.np-mx tr.fin td.pn { opacity: .75 }
 .np-div { width: 1px; height: 22px; background: var(--line); margin: 0 6px }
 .np-chips .np-q { width: 200px }
 @media (max-width: 1099px) { .np-div { flex-basis: 100%; width: 0; height: 0; margin: 0 } .np-chips .np-q { width: 100%; flex: 1 1 100% } }
+
+/* ===== v39: 등록 화면 폭 · 요약 표 순환 처리 ===== */
+.np-new { grid-template-columns: minmax(0, 560px) minmax(0, 460px); justify-content: start }
+td.np-c.busy .np-box { opacity: .45 }
+.np-cell:disabled { cursor: progress }
+@media (max-width: 1099px) { .np-new { grid-template-columns: 1fr } }
