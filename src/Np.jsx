@@ -449,7 +449,7 @@ function NpTable({ list, H }) {
     const cls = t.status === '완료' ? 'ok' : t.status === '해당없음' ? 'na' : cur ? 'pend nx' : 'pend'
     return (
       <td className={'np-c ' + cls + (pop && pop.tid === t.id ? ' on' : '') + (cBusy === t.id ? ' busy' : '')}>
-        <button type="button" className="np-cell" disabled={cBusy === t.id} title={`${t.title} · ${t.status}${t.status !== '대기' ? ` · ${nameOf(db, t.done_by)} ${t.done_at ? md(new Date(t.done_at)) : ''}${t.memo ? ' · ' + t.memo : ''}` : ' · 담당 ' + nameOf(db, t.assignee)}${quick(t, p) ? '\n누르면 → ' + { 대기: '완료', 완료: '해당없음 (사유 입력)', 해당없음: '대기' }[t.status] : ''}`} onClick={e => openPop(e, t, p)}>
+        <button type="button" className="np-cell" disabled={cBusy === t.id} title={`${t.title} · ${t.status}${t.status !== '대기' ? ` · ${nameOf(db, t.done_by)} ${t.done_at ? md(new Date(t.done_at)) : ''}${t.memo ? ' · ' + t.memo : ''}` : ' · 담당 ' + nameOf(db, t.assignee)}${quick(t, p) ? '\n누르면 → ' + { 대기: '완료', 완료: '해당없음(사유) 또는 대기로 되돌리기', 해당없음: '대기' }[t.status] : ''}`} onClick={e => openPop(e, t, p)}>
           <span className="np-box">{t.status === '완료' ? '✓' : t.status === '해당없음' ? '–' : ''}</span>
         </button>
       </td>
@@ -482,7 +482,8 @@ function NpTable({ list, H }) {
           {err && <p className="nf-err">{err}</p>}
           <div className="np-popa">
             <button type="button" className="btn sm np-btn" disabled={busy} onClick={na}>해당없음으로 저장</button>
-            <span className="np-poph2">Enter 저장 · Esc 취소 (완료로 남음)</span>
+            <button type="button" className="btn sm ghost" disabled={busy} onClick={() => save('np_task_cancel', { p_task: t.id, p_reason: null }, '대기로 되돌렸습니다')}>↩ 대기로 되돌리기</button>
+            <span className="np-poph2">Enter 저장 · Esc 닫기 (완료로 남음)</span>
           </div>
         </>
       )
@@ -565,7 +566,7 @@ function NpTable({ list, H }) {
       <div className="np-lg">
         <span><span className="np-box ok">✓</span>완료</span><span><span className="np-box na">–</span>해당없음</span><span><span className="np-box nx" />다음 할 일</span><span><span className="np-box" />대기</span>
         <span><span className="np-dot">·</span>이 제품엔 없는 업무</span><span><i className="np-mi">✎</i>메모 필요 (관리자 설정)</span>
-        <span className="np-lgr">{npEditor ? '누를 때마다 □ → ✓ 완료 → – 해당없음(사유 입력) → □ · ✎ 업무·생산 점검은 입력창' : '칸을 누르면 처리 내용을 볼 수 있습니다'}</span>
+        <span className="np-lgr">{npEditor ? '□ 누르기 = 완료 · ✓ 누르기 = 해당없음(사유) 또는 대기로 되돌리기 · – 누르기 = 대기 · ✎ 업무·생산 점검은 입력창' : '칸을 누르면 처리 내용을 볼 수 있습니다'}</span>
       </div>
     </div>
   )
