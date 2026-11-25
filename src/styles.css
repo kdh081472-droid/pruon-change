@@ -2460,3 +2460,5 @@ table.np-mx tr.fin td { opacity: .55 } table.np-mx tr.fin td.pn { opacity: .75 }
 td.np-c.busy .np-box { opacity: .45 }
 .np-cell:disabled { cursor: progress }
 @media (max-width: 1099px) { .np-new { grid-template-columns: 1fr } }
+
+.np-draft { font-size: 12px; color: var(--faint); display: flex; gap: 8px; align-items: center; margin-bottom: 2px } .np-draft .link { font-size: 12px }

@@ -667,11 +667,26 @@ function OwnerSelect({ value, onChange, id }) {
 }
 
 function NpNew() {
-  const { db, uid, npRun, npOpen } = useApp()
+  const { db, uid, npRun, npOpen, ui, setUi } = useApp()
   const mkSteps = () => db.npTemplates.map((t, i) => ({ k: 't' + i, tid: t.id, t: t.title, m: !!t.need_memo, on: true }))
-  const [f, setF] = useState(() => ({ name: '', customer: '', launch: '', owner: devPeople(db).some(p => p.id === uid) ? uid : '', team: '', spec: '', memo: '' }))
-  const [steps, setSteps] = useState(mkSteps)
-  const [nt, setNt] = useState('')
+  const mkF = () => ({ name: '', customer: '', launch: '', owner: devPeople(db).some(p => p.id === uid) ? uid : '', team: '', spec: '', memo: '' })
+  // 작성 중인 내용 보관: 창 크기를 바꿔 화면 구성이 바뀌거나, 다른 탭에 다녀오거나, 새로고침해도 남아 있게
+  const DK = 'pruon-np-draft-' + uid
+  const [d0] = useState(() => {
+    if (ui.npDraft) return ui.npDraft
+    try { const d = JSON.parse(localStorage.getItem(DK) || 'null'); if (d && d.f && Array.isArray(d.steps)) return d } catch (e) { /* 저장 불가 브라우저 */ }
+    return null
+  })
+  const [f, setF] = useState(() => (d0 ? { ...mkF(), ...d0.f } : mkF()))
+  const [steps, setSteps] = useState(() => (d0 ? d0.steps : mkSteps()))
+  const [nt, setNt] = useState(() => (d0 ? d0.nt || '' : ''))
+  const hasDraft = !!(f.name || f.customer || f.launch || f.spec || f.memo || nt || JSON.stringify(steps) !== JSON.stringify(mkSteps()))
+  useEffect(() => {
+    const d = hasDraft ? { f, steps, nt } : null
+    setUi(u => ({ ...u, npDraft: d }))
+    try { d ? localStorage.setItem(DK, JSON.stringify(d)) : localStorage.removeItem(DK) } catch (e) { /* 저장 불가 브라우저 */ }
+  }, [f, steps, nt]) // eslint-disable-line react-hooks/exhaustive-deps
+  const clearDraft = () => { setF(mkF()); setSteps(mkSteps()); setNt(''); setErr('') }
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const drag = useRef(null)
@@ -687,12 +702,15 @@ function NpNew() {
     const r = await npRun('np_create', { p_name: f.name, p_customer: f.customer, p_spec: f.spec, p_memo: f.memo, p_owner: f.owner, p_team: needT ? f.team : null, p_launch: f.launch || null, p_steps: steps.filter(s => s.on && s.t.trim()).map(s => ({ tpl_id: s.tid || null, title: s.t.trim(), need_memo: s.m })) }, '신제품을 등록했습니다')
     setBusy(false)
     if (r.error) return setErr(r.error + (/np_create|function/i.test(r.error) ? ' (upgrade23·upgrade24 SQL을 실행했는지 확인해주세요)' : ''))
+    setUi(u => ({ ...u, npDraft: null }))
+    try { localStorage.removeItem(DK) } catch (e) { /* 저장 불가 브라우저 */ }
     npOpen(r.data)
   }
   let no = 0
   return (
     <div className="np-new">
       <div className="nf np-form">
+        {hasDraft && <div className="np-draft">작성 중인 내용이 자동으로 보관됩니다 <button type="button" className="link" onClick={clearDraft}>지우고 새로 쓰기</button></div>}
         <label htmlFor="np-name">제품명 <span className="req">*필수</span></label>
         <input id="np-name" value={f.name} onChange={e => set({ name: e.target.value })} maxLength={100} placeholder="예: 새우 딤섬 500g" />
         <label htmlFor="np-cus">고객사</label>
