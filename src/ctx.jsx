@@ -36,6 +36,27 @@ export function Person({ id, fallback }) {
 }
 
 // 보고서용 (줄여 쓰지 않음)
+// 영업 담당자 이름 + 함께 처리하는 사람
+export function SalesOwner({ owner }) {
+  const { db } = useApp()
+  if (!owner) return <span className="sal-none">미정</span>
+  const hs = (db.salesHelpers || []).filter(h => h.owner === owner).map(h => db.people[h.helper]).filter(p => p && !p.left_at)
+  return <><Person id={owner} />{hs.length > 0 && <small className="sal-h"> · 함께 처리 {hs.map(p => p.name).join(', ')}</small>}</>
+}
+
+// 영업 담당자 고르기 (영업 부서 재직자 · 함께 처리하는 사람 표시)
+export function salesPeople(db) {
+  return db.profiles.filter(p => p.department === '영업' && !p.left_at).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+}
+export function SalesPick({ id, value, onChange, db, uid }) {
+  const hs = o => (db.salesHelpers || []).filter(h => h.owner === o).map(h => db.people[h.helper]).filter(p => p && !p.left_at).map(p => p.name)
+  return (
+    <select id={id} value={value || ''} onChange={e => onChange(e.target.value)}>
+      <option value="">영업 담당자를 골라주세요</option>
+      {salesPeople(db).map(p => <option key={p.id} value={p.id}>{p.name}{p.id === uid ? ' (나)' : ''}{hs(p.id).length ? ' · 함께 처리: ' + hs(p.id).join(', ') : ''}</option>)}
+    </select>
+  )
+}
 export function PersonR({ id, inline, fallback }) {
   const { db } = useApp()
   const p = id && db.people[id]

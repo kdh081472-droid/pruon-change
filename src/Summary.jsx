@@ -13,6 +13,7 @@ const STATUS_CLS = { '진행 중': 'live', '전환일 지남': 'late', 종결: '
 
 const COLS = [
   { k: 'title', label: '제목', type: 'text', cls: 'c0', w: 240, min: 140 },
+  { k: 'sales', label: '영업 담당', type: 'cat', w: 100, min: 76 },
   { k: 'status', label: '상태', type: 'cat', w: 104, min: 84 },
   { k: 'pct', label: '처리', type: 'num', unit: '%', numLabel: '처리율 몇 % 이상', w: 130, min: 96 },
   { k: 'target', label: '전환일', type: 'date', w: 100, min: 86 },
@@ -49,6 +50,7 @@ export default function Summary() {
   const tw = useRef(null)
 
   // 표에 쓰는 줄 (엑셀 "변경" 시트와 같은 값)
+  const salesName = id => (id ? (db.people[id] ? db.people[id].name : '-') : '미정')
   const rows = useMemo(() => db.changes.map(c => {
     const n = c.tasks.length, d = c.tasks.filter(t => t.status !== '대기').length
     const p = db.people[c.created_by]
@@ -68,8 +70,9 @@ export default function Summary() {
       gid: g ? g.id : null, kidNo: c.kidNo, extra: g ? g.title + ' ' + (c.description || '') + ' ' + (c.reason || '') : '',
       desc: g ? '' : c.description || '', reason: g ? '' : c.reason || '', items: g ? '' : c.itemsText === '-' ? '' : c.itemsText,
       by: g ? '' : p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''),
+      sales: g ? '' : salesName(c.sales_owner),
       // 묶음의 품목: 화면에는 비워 두지만 필터·정렬은 묶음 값으로 (등록자·변경내용·변경사유) + 자기 대상품목
-      fv: g ? { by: p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''), desc: g.description || c.description || '', reason: g.reason || c.reason || '', items: c.itemsText === '-' ? '' : c.itemsText } : null,
+      fv: g ? { sales: salesName(g.sales_owner), by: p ? `${p.name} (${SHORT[dept] || dept})` : (c.created_by_dept || ''), desc: g.description || c.description || '', reason: g.reason || c.reason || '', items: c.itemsText === '-' ? '' : c.itemsText } : null,
       bySort: String(di < 0 ? 99 : di).padStart(2, '0') + ' ' + (p ? p.name : ''),
       left: c.status === '종결' ? '' : remList.map(([x, k]) => x + ' ' + k).join(' · '),
       remList: c.status === '종결' ? [] : remList, leftN: c.status === '종결' ? '' : remList.reduce((a, x) => a + x[1], 0),
@@ -92,6 +95,7 @@ export default function Summary() {
         done: s.done, total: s.total, pct: s.pct, target: s.next || s.from, range: rangeTxt(s.from, s.to),
         desc: g.description || '', reason: g.reason || '', items: '품목 ' + g.kids.length + '개',
         by: p ? `${p.name} (${SHORT[dept] || dept})` : (g.created_by_dept || ''),
+        sales: salesName(g.sales_owner),
         bySort: String(di < 0 ? 99 : di).padStart(2, '0') + ' ' + (p ? p.name : ''),
         chat: us.reduce((a, u) => a + u.length, 0), chatAt: us.some(u => u.some(mentionsMe)),
         reg: ymd(g.created_at), closed: ymd(s.closedAt),
@@ -194,6 +198,7 @@ export default function Summary() {
     if (c.k === 'title' && r.kid) return <td key={c.k} className="c0 kid"><div className="cl2"><span className="k-ln" aria-hidden="true">└</span><b><Hl text={v} words={words} /></b>{r.chat > 0 && <span className="tdot" title={'안 읽은 대화 ' + r.chat + '개'}>{r.chatAt ? '@' : ''}{r.chat}</span>}</div></td>
     if (c.k === 'title') return <td key={c.k} className="c0"><div className="cl2"><b><Hl text={v} words={words} /></b>{r.chat > 0 && <span className="tdot" title={'안 읽은 대화 ' + r.chat + '개' + (r.chatAt ? ' (나를 부른 글 있음)' : '')}>{r.chatAt ? '@' : ''}{r.chat}</span>}</div></td>
     if (c.k === 'status') return <td key={c.k} className="ctr"><span className={'sst ' + STATUS_CLS[v]}>{v}</span></td>
+    if (c.k === 'sales') return <td key={c.k} className={'sub1' + (v === '미정' ? ' sal-none' : '')}>{v}</td>
     if (c.k === 'pct') return <td key={c.k}><span className={'spg' + (r.status === '전환일 지남' ? ' late' : '')}><i><em style={{ width: v + '%' }} /></i>{r.done}/{r.total}</span></td>
     if (c.k === 'target') {
       const n = dd(v), live = r.status === '진행 중' || r.status === '전환일 지남'

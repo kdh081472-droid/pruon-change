@@ -6,9 +6,9 @@ import { md, parse, snip, stamp } from './util.js'
 
 /* ---------- 내 할 일 (제품별, 전환일이 가까운 순) · 처리한 일 ---------- */
 export function MineTab() {
-  const { db, me, C, isLate, overdue, openTask, goChange, ui, setUi } = useApp()
-  const list = db.tasks.filter(t => t.department === me.department && t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중')
-  const done = db.tasks.filter(t => t.department === me.department && t.status !== '대기' && C(t.change_id))
+  const { db, me, C, isLate, overdue, openTask, goChange, ui, setUi, inMine } = useApp()
+  const list = db.tasks.filter(t => inMine(t) && t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중')
+  const done = db.tasks.filter(t => inMine(t) && t.status !== '대기' && C(t.change_id))
   const late = list.filter(isLate).length
   const view = ui.mineView || 'todo'
   const head = (
@@ -21,7 +21,7 @@ export function MineTab() {
     </>
   )
   if (view === 'done') {
-    if (!done.length) return <>{head}<div className="card empty">아직 {me.department} 부서가 처리한 일이 없습니다.</div></>
+    if (!done.length) return <>{head}<div className="card empty">아직 처리한 일이 없습니다.</div></>
     const by = {}
     done.forEach(t => { (by[t.change_id] = by[t.change_id] || []).push(t) })
     const cids = Object.keys(by).sort((a, b) => {
@@ -42,7 +42,7 @@ export function MineTab() {
                   <button type="button" key={t.id} className="m-i dn-i" onClick={() => openTask(t.id)}>
                     <span className={'cal ok' + (na ? ' na' : '')}><b>{na ? '–' : '✓'}</b><span>{na ? '해당없음' : '완료'}</span></span>
                     <span>
-                      <span className="tt">{t.title}</span>
+                      <span className="tt"><SalesTag t={t} />{t.title}</span>
                       <span className="memo-l">“{t.memo}”</span>
                       <span className="when"><Person id={t.done_by} /> · {stamp(t.done_at)}</span>
                     </span>
@@ -56,7 +56,7 @@ export function MineTab() {
       </>
     )
   }
-  if (!list.length) return <>{head}<div className="card empty">지금 {me.department} 부서가 처리할 일이 없습니다.</div></>
+  if (!list.length) return <>{head}<div className="card empty">지금 처리할 일이 없습니다.</div></>
   const by = {}, byG = {}
   list.forEach(t => {
     const c = C(t.change_id)
@@ -81,7 +81,7 @@ export function MineTab() {
             {by[cid].map(t => (
               <button type="button" key={t.id} className={'t2' + (od ? ' late' : '')} onClick={() => openTask(t.id)}>
                 <span className={'tc2 ' + (od ? 'late' : 'wait')}>{od ? '전환일 지남' : '대기'}</span>
-                <span className="t2-tx"><span className="t2-t">{t.is_extra && <span className="asg">배정</span>}{t.title}</span></span>
+                <span className="t2-tx"><span className="t2-t"><SalesTag t={t} />{t.is_extra && <span className="asg">배정</span>}{t.title}</span></span>
                 <span className="arr">›</span>
               </button>
             ))}
@@ -90,6 +90,14 @@ export function MineTab() {
       })}
     </>
   )
+}
+
+/* ---------- 겸직: 다른 부서(영업) 할 일 표시 ---------- */
+function SalesTag({ t }) {
+  const { db, me, C } = useApp()
+  if (!t || t.department === me.department) return null
+  const c = C(t.change_id), o = c && c.sales_owner && db.people[c.sales_owner]
+  return <span className="sal-tag">{t.department}{o ? ' · ' + o.name + ' 담당' : ''}</span>
 }
 
 /* ---------- 새 대화 (안 읽은 글이 있는 제품) ---------- */
@@ -140,18 +148,19 @@ function GroupMine({ gid, ts }) {
   const [pick, setPick] = useState(() => ({}))          // { taskId: false } 체크 해제한 것만
   const ds = ts.map(t => C(t.change_id).target_date).sort()
   // 할 일 제목별로 묶음 (묶음의 할 일 세트 순서, 나중에 추가 배정된 건 뒤로)
-  const order = (g.tasks || []).map(x => x.title)
-  const titles = [...new Set(ts.map(t => t.title))].sort((a, b) => {
+  const order = (g.tasks || []).map(x => x.department + '|' + x.title)
+  const keyOf = t => t.department + '|' + t.title
+  const titles = [...new Set(ts.map(keyOf))].sort((a, b) => {
     const ia = order.indexOf(a), ib = order.indexOf(b)
     return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib)
   })
-  const kidsOf = title => ts.filter(t => t.title === title).sort((a, b) => C(a.change_id).kidNo - C(b.change_id).kidNo)
+  const kidsOf = key => ts.filter(t => keyOf(t) === key).sort((a, b) => C(a.change_id).kidNo - C(b.change_id).kidNo)
   const odAny = ts.some(t => overdue(C(t.change_id)))
   return (
     <div className={'card mg gm' + (odAny ? ' od' : '')}>
       <button type="button" className="mg-h" onClick={() => goGroup(gid)}>
         <span className="t"><span className="g-chip">묶음 · 품목 {g.kids.length}</span> {g.title}</span>
-        <span className="d">전환 {rangeTxt(ds[0], ds[ds.length - 1])} · 우리 부서 남은 {ts.length}건</span>
+        <span className="d">전환 {rangeTxt(ds[0], ds[ds.length - 1])} · 내 할 일 남은 {ts.length}건</span>
       </button>
       <div className="gm-seg" role="tablist">
         <button type="button" role="tab" className={view === 'task' ? 'on' : ''} onClick={() => setView('task')}>할 일별로 보기</button>
@@ -159,13 +168,14 @@ function GroupMine({ gid, ts }) {
       </div>
       {view === 'task' ? titles.map((title, i) => {
         const xs = kidsOf(title)
+        const label = xs[0].title
         const isOpen = open[title] !== undefined ? open[title] : false   // 접힌 게 기본
         const sel = xs.filter(t => pick[t.id] !== false)
         const late = xs.some(t => overdue(C(t.change_id)))
         return (
           <div key={title} className={'gm-t' + (isOpen ? ' open' : '') + (late ? ' late' : '')}>
             <button type="button" className="gm-th" aria-expanded={isOpen} onClick={() => setOpen({ ...open, [title]: !isOpen })}>
-              <span className="tno">{i + 1}</span><b>{title}</b><span className={'tc2 ' + (late ? 'late' : 'wait')}>{xs.length}개 품목 남음</span><span className="sp" /><span className="gm-c">{isOpen ? '접기 ▴' : '펼치기 ▾'}</span>
+              <span className="tno">{i + 1}</span><SalesTag t={xs[0]} /><b>{label}</b><span className={'tc2 ' + (late ? 'late' : 'wait')}>{xs.length}개 품목 남음</span><span className="sp" /><span className="gm-c">{isOpen ? '접기 ▴' : '펼치기 ▾'}</span>
             </button>
             {isOpen && (
               <div className="gm-b">
@@ -196,7 +206,7 @@ function GroupMine({ gid, ts }) {
           {ts.filter(t => t.change_id === k.id).map(t => (
             <button type="button" key={t.id} className={'t2' + (overdue(k) ? ' late' : '')} onClick={() => openTask(t.id)}>
               <span className={'tc2 ' + (overdue(k) ? 'late' : 'wait')}>{overdue(k) ? '전환일 지남' : '대기'}</span>
-              <span className="t2-tx"><span className="t2-t">{t.is_extra && <span className="asg">배정</span>}{t.title}</span></span>
+              <span className="t2-tx"><span className="t2-t"><SalesTag t={t} />{t.is_extra && <span className="asg">배정</span>}{t.title}</span></span>
               <span className="arr">›</span>
             </button>
           ))}

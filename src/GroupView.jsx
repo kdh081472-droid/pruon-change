@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ORDER, SHORT } from './supabase.js'
-import { useApp, Person } from './ctx.jsx'
+import { useApp, Person, SalesOwner } from './ctx.jsx'
 import { AiDraftBadge } from './AiDraft.jsx'
 import { dd, md, stamp, snip } from './util.js'
 import Chat from './Chat.jsx'
@@ -33,7 +33,7 @@ const SCLS = { '진행 중': 'live', '전환일 지남': 'late', 종결: 'done',
 
 /* ---------- 묶음 화면 ---------- */
 export default function GroupView({ gid }) {
-  const { db, me, viewer, wide, isAdmin, overdue, unread, goChange, goSummary, setSheet, openChat, startAssign } = useApp()
+  const { db, me, uid, viewer, wide, isAdmin, overdue, unread, goChange, goSummary, setSheet, openChat, startAssign } = useApp()
   const [logOpen, setLogOpen] = useState(false)
   const g = db.groupMap[gid]
   if (!g || !g.kids.length) return <div className="card empty">묶음을 찾을 수 없습니다. 요약에서 다시 골라주세요.</div>
@@ -72,6 +72,7 @@ export default function GroupView({ gid }) {
           {g.reason && <div><dt>변경 사유 (공통)</dt><dd>{g.reason}</dd></div>}
           <div><dt>진행</dt><dd><span className="spg"><i><em style={{ width: s.pct + '%' }} /></i>{s.done}/{s.total}</span> <small className="gv-sn">진행 {s.openN} · 종결 {s.doneN}{s.stopN ? ' · 중단 ' + s.stopN : ''}</small></dd></div>
           <div><dt>등록</dt><dd><Person id={g.created_by} fallback={g.created_by_dept} />{g.ai_turns ? <> <AiDraftBadge long turns={g.ai_turns} /></> : null}</dd></div>
+          <div className="kv-sal"><dt>영업 담당</dt><dd><SalesOwner owner={g.sales_owner} />{canWork && (g.created_by === uid || g.sales_owner === uid || isAdmin) && <button type="button" className="pill sm sal-chg" onClick={() => setSheet({ kind: 'sales', gid: g.id })}>{g.sales_owner ? '바꾸기' : '정하기'}</button>}</dd></div>
         </dl>
       </div>
 

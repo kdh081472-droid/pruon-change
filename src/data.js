@@ -66,6 +66,7 @@ export function buildDb(raw) {
     groups: groups.filter(g => g.kids.length),
     groupMap,
     tasks: raw.tasks,
+    salesHelpers: raw.salesHelpers || [],
     taskLogs: raw.taskLogs,
     changeLogs: raw.changeLogs,
     presets: raw.presets,
@@ -78,6 +79,8 @@ export function buildDb(raw) {
 
 // ---------- 신제품 (upgrade22 이후 · 없으면 빈 목록) ----------
 export const NP_DEPT = '개발'   // 신제품 등록·수정·처리 권한 부서 (앱의 부서 이름)
+// 영업 할 일은 부서가 아니라 변경마다 정한 영업 담당자(+함께 처리하는 사람)가 처리 (upgrade28)
+export const SALES_DEPT = '영업'
 function buildNp(raw, reads) {
   const tasksBy = {}
   ;(raw.npTasks || []).forEach(t => { (tasksBy[t.product_id] = tasksBy[t.product_id] || []).push(t) })
@@ -124,6 +127,7 @@ export async function loadRaw() {
     soft(fetchAll('group_logs', ['id'])),
     soft(fetchAll('group_reads', ['user_id', 'group_id'])),
   ])
+  const salesHelpers = await soft(fetchAll('sales_helpers', ['owner', 'helper']))   // upgrade28
   // 신제품 (upgrade22): 표가 없으면 빈 목록 + npReady=false
   let np = {}
   try {
@@ -138,7 +142,7 @@ export async function loadRaw() {
     ])
     np = { npProducts, npTasks, npLogs, npMessages, npReads, npMembers, npTemplates, npReady: true }
   } catch (_) { np = { npReady: false } }
-  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs, greads, ...np }
+  return { profiles, changes, items, tasks, taskLogs, changeLogs, presets, templates, messages, reads, depts, groups, groupLogs, greads, salesHelpers, ...np }
 }
 
 // 앱 전체 데이터: 처음에 한 번 모두 불러오고, 누가 무엇을 바꾸면 실시간으로 다시 불러옴
@@ -185,6 +189,9 @@ export function useAppData(userId) {
       ch2.on('postgres_changes', { event: '*', schema: 'public', table }, soon)
     })
     ch2.subscribe()
+    const ch3 = supabase.channel('pruon-sales')
+    ch3.on('postgres_changes', { event: '*', schema: 'public', table: 'sales_helpers' }, soon)
+    ch3.subscribe()
     // 화면으로 다시 돌아오면 최신으로
     const onVis = async () => {
       if (document.visibilityState !== 'visible') return
@@ -198,7 +205,7 @@ export function useAppData(userId) {
     return () => {
       alive.current = false
       clearTimeout(timer.current)
-      supabase.removeChannel(ch); supabase.removeChannel(ch2)
+      supabase.removeChannel(ch); supabase.removeChannel(ch2); supabase.removeChannel(ch3)
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', onVis)
       window.removeEventListener('online', onVis)

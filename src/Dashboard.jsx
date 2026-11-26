@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, isViewDept } from './supabase.js'
-import { useAppData } from './data.js'
+import { useAppData, SALES_DEPT } from './data.js'
 import { Ctx, Person, ICON, useWidth, WIDE, useApp as useAppCtx } from './ctx.jsx'
 import { dd, iso, todayMid, errText } from './util.js'
 import { MineTab, NewChatBlock } from './Mine.jsx'
@@ -186,6 +186,17 @@ export default function Dashboard({ session }) {
     // 전환일이 지났는데 아직 처리 안 된 할 일 (마감일 기능은 없음)
     const isLate = t => t.status === '대기' && C(t.change_id) && C(t.change_id).status === '진행중' && dd(C(t.change_id).target_date) < 0
     const overdue = c => !!c && c.status === '진행중' && dd(c.target_date) < 0 && c.tasks.some(t => t.status === '대기')
+    // 영업 할 일: 그 변경의 영업 담당자 + 함께 처리하는 사람(겸직자)이 처리 · 담당이 비어 있는 기존 건은 영업 부서
+    const helping = new Set((db.salesHelpers || []).filter(h => h.helper === uid).map(h => h.owner))
+    const salesOwner = c => (c && c.sales_owner) || null
+    const salesMine = c => { const o = salesOwner(c); return !!o && (o === uid || helping.has(o)) }
+    const canDoTask = t => {
+      if (viewer || !t) return false
+      if (t.department === SALES_DEPT) { const c = C(t.change_id); return salesOwner(c) ? salesMine(c) : me.department === SALES_DEPT }
+      return t.department === me.department
+    }
+    // 내 할 일에 보이는 것: 우리 부서 할 일 + 내가 담당(함께 처리)하는 변경의 영업 할 일 (담당 미정 영업 건은 안 보임)
+    const inMine = t => (t.department === SALES_DEPT ? salesMine(C(t.change_id)) : t.department === me.department)
     // 방(room): 변경 id 또는 'g:'+묶음 id
     const myRead = room => db.reads[uid + '|' + room] || 0
     const unread = room => db.messages.filter(m => m.room === room && m.id > myRead(room) && m.user_id !== uid && !m.deleted)
@@ -219,7 +230,7 @@ export default function Dashboard({ session }) {
         setSheet(sh); toast('팝업이 막혀 있어 이 화면에서 엽니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용하면 다음부터 따로 뜹니다.')
       },
       openAssignWin: room => { const ok = openAssignPopup(room); if (ok) setSheet(null); else toast('팝업이 막혀 있습니다. 주소창 오른쪽의 팝업 차단 표시를 눌러 허용해주세요.'); return ok },
-      db, me, uid, viewer, wide, ui, setUi, C, tOf, isLate, overdue, unread, isAdmin, setAdminMode, mentionsMe, unreadCnt, run, reload, toast,
+      db, me, uid, viewer, wide, ui, setUi, C, tOf, isLate, overdue, unread, canDoTask, inMine, salesMine, helping, isAdmin, setAdminMode, mentionsMe, unreadCnt, run, reload, toast,
       sheet, setSheet,
       openTask: tid => setSheet({ kind: 'task', tid }),
       openSheet: (kind, cid) => setSheet({ kind, cid }),
@@ -403,7 +414,7 @@ export default function Dashboard({ session }) {
   }
   if (adminMode && isAdmin) return <Ctx.Provider value={app}><Admin onExit={() => setAdminMode(false)} />{toastMsg && <div className="toast" role="status">{toastMsg}</div>}</Ctx.Provider>
 
-  const myOpenN = db.tasks.filter(t => t.department === me.department && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length
+  const myOpenN = db.tasks.filter(t => app.inMine(t) && t.status === '대기' && app.C(t.change_id) && app.C(t.change_id).status === '진행중').length
   const unreadAll = db.changes.reduce((n, c) => n + app.unread(c.id).length, 0) + db.groups.reduce((n, g) => n + app.unread('g:' + g.id).length, 0)
   const npN = npBadge(db, uid, me)
   const tabs = viewer

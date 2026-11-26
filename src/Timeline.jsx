@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ORDER } from './supabase.js'
 import { GroupCrumb } from './GroupView.jsx'
-import { useApp, Person, ICON } from './ctx.jsx'
+import { useApp, Person, ICON, SalesOwner } from './ctx.jsx'
 import { AiDraftBadge } from './AiDraft.jsx'
 import Summary from './Summary.jsx'
 import { dd, iso, md, norm, parse, todayMid, stamp, snip } from './util.js'
@@ -87,7 +87,7 @@ export function ChatMini({ c }) {
 
 /* ---------- 제품 카드: 위에 요약, 펼치면 부서별 할 일 목록 ---------- */
 export function ProductCard({ c, forceOpen }) {
-  const { db, me, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, openTask, openSheet, startAssign, openReport, isAdmin, run, toast, goSummary, goGroup } = useApp()
+  const { db, me, uid, viewer, wide, ui, setUi, tOf, isLate, overdue, sheet, setSheet, openTask, openSheet, startAssign, openReport, isAdmin, run, toast, goSummary, goGroup, canDoTask, inMine } = useApp()
   const pcView = !!forceOpen && wide        // PC 제품 화면: 버튼은 제목 줄 오른쪽, 대화 버튼 없음
   const [ord, setOrd] = useState(null)        // 우리 부서 할 일 순서 (저장되기 전 화면에 먼저 반영)
   const [drag, setDrag] = useState(null)
@@ -95,7 +95,7 @@ export function ProductCard({ c, forceOpen }) {
   const ts = tOf(c.id)
   useEffect(() => { setOrd(null) }, [ts])
   const left = ts.filter(t => t.status === '대기')
-  const mine = left.filter(t => t.department === me.department).length
+  const mine = left.filter(inMine).length
   const isOpen = !!ui.open[c.id] || !!forceOpen
   const closed = c.status === '종결'
   const stopped = closed && c.close_type === '중단'
@@ -144,7 +144,7 @@ export function ProductCard({ c, forceOpen }) {
         {clogs.length > tlogs.length && <span className="chg">내용 수정됨</span>}
         <span>{ts.length - left.length}/{ts.length} 처리</span>
         {left.length > 0 && <span className={od ? 'late' : ''}>{stopped ? '중단 ' + left.length + '건' : '남은 ' + left.length + '건'}</span>}
-        {mine > 0 && !closed && !viewer && <span className="mine">우리 부서 {mine}건</span>}
+        {mine > 0 && !closed && !viewer && <span className="mine">내 할 일 {mine}건</span>}
       </div>}
       {!pcView && <span className={'bar2' + (od ? ' late' : '')}><i style={{ width: pct + '%' }} /></span>}
       {!isOpen && !closed && left.length > 0 && (
@@ -163,7 +163,7 @@ export function ProductCard({ c, forceOpen }) {
     .concat([...new Set(ts.map(t => t.department))].filter(d => !ORDER.includes(d)).map(d => ({ d, xs: ts.filter(t => t.department === d) })))
     .filter(g => g.xs.length)
   const canOrder = !viewer && !closed
-  const mineIds = ts.filter(t => t.department === me.department).map(t => t.id)
+  const mineIds = ts.filter(t => t.department === me.department && canDoTask(t)).map(t => t.id)
   const curOrd = ord || mineIds
   const saveOrd = async ids => {
     setOrd(ids)
@@ -182,6 +182,7 @@ export function ProductCard({ c, forceOpen }) {
           {c.description && <div><dt>변경 내용</dt><dd>{c.description}</dd></div>}
           {c.reason && <div><dt>변경 사유</dt><dd>{c.reason}</dd></div>}
           <div><dt>등록</dt><dd><Person id={c.created_by} fallback={c.created_by_dept} />{(c.ai_turns || (c.group && c.group.ai_turns)) ? <> <AiDraftBadge long turns={c.ai_turns || c.group.ai_turns} /></> : null}</dd></div>
+          <div className="kv-sal"><dt>영업 담당</dt><dd><SalesOwner owner={c.sales_owner} />{!viewer && !closed && ((c.group ? c.group.created_by : c.created_by) === uid || c.sales_owner === uid || isAdmin) && <button type="button" className="pill sm sal-chg" onClick={() => setSheet(c.group ? { kind: 'sales', gid: c.group.id } : { kind: 'sales', cid: c.id })}>{c.sales_owner ? '바꾸기' : '정하기'}</button>}</dd></div>
         </dl>
   const histLine = x => (x.action === '전환일 변경'
     ? <>전환일 {md(x.old_date)} → <b>{md(x.new_date)}</b> · {x.memo} — <Person id={x.user_id} />, {stamp(x.created_at)}</>
@@ -228,20 +229,21 @@ export function ProductCard({ c, forceOpen }) {
         <div className="dg-grid">
         {groups.map(({ d, xs }) => {
           const r = xs.filter(t => t.status === '대기').length
-          const isMine = d === me.department && !viewer
+          const isMine = !viewer && canDoTask(xs[0]) && (d === me.department || d === '영업')
+          const ownD = isMine && d === me.department   // 순서 바꾸기는 우리 부서만
           return (
             <section key={d} className={'dg2' + (r && od ? ' od' : '') + (isMine ? ' mine' : '') + (r ? '' : ' done')}>
               <div className="dg2-h">
-                <b>{d}</b>{isMine && <span className="me">우리 부서</span>}{isMine && canOrder && r > 0 && xs.length > 1 && <span className="ord-h">{wide ? '끌어서 순서 변경' : '▲▼로 순서 변경'}</span>}
+                <b>{d}</b>{d === '영업' && c.sales_owner && <span className="sal-own">{(db.people[c.sales_owner] || {}).name} 담당</span>}{isMine && <span className="me">{d === me.department ? '우리 부서' : '함께 처리'}</span>}{ownD && canOrder && r > 0 && xs.length > 1 && <span className="ord-h">{wide ? '끌어서 순서 변경' : '▲▼로 순서 변경'}</span>}
                 <span className="sp" />
                 {r > 0
                   ? <span className="dg2-n">{stopped ? '중단 ' + r + '건' : '남은 ' + r + '건'}</span>
                   : <span className="dg2-ok">✓ {xs.length}건 모두 처리</span>}
               </div>
-              {(isMine && canOrder ? xs.slice().sort((p, q) => curOrd.indexOf(p.id) - curOrd.indexOf(q.id)) : xs).map((t, i) => {
+              {(ownD && canOrder ? xs.slice().sort((p, q) => curOrd.indexOf(p.id) - curOrd.indexOf(q.id)) : xs).map((t, i) => {
                 const late = isLate(t)
                 const on = sheet && sheet.kind === 'task' && sheet.tid === t.id
-                const movable = isMine && canOrder && xs.length > 1
+                const movable = ownD && canOrder && xs.length > 1
                 const idx = movable ? curOrd.indexOf(t.id) : i
                 return (
                   <div key={t.id} className={'t2row' + (movable ? ' mv' : '') + (drag && drag.over === idx && drag.from !== idx ? ' over' : '') + (drag && drag.from === idx ? ' dragging' : '')}

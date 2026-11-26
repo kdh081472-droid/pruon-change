@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, ORDER, SHORT, ITEM_TYPES } from './supabase.js'
-import { useApp, Person, useWidth, WIDE } from './ctx.jsx'
+import { useApp, Person, useWidth, WIDE, SalesPick } from './ctx.jsx'
 import { errText, stampFull } from './util.js'
 import AiDraft, { AiTag, Grow, SrcLine, srcOf } from './AiDraft.jsx'
 import { useAiPublic, memoFlag, defaultMemo, FIELD_LABEL, PV2F } from './ai.js'
@@ -19,6 +19,7 @@ const NAME_HINT = {
 export function emptyForm() {
   return {
     title: '', desc: '', reason: '', target: '',
+    sales: null,                // 영업 담당자 (null이면 영업팀원은 본인, 그 외는 골라야 함)
     items: [{ type: '단품', name: '' }],
     list: null,                 // 할 일 목록 (부서별 순서 그대로) — null이면 기본 목록
     mode: 'items',              // 품목 2개 이상이면 항상 품목별로 관리 (묶음) · '하나로 관리'는 없앰
@@ -40,6 +41,8 @@ function sig(f, v) {
 // 변경 등록. test = 관리자 '시험해 보기' { dept, cfg, conf } → 똑같이 동작하지만 저장하지 않음
 export default function NewChange({ nf, setNf, onDone, test }) {
   const { db, uid, me, C, reload, toast } = useApp()
+  // 영업 담당자: 고른 값 → 없으면 영업팀원은 본인
+  const salesV = nf.sales || (me.department === '영업' && !me.left_at ? uid : '')
   const [ask, setAsk] = useState(null)          // 미확인 질문 확인창 { open, memoOn, memo, aiMemo }
   const [testDone, setTestDone] = useState(null) // 시험 등록 결과
   const pub = useAiPublic()
@@ -242,7 +245,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
 
   async function submit(choice) {
     const items = nf.items.map(i => ({ type: i.type, name: i.name.trim(), target: i.target || '' })).filter(i => i.name)
-    const err = !nf.title.trim() ? '제목을 입력해주세요.' : !nf.target ? '전환일을 골라주세요.'
+    const err = !nf.title.trim() ? '제목을 입력해주세요.' : !nf.target ? '전환일을 골라주세요.' : !salesV ? '영업 담당자를 골라주세요.'
       : !items.length ? '대상 품목을 1개 이상 입력해주세요.' : !pickedN ? '할 일을 1건 이상 배정해주세요.' : ''
     if (err) return set({ err })
     if (edit) return set({ err: '고치고 있는 할 일을 먼저 저장하거나 취소해주세요.' })
@@ -280,7 +283,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
       setBusy(true)
       const { data, error } = await supabase.rpc('create_group', {
         p_title: nf.title.trim(), p_description: nf.desc.trim(), p_reason: nf.reason.trim(),
-        p_items: items.map(i => ({ type: i.type, name: i.name, target: i.target || nf.target })), p_tasks: tasks,
+        p_items: items.map(i => ({ type: i.type, name: i.name, target: i.target || nf.target })), p_tasks: tasks, p_sales_owner: salesV,
       })
       if (error) { setBusy(false); return set({ err: errText(error) }) }
       await after(data, true)
@@ -292,7 +295,7 @@ export default function NewChange({ nf, setNf, onDone, test }) {
     setBusy(true)
     const { data, error } = await supabase.rpc('create_change', {
       p_title: nf.title.trim(), p_description: nf.desc.trim(), p_reason: nf.reason.trim(),
-      p_target_date: nf.target, p_items: items, p_tasks: tasks,
+      p_target_date: nf.target, p_items: items, p_tasks: tasks, p_sales_owner: salesV,
     })
     if (error) { setBusy(false); return set({ err: errText(error) }) }
     await after(data, false)
@@ -392,6 +395,9 @@ export default function NewChange({ nf, setNf, onDone, test }) {
         <input id="nf-reason" value={nf.reason} onChange={e => set({ reason: e.target.value })} placeholder="예: 고객사 요청" />
         <label htmlFor="nf-target">{byItem ? '공통 전환일' : '전환일 (변경 적용일)'} <span className="req">*필수 · 직접 골라주세요</span></label>
         <input id="nf-target" type="date" className={!nf.target && nf.err === '전환일을 골라주세요.' ? 'bad' : ''} value={nf.target} onChange={e => set({ target: e.target.value, err: '' })} />
+        <label htmlFor="nf-sales">영업 담당자 <span className="req">*필수</span></label>
+        <span className={'nf-sales' + (!salesV && nf.err === '영업 담당자를 골라주세요.' ? ' bad' : '')}><SalesPick id="nf-sales" value={salesV} onChange={v => set({ sales: v, err: '' })} db={db} uid={uid} /></span>
+        <p className="hint nf-hint">{me.department === '영업' ? '내가 기본으로 들어가 있습니다 · 다른 영업사원 건을 대신 등록하면 바꿔주세요' : '영업 할 일이 없어도 꼭 정합니다 · 영업 할 일은 이 담당자(와 함께 처리하는 사람)만 처리합니다'}</p>
       </div>
 
       <div className="card nf">

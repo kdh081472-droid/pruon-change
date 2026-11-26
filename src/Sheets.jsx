@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ORDER, ITEM_TYPES } from './supabase.js'
-import { useApp, Person, MsgText } from './ctx.jsx'
+import { useApp, Person, MsgText, SalesPick } from './ctx.jsx'
 import OrgTree from './Org.jsx'
 import { md, stamp, hasAll } from './util.js'
 
@@ -42,6 +42,7 @@ export default function Sheet() {
   else if (sheet.kind === 'gresume') body = <GroupResumeSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gadd') body = <GroupAddSheet gid={sheet.gid} close={close} />
   else if (sheet.kind === 'gremove') body = <GroupRemoveSheet cid={sheet.cid} close={close} />
+  else if (sheet.kind === 'sales') body = <SalesSheet cid={sheet.cid} gid={sheet.gid} close={close} />
   else if (sheet.kind === 'org') body = <><Top tag={'가입한 사람 ' + app.db.profiles.length + '명'} close={close} /><div className="s-title">조직도</div><OrgTree inSheet /></>
   return (
     <>
@@ -86,12 +87,13 @@ function useFocus() {
 
 /* ---------- 할 일 처리 ---------- */
 function TaskSheet({ tid, close }) {
-  const { db, me, viewer, C, isLate } = useApp()
+  const { db, me, viewer, C, isLate, canDoTask } = useApp()
   const t = db.tasks.find(x => x.id === tid)
   const [mode, setMode] = useState(null)
   if (!t) return <><Top tag="" close={close} /><p className="empty">이 할 일을 찾을 수 없습니다.</p></>
   const c = C(t.change_id)
-  const mineT = t.department === me.department
+  const mineT = canDoTask(t)
+  const salesO = t.department === '영업' && c.sales_owner ? db.people[c.sales_owner] : null
   const st = t.status === '대기'
     ? <span className={isLate(t) ? 'late' : ''}>{isLate(t) ? '전환일 지남 · 대기' : '대기'}</span>
     : <span className="ok">{t.status === '완료' ? '✓ 확인완료' : '해당없음'}</span>
@@ -109,7 +111,7 @@ function TaskSheet({ tid, close }) {
     actions = (
       <>
         {viewer && <div className="lock">보기 전용 계정입니다. 처리는 {t.department} 부서가 합니다.</div>}
-        {!viewer && !mineT && t.status === '대기' && <div className="lock">{t.department} 부서만 처리할 수 있습니다.</div>}
+        {!viewer && !mineT && t.status === '대기' && <div className="lock">{salesO ? `이 변경의 영업 담당자(${salesO.name})와 함께 처리하는 사람만 처리할 수 있습니다.` : `${t.department} 부서만 처리할 수 있습니다.`}</div>}
         {!viewer && c.status === '종결' && c.close_type === '중단' && <div className="lock">중단 종결된 변경입니다. 처리하려면 먼저 "다시 진행"을 해주세요.</div>}
         {canDo && <QuickForm t={t} close={close} />}
         {a.length > 0 && <div className="s-acts">{a}</div>}
@@ -124,7 +126,7 @@ function TaskSheet({ tid, close }) {
       <dl className="kv">
         <dt>상태</dt><dd>{st}</dd>
         <dt>전환일</dt><dd className="mono">{c.target_date}</dd>
-        <dt>담당</dt><dd>{t.department}</dd>
+        <dt>담당</dt><dd>{t.department}{salesO && <> · <b>{salesO.name}</b></>}</dd>
       </dl>
       {t.is_extra && (
         <div className="asg-box">
@@ -237,6 +239,39 @@ function CancelForm({ t, c, back, close }) {
 }
 
 /* ---------- 전환일 변경 ---------- */
+/* ---------- 영업 담당 바꾸기 (묶음은 묶음 전체) ---------- */
+function SalesSheet({ cid, gid, close }) {
+  const { db, uid, C, run } = useApp()
+  const c = cid ? C(cid) : null, g = gid ? db.groupMap[gid] : null
+  const cur = (g || c || {}).sales_owner || ''
+  const [owner, setOwner] = useState(cur)
+  const { busy, err, setErr, go } = useBusy()
+  if (!c && !g) return <><Top tag="" close={close} /><p className="empty">찾을 수 없습니다.</p></>
+  const save = () => go(async () => {
+    if (!owner) return { error: '영업 담당자를 골라주세요.' }
+    if (owner === cur) return { error: '지금과 같은 담당자입니다.' }
+    const r = await run('set_sales_owner', { p_change: g ? null : cid, p_group: g ? gid : null, p_owner: owner }, '영업 담당자를 바꿨습니다')
+    if (!r.error) close()
+    return r
+  })
+  return (
+    <>
+      <Top tag={g ? '묶음 · ' + g.title : c.short} close={close} />
+      <div className="s-title">영업 담당 {cur ? '바꾸기' : '정하기'}</div>
+      <div className="form">
+        <label htmlFor="f-sales">영업 담당자 (현재 {cur ? (db.people[cur] || {}).name : '미정'})</label>
+        <SalesPick id="f-sales" value={owner} onChange={v => { setOwner(v); setErr('') }} db={db} uid={uid} />
+        <p className="note">{g ? `묶음의 품목 ${g.kids.length}개가 모두 같은 담당자로 바뀝니다. ` : ''}영업 할 일은 영업 담당자와 함께 처리하는 사람만 처리할 수 있습니다. 바꾼 기록이 남습니다.</p>
+        {err && <p className="err">{err}</p>}
+      </div>
+      <div className="s-acts">
+        <button type="button" className="btn" disabled={busy} onClick={save}>{busy ? '저장 중…' : '저장'}</button>
+        <button type="button" className="btn ghost" onClick={close}>취소</button>
+      </div>
+    </>
+  )
+}
+
 function TargetSheet({ cid, close }) {
   const { C, run } = useApp()
   const c = C(cid)
@@ -407,7 +442,7 @@ function BulkSheet({ tids, close }) {
   })
   return (
     <>
-      <Top tag={me.department + ' · 한 번에 처리'} close={close} />
+      <Top tag={ts[0].department + ' · 한 번에 처리'} close={close} />
       <div className="s-title">한 번에 처리 · {ts.length}개 품목</div>
       <p className="bk-t">{title}</p>
       <ul className="bk-list">{ts.map(t => <li key={t.id}>{C(t.change_id).title}</li>)}</ul>
