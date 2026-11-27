@@ -425,6 +425,23 @@ function NpTable({ list, H }) {
     setPop({ tid: t.id, x, y })
   }
   const quick = (t, p) => npEditor && t.kind === 'step' && !t.need_memo && p.status === '진행중'
+  // 칸에 마우스를 올리면 그 열(옅은 세로 띠)과 그 줄을 표시 — 마우스가 있는 기기만
+  const guide = useRef({ cells: [], row: null })
+  const clearGuide = () => { guide.current.cells.forEach(x => x.classList.remove('colhl')); if (guide.current.row) guide.current.row.classList.remove('rowhl'); guide.current = { cells: [], row: null } }
+  const hoverGuide = e => {
+    if (typeof window === 'undefined' || !window.matchMedia || !window.matchMedia('(hover: hover)').matches) return
+    const cell = e.target.closest('td, th'); const table = e.currentTarget
+    if (!cell || !table.contains(cell)) return
+    const idx = cell.cellIndex, tr = cell.parentElement
+    const col = ['np-c', 'pk', 'sh', 'ck'].some(k => cell.classList.contains(k))
+    if (guide.current.row === tr && guide.current.idx === idx) return
+    clearGuide()
+    if (!col) return
+    const cells = [...table.rows].map(r => r.cells[idx]).filter(Boolean)
+    cells.forEach(x => x.classList.add('colhl'))
+    if (tr.parentElement.tagName === 'TBODY') tr.classList.add('rowhl')
+    guide.current = { cells, row: tr, idx }
+  }
   const [cBusy, setCBusy] = useState(null)
   const cycle = async t => {
     if (cBusy) return
@@ -531,8 +548,8 @@ function NpTable({ list, H }) {
   }
   return (
     <div className="np-tw" ref={wrap}>
-      <div className="np-tsc">
-        <table className="np-mx">
+      <div className="np-tsc" onScroll={() => pop && setPop(null)}>
+        <table className="np-mx" onMouseOver={hoverGuide} onMouseLeave={clearGuide}>
           <thead>
             <tr>
               <H k="name" cls="pn">제품</H><H k="reg" cls="dt">등록일</H><H k="launch" cls="dt">출시일</H>

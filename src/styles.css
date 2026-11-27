@@ -2482,3 +2482,15 @@ td.np-c.busy .np-box { opacity: .45 }
 .sa-n { color: var(--late) }
 .sa-d { color: var(--muted); font-size: 12.5px; white-space: nowrap; width: 90px }
 .sa-pick { width: 190px; text-align: right } .sa-pick select { font: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; background: var(--surface, #fff); color: var(--text) }
+
+/* ===== v44: 신제품 요약 표 — 머리글 고정 · 세로 가이드 ===== */
+.np-tsc { max-height: calc(100vh - 210px); overflow: auto }
+table.np-mx thead th, table.np-mx thead th.sh, table.np-mx thead th.ck, table.np-mx thead th.dt { position: sticky; top: 0; z-index: 3; box-shadow: inset 0 -1px 0 var(--line) }
+table.np-mx thead th.pn { z-index: 4; left: 0 }
+table.np-mx td.pn { z-index: 2 }
+table.np-mx .colhl { background-color: color-mix(in srgb, var(--np) 3.5%, var(--surface)) !important; box-shadow: inset 1px 0 0 color-mix(in srgb, var(--np) 18%, transparent), inset -1px 0 0 color-mix(in srgb, var(--np) 18%, transparent) }
+table.np-mx thead th.colhl { background-color: color-mix(in srgb, var(--np) 8%, var(--bg)) !important; box-shadow: inset 1px 0 0 color-mix(in srgb, var(--np) 18%, transparent), inset -1px 0 0 color-mix(in srgb, var(--np) 18%, transparent), inset 0 -2px 0 var(--np) }
+table.np-mx thead th.colhl .st2 { color: var(--np); font-weight: 800 }
+table.np-mx tr.rowhl td { background-color: color-mix(in srgb, var(--np) 2.5%, var(--surface)) }
+table.np-mx tr.rowhl td.colhl { background-color: color-mix(in srgb, var(--np) 6%, var(--surface)) !important }
+@media (max-width: 1099px) { .np-tsc { max-height: calc(100vh - 250px) } }
